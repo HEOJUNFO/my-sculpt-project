@@ -1,5 +1,3 @@
-// src/main.js
-
 import Stats from 'three/examples/jsm/libs/stats.module.js';
 import * as dat from 'three/examples/jsm/libs/lil-gui.module.min.js';
 import * as THREE from 'three';
@@ -14,20 +12,18 @@ import {
   MeshBVHHelper,
 } from 'three-mesh-bvh';
 
-// ---- 우리가 만든 모듈들 import ----
+// 리팩토링된 헬퍼 모듈들 (별도 파일로 분리했다고 가정)
 import { centerAndScaleGeometry } from './geometryHelpers.js';
 import { fitCameraToObject } from './cameraHelpers.js';
 import { loadStlFileAsGeometry } from './stlHelpers.js';
 import { performStroke, updateNormals } from './sculpt.js';
 
-// Raycast / BufferGeometry 프로토타입 확장
+// three-mesh-bvh 프로토타입 확장
 THREE.Mesh.prototype.raycast = acceleratedRaycast;
 THREE.BufferGeometry.prototype.computeBoundsTree = computeBoundsTree;
 THREE.BufferGeometry.prototype.disposeBoundsTree = disposeBoundsTree;
 
-// -------------------------------------
-// 전역 변수
-// -------------------------------------
+// ---------------------- 전역 상태 ----------------------
 let scene, camera, renderer, controls, stats;
 let targetMesh = null, bvhHelper = null;
 let brush, symmetryBrush;
@@ -37,9 +33,16 @@ let mouseState = false, lastMouseState = false;
 let lastCastPose = new THREE.Vector3();
 let material, rightClick = false;
 
-// ★ 처음 업로드된 모델을 기억하기 위한 변수
+// "처음 업로드된" 모델을 기억 -> reset() 시 복원
 let initialGeometry = null;
 
+// 업로드 모델 리스트 (최대 10개)
+let modelList = []; // [{ fileName, geometry }, ...]
+
+// ★ 현재 로딩중인(선택된) 모델 인덱스. (-1이면 미선택)
+let activeItemIndex = -1;
+
+// GUI / 파라미터들
 const params = {
   matcap: 'Clay',
   size: 0.1,
@@ -56,12 +59,71 @@ const params = {
 
 const matcaps = {};
 
-// -------------------------------------
-// STL 지오메트리 세팅
-// -------------------------------------
+// ---------------------- 모델 리스트 UI 갱신 ----------------------
+function updateModelListUI() {
+  const ul = document.getElementById('model-list');
+  if ( !ul ) return;
+
+  ul.innerHTML = '';
+
+  modelList.forEach( (item, idx) => {
+
+    // li 항목
+    const li = document.createElement('li');
+    li.textContent = `${idx + 1}. ${item.fileName}`;
+    li.style.cursor = 'pointer';
+    li.style.padding = '4px 0';
+
+    // (★) 리스트 항목 클릭 시: 해당 모델 로드
+    li.addEventListener('click', () => {
+      activeItemIndex = idx; // 선택된 모델 인덱스 갱신
+      setTargetMeshGeometry( item.geometry.clone() );
+    });
+
+    // (★) 삭제 아이콘
+    const deleteBtn = document.createElement('span');
+    deleteBtn.textContent = ' ❌';
+    deleteBtn.style.marginLeft = '8px';
+    deleteBtn.style.color = '#f66';
+    deleteBtn.style.cursor = 'pointer';
+
+    // 삭제 버튼 클릭 -> 리스트에서 제거
+    deleteBtn.addEventListener('click', e => {
+      e.stopPropagation(); // li의 클릭이벤트가 실행되지 않도록
+      removeFromList(idx);
+    });
+
+    li.appendChild(deleteBtn);
+    ul.appendChild(li);
+  });
+}
+
+// ---------------------- 리스트에서 항목 제거 ----------------------
+function removeFromList(index) {
+  // 만약 제거 대상이 현재 선택중인 모델이면 -> 씬도 비움
+  if ( index === activeItemIndex ) {
+    if ( targetMesh ) {
+      targetMesh.geometry.dispose();
+      targetMesh.material.dispose();
+      scene.remove( targetMesh );
+      targetMesh = null;
+    }
+    if ( bvhHelper ) {
+      scene.remove( bvhHelper );
+      bvhHelper = null;
+    }
+    activeItemIndex = -1;
+  }
+
+  // 배열에서 삭제 후 UI 갱신
+  modelList.splice(index, 1);
+  updateModelListUI();
+  console.log(`Removed item from list at index: ${index}`);
+}
+
+// ---------------------- STL 지오메트리를 씬에 로드 ----------------------
 function setTargetMeshGeometry( geometry ) {
 
-  // 기존 mesh 제거
   if ( targetMesh ) {
     targetMesh.geometry.dispose();
     targetMesh.material.dispose();
@@ -73,48 +135,42 @@ function setTargetMeshGeometry( geometry ) {
     bvhHelper = null;
   }
 
-  // ----- "처음 업로드된" 모델을 저장 (이미 있으면 덮어쓰기 안 함)
+  // "처음 업로드된" 모델 기록
   if ( !initialGeometry ) {
-    // clone()으로 복제해두면, 나중에 스컬팅 등으로 geometry가 변형되어도
-    // 최초 상태를 보존할 수 있습니다.
     initialGeometry = geometry.clone();
   }
 
-  // 원하는 형태로 전처리
+  // 지오메트리 전처리 (center+scale, mergeVertices, boundsTree 등)
   centerAndScaleGeometry( geometry );
   geometry = BufferGeometryUtils.mergeVertices( geometry );
   geometry.computeVertexNormals();
   geometry.attributes.position.setUsage( THREE.DynamicDrawUsage );
   geometry.attributes.normal.setUsage( THREE.DynamicDrawUsage );
-  geometry.computeBoundsTree( { setBoundingBox: false } );
+  geometry.computeBoundsTree({ setBoundingBox: false });
 
-  // 새 mesh
+  // 새 Mesh
   targetMesh = new THREE.Mesh( geometry, material );
   targetMesh.frustumCulled = false;
   scene.add( targetMesh );
 
-  // BVH Helper
+  // BVHHelper
   bvhHelper = new MeshBVHHelper( targetMesh, params.depth );
   if ( params.displayHelper ) {
     scene.add( bvhHelper );
   }
   bvhHelper.update();
 
-  // 모델 맞춰서 카메라 조정
+  // 카메라 맞춤
   fitCameraToObject( camera, targetMesh, controls );
 }
 
-// -------------------------------------
-// reset : "처음 업로드한 모델"로 되돌리기
-// -------------------------------------
+// ---------------------- reset(): 처음 업로드 모델로 복원 ----------------------
 function reset() {
-  // 아직 아무 모델도 업로드 안 했다면
   if ( !initialGeometry ) {
     console.log('아직 업로드된 모델이 없습니다.');
     return;
   }
 
-  // 씬에 있는 mesh 제거
   if ( targetMesh ) {
     targetMesh.geometry.dispose();
     targetMesh.material.dispose();
@@ -126,44 +182,46 @@ function reset() {
     bvhHelper = null;
   }
 
-  // initialGeometry를 clone() 해서 다시 씬에 적용
+  // 저장해둔 initialGeometry를 다시 clone
   const cloned = initialGeometry.clone();
   setTargetMeshGeometry( cloned );
 }
 
-// -------------------------------------
-//  clear : 씬을 완전히 빈 상태로 만들고,
-//          '처음 업로드된 모델' 기록(initialGeometry)도 지움
-// -------------------------------------
-function clearScene() {
-  // 현재 mesh 제거
-  if ( targetMesh ) {
-    targetMesh.geometry.dispose();
-    targetMesh.material.dispose();
-    scene.remove( targetMesh );
-    targetMesh = null;
+// ---------------------- save(): 현재 선택된 모델에 변경사항을 저장 ----------------------
+function saveChanges() {
+  if ( activeItemIndex < 0 ) {
+    console.log('No item selected. Cannot save changes.');
+    return;
   }
-  if ( bvhHelper ) {
-    scene.remove( bvhHelper );
-    bvhHelper = null;
+  if ( !targetMesh ) {
+    console.log('No mesh in the scene. Nothing to save.');
+    return;
   }
 
-  // "처음 업로드된 모델" 기록도 null 로
-  initialGeometry = null;
-
-  console.log('씬이 완전히 비워졌습니다. 이제 새 모델을 업로드할 수 있습니다.');
+  // targetMesh의 현재 geometry를 다시 clone해서
+  // modelList[activeItemIndex]에 덮어씌움
+  modelList[activeItemIndex].geometry = targetMesh.geometry.clone();
+  console.log(`Saved changes for item: ${modelList[activeItemIndex].fileName}`);
 }
 
-// -------------------------------------
-// 드래그 앤 드롭으로 STL 불러오기
-// -------------------------------------
+// ---------------------- STL 파일 드래그앤드롭 ----------------------
 function onDropSTL( e ) {
   e.preventDefault();
   if ( e.dataTransfer.files && e.dataTransfer.files.length > 0 ) {
     const file = e.dataTransfer.files[0];
     loadStlFileAsGeometry( file )
       .then( geometry => {
+        // 씬에 표시
         setTargetMeshGeometry( geometry );
+
+        // 리스트에 추가 + 현재 모델로 활성화
+        modelList.push({
+          fileName: file.name,
+          geometry: geometry.clone(),
+        });
+        activeItemIndex = modelList.length - 1;
+
+        updateModelListUI();
       })
       .catch( err => {
         console.error( 'STL 로딩 실패:', err );
@@ -174,9 +232,7 @@ function onDragOver( e ) {
   e.preventDefault();
 }
 
-// -------------------------------------
-// 초기화
-// -------------------------------------
+// ---------------------- init() ----------------------
 function init() {
 
   renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -206,32 +262,37 @@ function init() {
   stats = new Stats();
   document.body.appendChild( stats.dom );
 
-  // Material
-  matcaps[ 'Clay' ] = new THREE.TextureLoader().load( 'textures/B67F6B_4B2E2A_6C3A34_F3DBC6-256px.png' );
-  matcaps[ 'Red Wax' ] = new THREE.TextureLoader().load( 'textures/763C39_431510_210504_55241C-256px.png' );
-  matcaps[ 'Shiny Green' ] = new THREE.TextureLoader().load( 'textures/3B6E10_E3F2C3_88AC2E_99CE51-256px.png' );
-  matcaps[ 'Normal' ] = new THREE.TextureLoader().load( 'textures/7877EE_D87FC5_75D9C7_1C78C0-256px.png' );
+  // matcaps
+  matcaps['Clay'] = new THREE.TextureLoader().load('textures/B67F6B_4B2E2A_6C3A34_F3DBC6-256px.png');
+  matcaps['Red Wax'] = new THREE.TextureLoader().load('textures/763C39_431510_210504_55241C-256px.png');
+  matcaps['Shiny Green'] = new THREE.TextureLoader().load('textures/3B6E10_E3F2C3_88AC2E_99CE51-256px.png');
+  matcaps['Normal']   = new THREE.TextureLoader().load('textures/7877EE_D87FC5_75D9C7_1C78C0-256px.png');
 
   material = new THREE.MeshMatcapMaterial({
     flatShading: params.flatShading,
   });
   for ( const key in matcaps ) {
-    matcaps[ key ].encoding = THREE.sRGBEncoding;
+    matcaps[key].encoding = THREE.sRGBEncoding;
   }
 
-  // 브러시
+  // 브러시(line geometry)
   const brushSegments = [ new THREE.Vector3(), new THREE.Vector3( 0, 0, 1 ) ];
   for ( let i = 0; i < 50; i ++ ) {
     const nexti = i + 1;
-    const x1 = Math.sin( 2 * Math.PI * i / 50 );
-    const y1 = Math.cos( 2 * Math.PI * i / 50 );
-    const x2 = Math.sin( 2 * Math.PI * nexti / 50 );
-    const y2 = Math.cos( 2 * Math.PI * nexti / 50 );
-    brushSegments.push( new THREE.Vector3( x1, y1, 0 ), new THREE.Vector3( x2, y2, 0 ) );
+    const x1 = Math.sin( (2*Math.PI*i)/50 );
+    const y1 = Math.cos( (2*Math.PI*i)/50 );
+    const x2 = Math.sin( (2*Math.PI*nexti)/50 );
+    const y2 = Math.cos( (2*Math.PI*nexti)/50 );
+    brushSegments.push(
+      new THREE.Vector3( x1, y1, 0 ),
+      new THREE.Vector3( x2, y2, 0 )
+    );
   }
   brush = new THREE.LineSegments();
   brush.geometry.setFromPoints( brushSegments );
-  brush.material.color.set( 0xfb8c00 );
+  brush.material.color.set( 'red' );
+  brush.renderOrder = 9999;          
+  brush.material.depthTest = false;  
   scene.add( brush );
 
   symmetryBrush = brush.clone();
@@ -240,12 +301,13 @@ function init() {
   // OrbitControls
   controls = new OrbitControls( camera, renderer.domElement );
   controls.minDistance = 1.5;
-  controls.addEventListener( 'start', () => { controls.active = true; } );
-  controls.addEventListener( 'end', () => { controls.active = false; } );
+  controls.addEventListener('start', () => { controls.active = true; });
+  controls.addEventListener('end',   () => { controls.active = false; });
 
   // GUI
   const gui = new dat.GUI();
   gui.add( params, 'matcap', Object.keys( matcaps ) );
+
   const sculptFolder = gui.addFolder( 'Sculpting' );
   sculptFolder.add( params, 'brush', [ 'normal', 'clay', 'flatten' ] );
   sculptFolder.add( params, 'size', 0.025, 0.25, 0.005 );
@@ -258,7 +320,7 @@ function init() {
       targetMesh.material.flatShading = val;
       targetMesh.material.needsUpdate = true;
     }
-  } );
+  });
   sculptFolder.open();
 
   const helperFolder = gui.addFolder( 'BVH Helper' );
@@ -267,50 +329,46 @@ function init() {
       bvhHelper.depth = parseFloat( val );
       bvhHelper.update();
     }
-  } );
+  });
   helperFolder.add( params, 'displayHelper' ).onChange( display => {
-    if ( ! bvhHelper ) return;
+    if ( !bvhHelper ) return;
     if ( display ) {
       scene.add( bvhHelper );
       bvhHelper.update();
     } else {
       scene.remove( bvhHelper );
     }
-  } );
+  });
   helperFolder.open();
 
-  // reset, rebuildBVH
-  gui.add( { reset }, 'reset' );
+  gui.add({ reset }, 'reset');
 
-  // ★ clear 버튼 추가
-  //    -> 누르면 씬을 완전히 비우고, initialGeometry 도 null 처리
-  gui.add( { clear: clearScene }, 'clear' );
+  // (★) clear -> save 로 교체
+  gui.add({ save: saveChanges }, 'save');
 
-  gui.add( {
+  gui.add({
     rebuildBVH: () => {
       if ( targetMesh ) {
         targetMesh.geometry.computeBoundsTree({ setBoundingBox: false });
         if ( bvhHelper ) bvhHelper.update();
       }
     }
-  }, 'rebuildBVH' );
+  }, 'rebuildBVH');
   gui.open();
 
-  // Window 이벤트
-  window.addEventListener( 'resize', onWindowResize );
-  window.addEventListener( 'pointermove', onPointerMove );
-  window.addEventListener( 'pointerdown', onPointerDown, true );
-  window.addEventListener( 'pointerup', onPointerUp );
-  window.addEventListener( 'contextmenu', e => e.preventDefault() );
-  window.addEventListener( 'wheel', onWheel );
-  window.addEventListener( 'dragover', onDragOver, false );
-  window.addEventListener( 'drop', onDropSTL, false );
+  // 윈도우 / 드롭 이벤트
+  window.addEventListener('resize', onWindowResize);
+  window.addEventListener('pointermove', onPointerMove);
+  window.addEventListener('pointerdown', onPointerDown, true);
+  window.addEventListener('pointerup', onPointerUp);
+  window.addEventListener('contextmenu', e => e.preventDefault() );
+  window.addEventListener('wheel', onWheel );
+  window.addEventListener('dragover', onDragOver, false);
+  window.addEventListener('drop', onDropSTL, false);
 
 }
 
-// -------------------------------------
-// 이벤트 핸들러
-// -------------------------------------
+// ---------------------- 이벤트 핸들러들 ----------------------
 function onPointerMove( e ) {
   mouse.x = ( e.clientX / window.innerWidth ) * 2 - 1;
   mouse.y = - ( e.clientY / window.innerHeight ) * 2 + 1;
@@ -329,7 +387,7 @@ function onPointerDown( e ) {
 
   if ( targetMesh ) {
     const res = raycaster.intersectObject( targetMesh );
-    controls.enabled = res.length === 0;
+    controls.enabled = (res.length === 0);
   }
 }
 function onPointerUp( e ) {
@@ -351,18 +409,15 @@ function onWindowResize() {
   renderer.setSize( window.innerWidth, window.innerHeight );
 }
 
-// -------------------------------------
-// 애니메이션/렌더 루프
-// -------------------------------------
+// ---------------------- 렌더 루프 ----------------------
 function renderLoop() {
   requestAnimationFrame( renderLoop );
   stats.begin();
 
-  // MATCAP
+  // matcap
   material.matcap = matcaps[ params.matcap ];
 
   if ( controls.active || ! brushActive || ! targetMesh ) {
-    // 스컬팅 비활성
     brush.visible = false;
     symmetryBrush.visible = false;
     lastCastPose.setScalar( Infinity );
@@ -372,7 +427,7 @@ function renderLoop() {
     raycaster.setFromCamera( mouse, camera );
     raycaster.firstHitOnly = true;
 
-    const hit = raycaster.intersectObject( targetMesh, true )[ 0 ];
+    const hit = raycaster.intersectObject( targetMesh, true )[0];
     if ( hit ) {
 
       brush.visible = true;
@@ -390,8 +445,8 @@ function renderLoop() {
         lastCastPose.copy( hit.point );
       }
 
-      if ( ! ( mouseState || lastMouseState ) ) {
-        // 마우스 클릭 안 된 상태 -> 브러시 위치만 갱신
+      if ( !(mouseState || lastMouseState) ) {
+        // 클릭 안 된 상태 -> 브러시 위치만 갱신
         performStroke( hit.point, brush, true, {}, targetMesh, params, rightClick );
         if ( params.symmetrical ) {
           hit.point.x *= -1;
@@ -402,10 +457,10 @@ function renderLoop() {
         lastCastPose.copy( hit.point );
 
       } else {
-        // 마우스 이동/클릭 상태에서 스컬팅
+        // 마우스 이동/클릭 상태
         const mdx = ( mouse.x - lastMouse.x ) * window.innerWidth * window.devicePixelRatio;
         const mdy = ( mouse.y - lastMouse.y ) * window.innerHeight * window.devicePixelRatio;
-        let mdist = Math.sqrt( mdx * mdx + mdy * mdy );
+        let mdist = Math.sqrt( mdx*mdx + mdy*mdy );
         let castDist = hit.point.distanceTo( lastCastPose );
 
         const step = params.size * 0.15;
@@ -419,7 +474,7 @@ function renderLoop() {
         const sets = {
           accumulatedTriangles: changedTriangles,
           accumulatedIndices: changedIndices,
-          accumulatedTraversedNodeIndices: traversedNodeIndices,
+          accumulatedTraversedNodeIndices: traversedNodeIndices
         };
 
         while ( castDist > step && mdist > params.size * 200 / hit.distance ) {
@@ -435,21 +490,20 @@ function renderLoop() {
             lastCastPose.x *= -1;
           }
 
-          stepCount ++;
+          stepCount++;
           if ( stepCount > params.maxSteps ) {
             break;
           }
         }
 
         if ( stepCount > 0 ) {
-          // 노멀 업데이트
           updateNormals( changedTriangles, changedIndices, targetMesh );
           targetMesh.geometry.boundsTree?.refit( traversedNodeIndices );
           if ( bvhHelper && bvhHelper.parent ) {
             bvhHelper.update();
           }
         } else {
-          // 이동량이 너무 작으면 위치만 갱신
+          // 이동량이 너무 작으면 위치만
           performStroke( hit.point, brush, true, {}, targetMesh, params, rightClick );
           if ( params.symmetrical ) {
             hit.point.x *= -1;
@@ -457,7 +511,6 @@ function renderLoop() {
             hit.point.x *= -1;
           }
         }
-
       }
 
     } else {
@@ -478,3 +531,4 @@ function renderLoop() {
 // 실행
 init();
 renderLoop();
+
