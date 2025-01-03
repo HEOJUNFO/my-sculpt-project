@@ -17,7 +17,7 @@ import {
 // ---- 우리가 만든 모듈들 import ----
 import { centerAndScaleGeometry } from './geometryHelpers.js';
 import { fitCameraToObject } from './cameraHelpers.js';
-import { stlLoader, loadStlFileAsGeometry } from './stlHelpers.js';
+import { loadStlFileAsGeometry } from './stlHelpers.js';
 import { performStroke, updateNormals } from './sculpt.js';
 
 // Raycast / BufferGeometry 프로토타입 확장
@@ -25,7 +25,9 @@ THREE.Mesh.prototype.raycast = acceleratedRaycast;
 THREE.BufferGeometry.prototype.computeBoundsTree = computeBoundsTree;
 THREE.BufferGeometry.prototype.disposeBoundsTree = disposeBoundsTree;
 
-// 전역
+// -------------------------------------
+// 전역 변수
+// -------------------------------------
 let scene, camera, renderer, controls, stats;
 let targetMesh = null, bvhHelper = null;
 let brush, symmetryBrush;
@@ -34,6 +36,9 @@ let mouse = new THREE.Vector2(), lastMouse = new THREE.Vector2();
 let mouseState = false, lastMouseState = false;
 let lastCastPose = new THREE.Vector3();
 let material, rightClick = false;
+
+// ★ 처음 업로드된 모델을 기억하기 위한 변수
+let initialGeometry = null;
 
 const params = {
   matcap: 'Clay',
@@ -68,6 +73,13 @@ function setTargetMeshGeometry( geometry ) {
     bvhHelper = null;
   }
 
+  // ----- "처음 업로드된" 모델을 저장 (이미 있으면 덮어쓰기 안 함)
+  if ( !initialGeometry ) {
+    // clone()으로 복제해두면, 나중에 스컬팅 등으로 geometry가 변형되어도
+    // 최초 상태를 보존할 수 있습니다.
+    initialGeometry = geometry.clone();
+  }
+
   // 원하는 형태로 전처리
   centerAndScaleGeometry( geometry );
   geometry = BufferGeometryUtils.mergeVertices( geometry );
@@ -90,13 +102,19 @@ function setTargetMeshGeometry( geometry ) {
 
   // 모델 맞춰서 카메라 조정
   fitCameraToObject( camera, targetMesh, controls );
-
 }
 
 // -------------------------------------
-// reset : 빈 상태로 만들기
+// reset : "처음 업로드한 모델"로 되돌리기
 // -------------------------------------
 function reset() {
+  // 아직 아무 모델도 업로드 안 했다면
+  if ( !initialGeometry ) {
+    console.log('아직 업로드된 모델이 없습니다.');
+    return;
+  }
+
+  // 씬에 있는 mesh 제거
   if ( targetMesh ) {
     targetMesh.geometry.dispose();
     targetMesh.material.dispose();
@@ -107,6 +125,33 @@ function reset() {
     scene.remove( bvhHelper );
     bvhHelper = null;
   }
+
+  // initialGeometry를 clone() 해서 다시 씬에 적용
+  const cloned = initialGeometry.clone();
+  setTargetMeshGeometry( cloned );
+}
+
+// -------------------------------------
+//  clear : 씬을 완전히 빈 상태로 만들고,
+//          '처음 업로드된 모델' 기록(initialGeometry)도 지움
+// -------------------------------------
+function clearScene() {
+  // 현재 mesh 제거
+  if ( targetMesh ) {
+    targetMesh.geometry.dispose();
+    targetMesh.material.dispose();
+    scene.remove( targetMesh );
+    targetMesh = null;
+  }
+  if ( bvhHelper ) {
+    scene.remove( bvhHelper );
+    bvhHelper = null;
+  }
+
+  // "처음 업로드된 모델" 기록도 null 로
+  initialGeometry = null;
+
+  console.log('씬이 완전히 비워졌습니다. 이제 새 모델을 업로드할 수 있습니다.');
 }
 
 // -------------------------------------
@@ -234,7 +279,13 @@ function init() {
   } );
   helperFolder.open();
 
+  // reset, rebuildBVH
   gui.add( { reset }, 'reset' );
+
+  // ★ clear 버튼 추가
+  //    -> 누르면 씬을 완전히 비우고, initialGeometry 도 null 처리
+  gui.add( { clear: clearScene }, 'clear' );
+
   gui.add( {
     rebuildBVH: () => {
       if ( targetMesh ) {

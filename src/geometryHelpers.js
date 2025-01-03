@@ -1,5 +1,3 @@
-// src/geometryHelpers.js
-import * as THREE from 'three';
 
 /**
  * 중심 정렬 + 바운딩 스피어 기반으로 반지름 = 1이 되도록 스케일링
