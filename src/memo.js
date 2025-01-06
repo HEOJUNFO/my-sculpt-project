@@ -50,8 +50,6 @@ export function createMemoSphere( position ) {
 
 // 새 메모 확인
 export function onMemoNewOkBtn( scene ) {
-
-
   const input = document.getElementById('memo-input-new');
   const text = input.value; // trim() 제거했다고 가정
   console.log(input.value);
