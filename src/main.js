@@ -1,3 +1,5 @@
+// src/main.js
+
 import Stats from 'three/examples/jsm/libs/stats.module.js';
 import * as dat from 'three/examples/jsm/libs/lil-gui.module.min.js';
 import * as THREE from 'three';
@@ -16,34 +18,51 @@ import {
 // STLExporter
 import { STLExporter } from 'three/examples/jsm/exporters/STLExporter.js';
 
-// (리팩토링 헬퍼)
+// 리팩토링된 헬퍼 / 로직 파일들
 import { centerAndScaleGeometry } from './geometryHelpers.js';
 import { fitCameraToObject } from './cameraHelpers.js';
 import { loadStlFileAsGeometry } from './stlHelpers.js';
 import { performStroke, updateNormals } from './sculpt.js';
+import {
+  memos,
+  openNewMemoModal,
+  closeNewMemoModal,
+  openEditMemoModal,
+  closeEditMemoModal,
+  createMemoSphere,
+  onMemoNewOkBtn,
+  onMemoEditUpdateBtn,
+  onMemoEditDeleteBtn,
+} from './memo.js';
 
 // three-mesh-bvh 프로토타입 확장
 THREE.Mesh.prototype.raycast = acceleratedRaycast;
 THREE.BufferGeometry.prototype.computeBoundsTree = computeBoundsTree;
 THREE.BufferGeometry.prototype.disposeBoundsTree = disposeBoundsTree;
 
+
 // ---------------------- 전역 상태 ----------------------
 let scene, camera, renderer, controls, stats;
-let targetMesh = null, bvhHelper = null;
+let targetMesh = null;
+let bvhHelper = null;
 let brush, symmetryBrush;
 let brushActive = false;
-let mouse = new THREE.Vector2(), lastMouse = new THREE.Vector2();
-let mouseState = false, lastMouseState = false;
+
+let mouse = new THREE.Vector2();
+let lastMouse = new THREE.Vector2();
+let mouseState = false;
+let lastMouseState = false;
 let lastCastPose = new THREE.Vector3();
-let material, rightClick = false;
+let rightClick = false;
 
-let initialGeometry = null; // 처음 업로드된 모델
-let modelList = [];         // [{ fileName, geometry }, ...]
-let activeItemIndex = -1;   // 현재 선택된 모델 인덱스
+// "처음 업로드" 모델
+let initialGeometry = null;
 
-const memos = []; // [{ object: THREE.Mesh, position: THREE.Vector3, text: string }]
+// 모델 목록
+let modelList = [];  // [{ fileName, geometry }, ...]
+let activeItemIndex = -1;
 
-// ---------------------- GUI / 파라미터 ----------------------
+// GUI 파라미터
 const params = {
   matcap: 'Clay',
 
@@ -56,82 +75,35 @@ const params = {
   symmetrical: true,
   flatShading: false,
 
-  // BVH
   depth: 10,
   displayHelper: false,
 
-  // 투명도
   brushOpacity: 1.0,
   modelOpacity: 1.0,
 
-  // 메모 모드
-  memoMode: false,
+  memoMode: false, // 메모 모드
 };
 
 const matcaps = {};
 
-// ---------------------- 모달 관련 ----------------------
-let pendingMemoPosition = new THREE.Vector3(); // 새 메모 생성하려고 클릭한 위치
-let editingMemoIndex = -1; // 기존 메모 인덱스
 
-function openNewMemoModal( point3D ) {
-  pendingMemoPosition.copy( point3D );
-  const modal = document.getElementById('memo-modal-new');
-  const input = document.getElementById('memo-input-new');
-  modal.style.display = 'block';
-  input.value = ''; // 초기화
-}
-
-function closeNewMemoModal() {
-  const modal = document.getElementById('memo-modal-new');
-  modal.style.display = 'none';
-}
-
-function openEditMemoModal( memoIndex ) {
-  editingMemoIndex = memoIndex;
-  const modal = document.getElementById('memo-modal-edit');
-  const input = document.getElementById('memo-input-edit');
-  modal.style.display = 'block';
-
-  // 기존 메모 내용 로드
-  input.value = memos[memoIndex].text;
-}
-
-function closeEditMemoModal() {
-  const modal = document.getElementById('memo-modal-edit');
-  modal.style.display = 'none';
-  editingMemoIndex = -1;
-}
-
-// 메모 구체 생성
-function createMemoSphere( position ) {
-  const sphereGeo = new THREE.SphereGeometry( 0.02, 16, 16 );
-  const sphereMat = new THREE.MeshBasicMaterial({ color: 0xffdd22 });
-  const sphere = new THREE.Mesh( sphereGeo, sphereMat );
-  sphere.position.copy( position );
-  return sphere;
-}
-
-// ---------------------- 모델 리스트 UI ----------------------
+// ---------------------- 메인 함수들 ----------------------
 function updateModelListUI() {
   const ul = document.getElementById('model-list');
   if ( !ul ) return;
 
   ul.innerHTML = '';
-
   modelList.forEach( (item, idx) => {
     const li = document.createElement('li');
     li.textContent = `${idx + 1}. ${item.fileName}`;
     li.style.cursor = 'pointer';
     li.style.padding = '4px 0';
 
-    // 클릭 -> 해당 모델 로드
     li.addEventListener('click', () => {
       activeItemIndex = idx;
       setTargetMeshGeometry( item.geometry.clone() );
     });
 
-    // 삭제 아이콘
     const deleteBtn = document.createElement('span');
     deleteBtn.textContent = ' ❌';
     deleteBtn.style.marginLeft = '8px';
@@ -162,13 +134,12 @@ function removeFromList(index) {
     }
     activeItemIndex = -1;
   }
-
   modelList.splice(index, 1);
   updateModelListUI();
   console.log(`Removed item from list at index: ${index}`);
 }
 
-// ---------------------- STL 로드 -> 씬에 반영 ----------------------
+
 function setTargetMeshGeometry( geometry ) {
   if ( targetMesh ) {
     targetMesh.geometry.dispose();
@@ -192,14 +163,14 @@ function setTargetMeshGeometry( geometry ) {
   geometry.attributes.normal.setUsage( THREE.DynamicDrawUsage );
   geometry.computeBoundsTree({ setBoundingBox: false });
 
-  const modelMat = new THREE.MeshMatcapMaterial({
+  const mat = new THREE.MeshMatcapMaterial({
     matcap: matcaps[ params.matcap ],
     flatShading: params.flatShading,
     transparent: true,
     opacity: params.modelOpacity,
   });
 
-  targetMesh = new THREE.Mesh( geometry, modelMat );
+  targetMesh = new THREE.Mesh( geometry, mat );
   targetMesh.frustumCulled = false;
   scene.add( targetMesh );
 
@@ -212,7 +183,6 @@ function setTargetMeshGeometry( geometry ) {
   fitCameraToObject( camera, targetMesh, controls );
 }
 
-// ---------------------- reset() ----------------------
 function reset() {
   if ( !initialGeometry ) {
     console.log('No initial model to reset to.');
@@ -234,7 +204,6 @@ function reset() {
   setTargetMeshGeometry( cloned );
 }
 
-// ---------------------- save() ----------------------
 function saveChanges() {
   if ( activeItemIndex < 0 ) {
     console.log('No item selected. Cannot save changes.');
@@ -249,13 +218,11 @@ function saveChanges() {
   console.log(`Saved changes for item: ${modelList[activeItemIndex].fileName}`);
 }
 
-// ---------------------- export STL ----------------------
 function exportCurrentModel() {
   if ( !targetMesh ) {
     console.log( 'No model to export.' );
     return;
   }
-
   const exporter = new STLExporter();
   const stlString = exporter.parse( targetMesh );
 
@@ -276,7 +243,7 @@ function exportCurrentModel() {
   console.log( 'Exported current model as STL.' );
 }
 
-// ---------------------- STL 드래그앤드롭 ----------------------
+
 function onDropSTL( e ) {
   e.preventDefault();
   if ( e.dataTransfer.files && e.dataTransfer.files.length > 0 ) {
@@ -301,6 +268,7 @@ function onDropSTL( e ) {
 function onDragOver( e ) {
   e.preventDefault();
 }
+
 
 // ---------------------- init() ----------------------
 function init() {
@@ -359,7 +327,6 @@ function init() {
     );
   }
   const brushGeo = new THREE.BufferGeometry().setFromPoints( brushSegments );
-
   brush = new THREE.LineSegments( brushGeo, brushMaterial );
   brush.renderOrder = 9999; 
   scene.add( brush );
@@ -426,7 +393,7 @@ function init() {
   });
   helperFolder.open();
 
-  // 메모 모드 토글
+  // 메모 모드
   gui.add( params, 'memoMode' ).name('Memo Mode');
 
   // 버튼들
@@ -445,9 +412,10 @@ function init() {
   }, 'rebuildBVH');
   gui.open();
 
-  document.getElementById('memo-new-ok-btn').addEventListener('click', onMemoNewOkBtn);
-  document.getElementById('memo-edit-update-btn').addEventListener('click', onMemoEditUpdateBtn);
-  document.getElementById('memo-edit-delete-btn').addEventListener('click', onMemoEditDeleteBtn);
+  // 모달 버튼 연결
+  document.getElementById('memo-new-ok-btn').addEventListener('click', () => onMemoNewOkBtn(scene));
+  document.getElementById('memo-edit-update-btn').addEventListener('click',() => onMemoEditUpdateBtn(scene));
+  document.getElementById('memo-edit-delete-btn').addEventListener('click', () => onMemoEditDeleteBtn(scene));
 
   // 이벤트
   window.addEventListener('resize', onWindowResize);
@@ -460,56 +428,6 @@ function init() {
   window.addEventListener('drop', onDropSTL, false);
 }
 
-// ---------------------- 새 메모 모달 OK ----------------------
-function onMemoNewOkBtn() {
-  closeNewMemoModal();
-
-  const input = document.getElementById('memo-input-new');
-  const text = input.value; // 그대로
-  if (!text) {
-    console.log("No memo text provided.");
-    return;
-  }
-  const memoObj = createMemoSphere( pendingMemoPosition );
-  scene.add( memoObj );
-
-  memos.push({
-    object: memoObj,
-    position: pendingMemoPosition.clone(),
-    text,
-  });
-  console.log("New memo created:", text, pendingMemoPosition);
-}
-
-// ---------------------- 기존 메모 수정/삭제 ----------------------
-function onMemoEditUpdateBtn() {
-  if ( editingMemoIndex < 0 || !memos[editingMemoIndex] ) {
-    console.log("Invalid memo index for update.");
-    closeEditMemoModal();
-    return;
-  }
-  const input = document.getElementById('memo-input-edit');
-  memos[editingMemoIndex].text = input.value;
-  console.log("Memo updated:", editingMemoIndex, input.value);
-
-  closeEditMemoModal();
-}
-
-function onMemoEditDeleteBtn() {
-  if ( editingMemoIndex < 0 || !memos[editingMemoIndex] ) {
-    console.log("Invalid memo index for delete.");
-    closeEditMemoModal();
-    return;
-  }
-  // 씬에서 제거
-  scene.remove( memos[editingMemoIndex].object );
-  memos.splice(editingMemoIndex, 1);
-  console.log("Memo deleted:", editingMemoIndex);
-
-  closeEditMemoModal();
-}
-
-// ---------------------- 클릭 ----------------------
 function onPointerDown( e ) {
   mouse.x = ( e.clientX / window.innerWidth ) * 2 - 1;
   mouse.y = - ( e.clientY / window.innerHeight ) * 2 + 1;
@@ -521,10 +439,9 @@ function onPointerDown( e ) {
   raycaster.setFromCamera( mouse, camera );
   raycaster.firstHitOnly = true;
 
-  // 1) 메모 배열(노란 구들)과의 충돌 체크
+  // 1) 메모 오브젝트 클릭
   const memoHits = raycaster.intersectObjects( memos.map(m => m.object), true );
   if ( memoHits && memoHits.length > 0 ) {
-    // 해당 메모 편집 모달
     const memoObj = memoHits[0].object;
     const foundIndex = memos.findIndex( m => m.object === memoObj );
     if ( foundIndex >= 0 ) {
@@ -533,7 +450,7 @@ function onPointerDown( e ) {
     }
   }
 
-  // 2) memoMode -> 새 메모
+  // 2) 메모 모드 + targetMesh => 새 메모
   if ( !targetMesh ) return;
   if ( params.memoMode ) {
     const meshHits = raycaster.intersectObject( targetMesh, true );
@@ -544,7 +461,7 @@ function onPointerDown( e ) {
     return;
   }
 
-  // 3) 스컬팅 모드
+  // 3) 스컬팅
   const res = raycaster.intersectObject( targetMesh );
   controls.enabled = (res.length === 0);
 }
@@ -586,7 +503,7 @@ function renderLoop() {
     targetMesh.material.matcap = matcaps[ params.matcap ];
   }
 
-  // 브러시 로직
+  // 메모 모드이면 스컬팅 X
   if ( params.memoMode || controls.active || ! brushActive || ! targetMesh ) {
     brush.visible = false;
     symmetryBrush.visible = false;
@@ -614,7 +531,7 @@ function renderLoop() {
       }
 
       if ( !(mouseState || lastMouseState) ) {
-        // 스컬핑 안 된 상태 -> 브러시 위치만
+        // 스컬핑 X 상태 -> 브러시 위치만
         performStroke( hit.point, brush, true, {}, targetMesh, params, rightClick );
         if ( params.symmetrical ) {
           hit.point.x *= -1;
@@ -625,7 +542,7 @@ function renderLoop() {
         lastCastPose.copy( hit.point );
 
       } else {
-        // 스컬핑
+        // 스컬팅
         const mdx = ( mouse.x - lastMouse.x ) * window.innerWidth * window.devicePixelRatio;
         const mdy = ( mouse.y - lastMouse.y ) * window.innerHeight * window.devicePixelRatio;
         let mdist = Math.sqrt( mdx*mdx + mdy*mdy );
@@ -691,11 +608,15 @@ function renderLoop() {
   }
 
   lastMouseState = mouseState;
-
   renderer.render( scene, camera );
   stats.end();
 }
 
-// ---------------------- 실행 ----------------------
-init();
-renderLoop();
+// ---------------------- main ----------------------
+function main() {
+  init();
+  renderLoop();
+}
+
+// 실행
+main();
