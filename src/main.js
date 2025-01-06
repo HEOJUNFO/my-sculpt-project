@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
+// BVH
 import {
   acceleratedRaycast,
   computeBoundsTree,
@@ -12,7 +13,10 @@ import {
   MeshBVHHelper,
 } from 'three-mesh-bvh';
 
-// 리팩토링된 헬퍼 모듈들 (별도 파일로 분리했다고 가정)
+// STLExporter 추가!
+import { STLExporter } from 'three/examples/jsm/exporters/STLExporter.js';
+
+// 리팩토링된 헬퍼들 (예: 별도 파일로 분리되어 있다고 가정)
 import { centerAndScaleGeometry } from './geometryHelpers.js';
 import { fitCameraToObject } from './cameraHelpers.js';
 import { loadStlFileAsGeometry } from './stlHelpers.js';
@@ -39,7 +43,7 @@ let initialGeometry = null;
 // 업로드 모델 리스트 (최대 10개)
 let modelList = []; // [{ fileName, geometry }, ...]
 
-// ★ 현재 로딩중인(선택된) 모델 인덱스. (-1이면 미선택)
+// 현재 로딩(선택)된 모델 인덱스
 let activeItemIndex = -1;
 
 // GUI / 파라미터들
@@ -67,20 +71,18 @@ function updateModelListUI() {
   ul.innerHTML = '';
 
   modelList.forEach( (item, idx) => {
-
-    // li 항목
     const li = document.createElement('li');
     li.textContent = `${idx + 1}. ${item.fileName}`;
     li.style.cursor = 'pointer';
     li.style.padding = '4px 0';
 
-    // (★) 리스트 항목 클릭 시: 해당 모델 로드
+    // 리스트 항목 클릭 -> 해당 모델 불러오기
     li.addEventListener('click', () => {
-      activeItemIndex = idx; // 선택된 모델 인덱스 갱신
+      activeItemIndex = idx;
       setTargetMeshGeometry( item.geometry.clone() );
     });
 
-    // (★) 삭제 아이콘
+    // 삭제 아이콘 추가
     const deleteBtn = document.createElement('span');
     deleteBtn.textContent = ' ❌';
     deleteBtn.style.marginLeft = '8px';
@@ -89,7 +91,7 @@ function updateModelListUI() {
 
     // 삭제 버튼 클릭 -> 리스트에서 제거
     deleteBtn.addEventListener('click', e => {
-      e.stopPropagation(); // li의 클릭이벤트가 실행되지 않도록
+      e.stopPropagation(); // li의 클릭 이벤트 방지
       removeFromList(idx);
     });
 
@@ -100,7 +102,8 @@ function updateModelListUI() {
 
 // ---------------------- 리스트에서 항목 제거 ----------------------
 function removeFromList(index) {
-  // 만약 제거 대상이 현재 선택중인 모델이면 -> 씬도 비움
+
+  // 현재 씬에 표시중인 모델이라면, 씬 비우기
   if ( index === activeItemIndex ) {
     if ( targetMesh ) {
       targetMesh.geometry.dispose();
@@ -115,7 +118,6 @@ function removeFromList(index) {
     activeItemIndex = -1;
   }
 
-  // 배열에서 삭제 후 UI 갱신
   modelList.splice(index, 1);
   updateModelListUI();
   console.log(`Removed item from list at index: ${index}`);
@@ -135,12 +137,12 @@ function setTargetMeshGeometry( geometry ) {
     bvhHelper = null;
   }
 
-  // "처음 업로드된" 모델 기록
+  // "처음 업로드된" 모델 기록 (reset 용)
   if ( !initialGeometry ) {
     initialGeometry = geometry.clone();
   }
 
-  // 지오메트리 전처리 (center+scale, mergeVertices, boundsTree 등)
+  // 지오메트리 전처리
   centerAndScaleGeometry( geometry );
   geometry = BufferGeometryUtils.mergeVertices( geometry );
   geometry.computeVertexNormals();
@@ -164,7 +166,7 @@ function setTargetMeshGeometry( geometry ) {
   fitCameraToObject( camera, targetMesh, controls );
 }
 
-// ---------------------- reset(): 처음 업로드 모델로 복원 ----------------------
+// ---------------------- reset(): 처음 업로드된 모델로 복원 ----------------------
 function reset() {
   if ( !initialGeometry ) {
     console.log('아직 업로드된 모델이 없습니다.');
@@ -182,12 +184,11 @@ function reset() {
     bvhHelper = null;
   }
 
-  // 저장해둔 initialGeometry를 다시 clone
   const cloned = initialGeometry.clone();
   setTargetMeshGeometry( cloned );
 }
 
-// ---------------------- save(): 현재 선택된 모델에 변경사항을 저장 ----------------------
+// ---------------------- save(): 현재 선택된 모델에 변경사항 반영 ----------------------
 function saveChanges() {
   if ( activeItemIndex < 0 ) {
     console.log('No item selected. Cannot save changes.');
@@ -198,10 +199,37 @@ function saveChanges() {
     return;
   }
 
-  // targetMesh의 현재 geometry를 다시 clone해서
-  // modelList[activeItemIndex]에 덮어씌움
+  // 현재 씬에서 스컬팅된 geometry를 다시 리스트에 저장
   modelList[activeItemIndex].geometry = targetMesh.geometry.clone();
   console.log(`Saved changes for item: ${modelList[activeItemIndex].fileName}`);
+}
+
+// ---------------------- export: STLExporter로 내보내기 ----------------------
+function exportCurrentModel() {
+  if ( !targetMesh ) {
+    console.log( 'No model to export.' );
+    return;
+  }
+
+  const exporter = new STLExporter();
+  // Mesh 객체인 targetMesh 전달
+  const stlString = exporter.parse( targetMesh );
+
+  const blob = new Blob( [ stlString ], { type: 'text/plain' } );
+  const url = URL.createObjectURL( blob );
+
+  const link = document.createElement( 'a' );
+  link.style.display = 'none';
+  document.body.appendChild( link );
+
+  link.href = url;
+  link.download = 'exportedModel.stl';
+  link.click();
+
+  URL.revokeObjectURL( url );
+  document.body.removeChild( link );
+
+  console.log( 'Exported current model as STL.' );
 }
 
 // ---------------------- STL 파일 드래그앤드롭 ----------------------
@@ -244,7 +272,6 @@ function init() {
   renderer.domElement.style.touchAction = 'none';
 
   scene = new THREE.Scene();
-  scene.fog = new THREE.Fog( 0x263238 / 2, 20, 60 );
 
   // 라이트
   const light = new THREE.DirectionalLight( 0xffffff, 0.5 );
@@ -275,7 +302,7 @@ function init() {
     matcaps[key].encoding = THREE.sRGBEncoding;
   }
 
-  // 브러시(line geometry)
+  // 브러시(LineSegments)
   const brushSegments = [ new THREE.Vector3(), new THREE.Vector3( 0, 0, 1 ) ];
   for ( let i = 0; i < 50; i ++ ) {
     const nexti = i + 1;
@@ -291,6 +318,7 @@ function init() {
   brush = new THREE.LineSegments();
   brush.geometry.setFromPoints( brushSegments );
   brush.material.color.set( 'red' );
+  // 항상 앞으로 표시되도록
   brush.renderOrder = 9999;          
   brush.material.depthTest = false;  
   scene.add( brush );
@@ -300,7 +328,8 @@ function init() {
 
   // OrbitControls
   controls = new OrbitControls( camera, renderer.domElement );
-  controls.minDistance = 1.5;
+  // 사용자 요구사항: minDistance = 1.0
+  controls.minDistance = 1.0;
   controls.addEventListener('start', () => { controls.active = true; });
   controls.addEventListener('end',   () => { controls.active = false; });
 
@@ -341,11 +370,10 @@ function init() {
   });
   helperFolder.open();
 
+  // reset, save, export, rebuildBVH
   gui.add({ reset }, 'reset');
-
-  // (★) clear -> save 로 교체
   gui.add({ save: saveChanges }, 'save');
-
+  gui.add({ export: exportCurrentModel }, 'export');
   gui.add({
     rebuildBVH: () => {
       if ( targetMesh ) {
@@ -356,7 +384,7 @@ function init() {
   }, 'rebuildBVH');
   gui.open();
 
-  // 윈도우 / 드롭 이벤트
+  // 이벤트
   window.addEventListener('resize', onWindowResize);
   window.addEventListener('pointermove', onPointerMove);
   window.addEventListener('pointerdown', onPointerDown, true);
@@ -365,7 +393,6 @@ function init() {
   window.addEventListener('wheel', onWheel );
   window.addEventListener('dragover', onDragOver, false);
   window.addEventListener('drop', onDropSTL, false);
-
 }
 
 // ---------------------- 이벤트 핸들러들 ----------------------
@@ -422,7 +449,6 @@ function renderLoop() {
     symmetryBrush.visible = false;
     lastCastPose.setScalar( Infinity );
   } else {
-    // 스컬팅 로직
     const raycaster = new THREE.Raycaster();
     raycaster.setFromCamera( mouse, camera );
     raycaster.firstHitOnly = true;
@@ -446,7 +472,7 @@ function renderLoop() {
       }
 
       if ( !(mouseState || lastMouseState) ) {
-        // 클릭 안 된 상태 -> 브러시 위치만 갱신
+        // 클릭 안 된 상태 -> 위치만 갱신
         performStroke( hit.point, brush, true, {}, targetMesh, params, rightClick );
         if ( params.symmetrical ) {
           hit.point.x *= -1;
@@ -531,4 +557,3 @@ function renderLoop() {
 // 실행
 init();
 renderLoop();
-
