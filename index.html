@@ -10,42 +10,60 @@
 </head>
 <body>
   <div id="model-list-container" 
-     style="
-       position: absolute;
-       left: 10px;
-       top: 50%;
-       transform: translateY(-50%);
-       width: 200px;
-       background: rgba(0,0,0,0.5);
-       color: #fff;
-       font: 14px sans-serif;
-       padding: 10px;
-       border: 1px solid #444;
-       border-radius: 4px;
-     ">
-  <h3 style="margin-top:0;">Model List</h3>
-  <ul id="model-list" style="list-style:none; padding:0; margin:0;"></ul>
-</div>
+       style="
+         position: absolute;
+         left: 10px;
+         top: 50%;
+         transform: translateY(-50%);
+         width: 200px;
+         background: rgba(0,0,0,0.5);
+         color: #fff;
+         font: 14px sans-serif;
+         padding: 10px;
+         border: 1px solid #444;
+         border-radius: 4px;
+       ">
+    <h3 style="margin-top:0;">Model List</h3>
+    <ul id="model-list" style="list-style:none; padding:0; margin:0;"></ul>
+  </div>
 
-<div id="memo-modal-new"
-style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-       background: rgba(0,0,0,0.8); padding: 20px; border-radius: 8px; color: #fff;">
-<h2>새 메모 작성</h2>
-<textarea id="memo-input-new" rows="4" cols="30"></textarea>
-<br/><br/>
-<button id="memo-new-ok-btn">확인</button>
-</div>
+  <div id="memo-modal-new"
+       style="
+         display: none;
+         position: fixed;
+         top: 50%;
+         left: 50%;
+         transform: translate(-50%, -50%);
+         background: rgba(0,0,0,0.8);
+         padding: 20px;
+         border-radius: 8px;
+         color: #fff;
+       ">
+    <h2>새 메모 작성</h2>
+    <textarea id="memo-input-new" rows="4" cols="30"></textarea>
+    <br/><br/>
+    <button id="memo-new-ok-btn">확인</button>
+  </div>
 
-<!-- 기존 메모 수정 모달 -->
-<div id="memo-modal-edit"
-style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-       background: rgba(0,0,0,0.8); padding: 20px; border-radius: 8px; color: #fff;">
-<h2>메모 수정</h2>
-<textarea id="memo-input-edit" rows="4" cols="30"></textarea>
-<br/><br/>
-<button id="memo-edit-update-btn">Update</button>
-<button id="memo-edit-delete-btn">Delete</button>
-</div>
+  <!-- 기존 메모 수정 모달 -->
+  <div id="memo-modal-edit"
+       style="
+         display: none;
+         position: fixed;
+         top: 50%;
+         left: 50%;
+         transform: translate(-50%, -50%);
+         background: rgba(0,0,0,0.8);
+         padding: 20px;
+         border-radius: 8px;
+         color: #fff;
+       ">
+    <h2>메모 수정</h2>
+    <textarea id="memo-input-edit" rows="4" cols="30"></textarea>
+    <br/><br/>
+    <button id="memo-edit-update-btn">Update</button>
+    <button id="memo-edit-delete-btn">Delete</button>
+  </div>
 
   <!-- Vite를 사용할 때는 ESM(ES Modules) 방식으로 JS 파일을 import -->
   <script type="module" src="/src/main.js"></script>
