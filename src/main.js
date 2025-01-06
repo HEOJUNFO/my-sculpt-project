@@ -13,8 +13,17 @@ import {
 
 // 스컬팅 로직
 import { performStroke, updateNormals } from './sculpt.js';
-// 메모 로직
-import { memos, openNewMemoModal, openEditMemoModal, onMemoNewOkBtn, onMemoEditUpdateBtn, onMemoEditDeleteBtn } from './memo.js';
+
+// 메모 로직 (memos 배열, 메모 오브젝트 등)
+import {
+  memos,
+  openNewMemoModal,
+  openEditMemoModal,
+  onMemoNewOkBtn,
+  onMemoEditUpdateBtn,
+  onMemoEditDeleteBtn
+} from './memo.js';
+
 // 모델 관리 (STL 드롭, 모델 리스트, reset/save/export, etc.)
 import {
   refs,  // { scene, camera, controls, targetMesh, bvhHelper, params, matcaps }
@@ -30,6 +39,7 @@ THREE.Mesh.prototype.raycast = acceleratedRaycast;
 THREE.BufferGeometry.prototype.computeBoundsTree = computeBoundsTree;
 THREE.BufferGeometry.prototype.disposeBoundsTree = disposeBoundsTree;
 
+
 // ---------------------- 전역 상태 ----------------------
 let renderer, stats;
 let brush, symmetryBrush;
@@ -39,7 +49,7 @@ let mouseState = false, lastMouseState = false;
 let lastCastPose = new THREE.Vector3();
 let rightClick = false;
 
-// 프로젝트 전역 파라미터 (GUI에서 사용)
+// ▼ 추가 : 기존 파라미터 + memoHide
 const params = {
   matcap: 'Clay',
 
@@ -62,15 +72,17 @@ const params = {
 
   // 메모 모드
   memoMode: false,
+
+  // ▼ 새로 추가 : 메모 숨김 토글
+  memoHide: false,
 };
 
-// matcaps
 const matcaps = {};
 
 // ---------------------- init() ----------------------
 function init() {
 
-  // 1) renderer
+  // renderer
   renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setPixelRatio(window.devicePixelRatio);
   renderer.setSize(window.innerWidth, window.innerHeight);
@@ -79,32 +91,34 @@ function init() {
   document.body.appendChild(renderer.domElement);
   renderer.domElement.style.touchAction = 'none';
 
-  // 2) scene
+  // scene
   const scene = new THREE.Scene();
 
-  // 3) light
+  // light
   const light = new THREE.DirectionalLight(0xffffff, 0.5);
   light.position.set(1, 1, 1);
   scene.add(light);
   scene.add(new THREE.AmbientLight(0xffffff, 0.4));
 
-  // 4) camera
-  const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 50);
+  // camera
+  const camera = new THREE.PerspectiveCamera(
+    75, window.innerWidth / window.innerHeight, 0.1, 50
+  );
   camera.position.set(0, 0, 3);
   camera.far = 100;
   camera.updateProjectionMatrix();
 
-  // 5) stats
+  // stats
   stats = new Stats();
   document.body.appendChild(stats.dom);
 
-  // 6) matcaps (단순 예시)
+  // matcaps
   matcaps['Clay'] = new THREE.TextureLoader().load('textures/B67F6B_4B2E2A_6C3A34_F3DBC6-256px.png');
   matcaps['Red Wax'] = new THREE.TextureLoader().load('textures/763C39_431510_210504_55241C-256px.png');
   matcaps['Shiny Green'] = new THREE.TextureLoader().load('textures/3B6E10_E3F2C3_88AC2E_99CE51-256px.png');
   matcaps['Normal']   = new THREE.TextureLoader().load('textures/7877EE_D87FC5_75D9C7_1C78C0-256px.png');
 
-  // 브러시 (LineSegments)
+  // 브러시(LineSegments)
   const brushMat = new THREE.LineBasicMaterial({
     color: 'red',
     transparent: true,
@@ -138,7 +152,7 @@ function init() {
   controls.addEventListener('start', ()=>{ controls.active=true; });
   controls.addEventListener('end', ()=>{ controls.active=false; });
 
-  // 7) modelManager refs 연결
+  // modelManager.js에서 참조할 객체들
   refs.scene = scene;
   refs.camera = camera;
   refs.controls = controls;
@@ -147,25 +161,25 @@ function init() {
   refs.params = params;
   refs.matcaps = matcaps;
 
-  // 8) GUI
+  // GUI
   const gui = new dat.GUI();
 
-  // (A) Model Folder
+  // Model Folder
   const modelFolder = gui.addFolder('Model');
   modelFolder.add(params, 'matcap', Object.keys(matcaps)).name('Matcap');
-  modelFolder.add(params, 'modelOpacity', 0.0, 1.0, 0.01).onChange(val => {
+  modelFolder.add(params, 'modelOpacity', 0.0, 1.0, 0.01).name('Model Opacity').onChange(val => {
     if ( refs.targetMesh ) {
       refs.targetMesh.material.opacity = val;
     }
-  }).name('Model Opacity');
+  });
   modelFolder.open();
 
-  // (B) Sculpt Folder
+  // Sculpt Folder
   const sculptFolder = gui.addFolder('Sculpting');
-  sculptFolder.add(params, 'brush', [ 'normal', 'clay', 'flatten' ]);
-  sculptFolder.add(params, 'size', 0.025, 0.25, 0.005);
-  sculptFolder.add(params, 'intensity', 1, 100, 1);
-  sculptFolder.add(params, 'maxSteps', 1, 25, 1);
+  sculptFolder.add(params, 'brush', [ 'normal','clay','flatten' ]);
+  sculptFolder.add(params, 'size', 0.025,0.25,0.005);
+  sculptFolder.add(params, 'intensity',1,100,1);
+  sculptFolder.add(params, 'maxSteps',1,25,1);
   sculptFolder.add(params, 'symmetrical');
   sculptFolder.add(params, 'invert');
   sculptFolder.add(params, 'flatShading').onChange( val => {
@@ -174,14 +188,14 @@ function init() {
       refs.targetMesh.material.needsUpdate = true;
     }
   });
-  sculptFolder.add(params, 'brushOpacity', 0.0, 1.0, 0.01).name('Brush Opacity')
+  sculptFolder.add(params, 'brushOpacity',0.0,1.0,0.01).name('Brush Opacity')
     .onChange(val => {
       brush.material.opacity = val;
       symmetryBrush.material.opacity = val;
     });
   sculptFolder.open();
 
-  // (C) BVH Helper
+  // BVH Helper
   const helperFolder = gui.addFolder('BVH Helper');
   helperFolder.add(params, 'depth', 1, 20, 1).onChange(val => {
     if ( refs.bvhHelper ) {
@@ -189,23 +203,33 @@ function init() {
       refs.bvhHelper.update();
     }
   });
-  helperFolder.add(params, 'displayHelper').onChange(display => {
+  helperFolder.add(params, 'displayHelper').onChange( display => {
     if ( !refs.bvhHelper ) return;
     if ( display ) {
-      scene.add( refs.bvhHelper );
+      refs.scene.add( refs.bvhHelper );
       refs.bvhHelper.update();
     } else {
-      scene.remove( refs.bvhHelper );
+      refs.scene.remove( refs.bvhHelper );
     }
   });
   helperFolder.open();
 
-  // (D) Memo Mode
+  // Memo Mode
   gui.add(params, 'memoMode').name('Memo Mode');
 
-  // (E) Buttons
-  gui.add({ reset }, 'reset');                  
-  gui.add({ save: saveChanges }, 'save');       
+  // ▼ 추가 : Hide Memo( memoHide ) 버튼
+  gui.add(params, 'memoHide').name('Hide Memo')
+    .onChange( (hideVal) => {
+      // hideVal === true -> 모든 메모 비가시화
+      // hideVal === false -> 모두 표시
+      memos.forEach( (m) => {
+        m.object.visible = !hideVal;
+      });
+    });
+
+  // Buttons
+  gui.add({ reset }, 'reset');
+  gui.add({ save: saveChanges }, 'save');
   gui.add({ export: exportCurrentModel }, 'export');
   gui.add({
     rebuildBVH: () => {
@@ -233,24 +257,22 @@ function init() {
   window.addEventListener('wheel', onWheel);
   window.addEventListener('dragover', onDragOver, false);
   window.addEventListener('drop', onDropSTL, false);
+
 }
 
 function renderLoop() {
   requestAnimationFrame(renderLoop);
   stats.begin();
 
-  // matcap
   if ( refs.targetMesh ) {
     refs.targetMesh.material.matcap = refs.matcaps[ refs.params.matcap ];
   }
 
-  // sculpt or memo mode
   if ( params.memoMode || refs.controls.active || ! brushActive || ! refs.targetMesh ) {
     brush.visible = false;
     symmetryBrush.visible = false;
     lastCastPose.setScalar( Infinity );
   } else {
-    // 스컬팅 로직
     const raycaster = new THREE.Raycaster();
     raycaster.setFromCamera( mouse, refs.camera );
     raycaster.firstHitOnly = true;
@@ -366,18 +388,19 @@ function onPointerDown( e ) {
   raycaster.setFromCamera( mouse, refs.camera );
   raycaster.firstHitOnly = true;
 
-  // 1) 메모 오브젝트 클릭?
-  const memoHits = raycaster.intersectObjects( memos.map(m => m.object), true );
-  if ( memoHits && memoHits.length > 0 ) {
-    const memoObj = memoHits[0].object;
-    const foundIndex = memos.findIndex( m => m.object === memoObj );
-    if ( foundIndex >= 0 ) {
-      openEditMemoModal( foundIndex );
-      return;
+  if ( params.memoMode ) {
+    const memoHits = raycaster.intersectObjects( memos.map(m => m.object), true );
+    if ( memoHits && memoHits.length > 0 ) {
+      const memoObj = memoHits[0].object;
+      const foundIndex = memos.findIndex( m => m.object === memoObj );
+      if ( foundIndex >= 0 ) {
+        openEditMemoModal( foundIndex );
+        return;
+      }
     }
   }
 
-  // 2) 메모 모드 + targetMesh => 새 메모
+  // 메모 모드
   if ( ! refs.targetMesh ) return;
   if ( params.memoMode ) {
     const meshHits = raycaster.intersectObject( refs.targetMesh, true );
@@ -387,7 +410,7 @@ function onPointerDown( e ) {
     return;
   }
 
-  // 3) 스컬팅
+  // 스컬팅
   const res = raycaster.intersectObject( refs.targetMesh );
   refs.controls.enabled = (res.length === 0);
 }
@@ -424,4 +447,5 @@ function main() {
   init();
   renderLoop();
 }
+
 main();
