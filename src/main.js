@@ -49,7 +49,7 @@ const params = {
   intensity: 50,
   maxSteps: 10,
   invert: false,
-  symmetrical: true,
+  symmetrical: false,
   flatShading: false,
 
   // BVH Helper
