@@ -70,7 +70,6 @@ const params = {
 
   // 투명도
   brushOpacity: 1.0,
-  modelOpacity: 1.0,
 
   // 메모 모드
   memoMode: false,
@@ -170,11 +169,7 @@ function init() {
   // Model Folder
   const modelFolder = gui.addFolder('Model');
   modelFolder.add(params, 'matcap', Object.keys(matcaps)).name('Matcap');
-  modelFolder.add(params, 'modelOpacity', 0.0, 1.0, 0.01).name('Model Opacity').onChange(val => {
-    if ( refs.targetMesh ) {
-      refs.targetMesh.material.opacity = val;
-    }
-  });
+
   modelFolder.open();
 
   // Sculpt Folder
