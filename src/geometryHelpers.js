@@ -5,7 +5,7 @@
 export function centerAndScaleGeometry( geometry ) {
 
   // 1) 지오메트리 중심을 (0,0,0)에 옮김
-  geometry.center();
+//   geometry.center();
 
   // 2) 바운딩 스피어 계산 -> 반지름(radius)을 1로 맞춤
   geometry.computeBoundingSphere();

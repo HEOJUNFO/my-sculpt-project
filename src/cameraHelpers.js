@@ -6,9 +6,10 @@ import * as THREE from 'three';
  * @param {THREE.Camera} camera 
  * @param {THREE.Object3D} object 
  * @param {number} offset 여유 공간 비율 (기본값 1.25)
- * @param {THREE.OrbitControls} controls
+ * @param {THREE.TrackballControls } controls
  */
 export function fitCameraToObject( camera, object, controls, offset = 1.25 ) {
+    console.log('fitCameraToObject');
 
   object.updateWorldMatrix( true, false );
 
