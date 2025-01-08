@@ -16,7 +16,7 @@ export let modelList = [];  // [{ fileName, geometry }, ...]
 export let activeItemIndex = -1;
 export let initialGeometry = null; // 처음 업로드된 모델
 
-// scene, targetMesh, bvhHelper 는 main.js / sceneSetup.js 등에서 만든 후 주입
+// scene, targetMesh, bvhHelper 는 main.js  등에서 만든 후 주입
 // 여기서는 '참조'를 담아둘 객체를 export (또는 setter 함수를 export)
 export const refs = {
   scene: null,
