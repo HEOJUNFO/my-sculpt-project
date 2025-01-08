@@ -3,7 +3,9 @@
 import Stats from 'three/examples/jsm/libs/stats.module.js';
 import * as dat from 'three/examples/jsm/libs/lil-gui.module.min.js';
 import * as THREE from 'three';
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+
+// ▼ TrackballControls import
+import { TrackballControls } from 'three/examples/jsm/controls/TrackballControls.js';
 
 import {
   acceleratedRaycast,
@@ -49,7 +51,7 @@ let mouseState = false, lastMouseState = false;
 let lastCastPose = new THREE.Vector3();
 let rightClick = false;
 
-// ▼ 추가 : 기존 파라미터 + memoHide
+// ▼ 기존 파라미터 + memoHide
 const params = {
   matcap: 'Clay',
 
@@ -73,7 +75,7 @@ const params = {
   // 메모 모드
   memoMode: false,
 
-  // ▼ 새로 추가 : 메모 숨김 토글
+  // Hide Memo
   memoHide: false,
 };
 
@@ -82,7 +84,7 @@ const matcaps = {};
 // ---------------------- init() ----------------------
 function init() {
 
-  // renderer
+  // 1) renderer
   renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setPixelRatio(window.devicePixelRatio);
   renderer.setSize(window.innerWidth, window.innerHeight);
@@ -91,28 +93,26 @@ function init() {
   document.body.appendChild(renderer.domElement);
   renderer.domElement.style.touchAction = 'none';
 
-  // scene
+  // 2) scene
   const scene = new THREE.Scene();
 
-  // light
+  // 3) light
   const light = new THREE.DirectionalLight(0xffffff, 0.5);
   light.position.set(1, 1, 1);
   scene.add(light);
   scene.add(new THREE.AmbientLight(0xffffff, 0.4));
 
-  // camera
-  const camera = new THREE.PerspectiveCamera(
-    75, window.innerWidth / window.innerHeight, 0.1, 50
-  );
+  // 4) camera
+  const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 50);
   camera.position.set(0, 0, 3);
   camera.far = 100;
   camera.updateProjectionMatrix();
 
-  // stats
+  // 5) stats
   stats = new Stats();
   document.body.appendChild(stats.dom);
 
-  // matcaps
+  // 6) matcaps
   matcaps['Clay'] = new THREE.TextureLoader().load('textures/B67F6B_4B2E2A_6C3A34_F3DBC6-256px.png');
   matcaps['Red Wax'] = new THREE.TextureLoader().load('textures/763C39_431510_210504_55241C-256px.png');
   matcaps['Shiny Green'] = new THREE.TextureLoader().load('textures/3B6E10_E3F2C3_88AC2E_99CE51-256px.png');
@@ -146,13 +146,16 @@ function init() {
   symmetryBrush = brush.clone();
   scene.add(symmetryBrush);
 
-  // OrbitControls
-  const controls = new OrbitControls(camera, renderer.domElement);
-  controls.minDistance = 1.0;
-  controls.addEventListener('start', ()=>{ controls.active=true; });
-  controls.addEventListener('end', ()=>{ controls.active=false; });
+  // ▼ TrackballControls로 교체
+  // (OrbitControls -> TrackballControls)
+  const controls = new TrackballControls(camera, renderer.domElement);
+  // 필요시 추가 설정 (rotateSpeed, zoomSpeed, etc.)
+ controls.rotateSpeed = 3;
 
-  // modelManager.js에서 참조할 객체들
+  controls.addEventListener('start', ()=>{ controls.active = true; });
+  controls.addEventListener('end', ()=>{ controls.active = false; });
+
+  // modelManager.js에서 사용할 참조
   refs.scene = scene;
   refs.camera = camera;
   refs.controls = controls;
@@ -217,11 +220,9 @@ function init() {
   // Memo Mode
   gui.add(params, 'memoMode').name('Memo Mode');
 
-  // ▼ 추가 : Hide Memo( memoHide ) 버튼
+  // Hide Memo
   gui.add(params, 'memoHide').name('Hide Memo')
     .onChange( (hideVal) => {
-      // hideVal === true -> 모든 메모 비가시화
-      // hideVal === false -> 모두 표시
       memos.forEach( (m) => {
         m.object.visible = !hideVal;
       });
@@ -260,9 +261,13 @@ function init() {
 
 }
 
+// 렌더 루프
 function renderLoop() {
   requestAnimationFrame(renderLoop);
   stats.begin();
+
+  // TrackballControls는 매 프레임 update() 필요
+  refs.controls.update();
 
   if ( refs.targetMesh ) {
     refs.targetMesh.material.matcap = refs.matcaps[ refs.params.matcap ];
@@ -288,6 +293,7 @@ function renderLoop() {
       symmetryBrush.position.copy( hit.point );
       symmetryBrush.position.x *= -1;
 
+      // TrackballControls: camera movement is manual, we just disable interactions if needed
       refs.controls.enabled = false;
 
       if ( lastCastPose.x === Infinity ) {
@@ -295,7 +301,6 @@ function renderLoop() {
       }
 
       if ( ! ( mouseState || lastMouseState ) ) {
-        // 브러시 위치만 갱신
         performStroke( hit.point, brush, true, {}, refs.targetMesh, params, rightClick );
         if ( params.symmetrical ) {
           hit.point.x *= -1;
@@ -306,7 +311,7 @@ function renderLoop() {
         lastCastPose.copy( hit.point );
 
       } else {
-        // 실제 스컬팅
+        // 스컬팅 로직
         const mdx = ( mouse.x - lastMouse.x ) * window.innerWidth * window.devicePixelRatio;
         const mdy = ( mouse.y - lastMouse.y ) * window.innerHeight * window.devicePixelRatio;
         let mdist = Math.sqrt( mdx * mdx + mdy * mdy );
@@ -388,6 +393,7 @@ function onPointerDown( e ) {
   raycaster.setFromCamera( mouse, refs.camera );
   raycaster.firstHitOnly = true;
 
+  // 메모 모드
   if ( params.memoMode ) {
     const memoHits = raycaster.intersectObjects( memos.map(m => m.object), true );
     if ( memoHits && memoHits.length > 0 ) {
@@ -400,7 +406,6 @@ function onPointerDown( e ) {
     }
   }
 
-  // 메모 모드
   if ( ! refs.targetMesh ) return;
   if ( params.memoMode ) {
     const meshHits = raycaster.intersectObject( refs.targetMesh, true );
