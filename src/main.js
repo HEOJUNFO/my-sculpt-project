@@ -183,7 +183,6 @@ function init() {
   sculptFolder.add(params, 'size', 0.025,0.25,0.005);
   sculptFolder.add(params, 'intensity',1,100,1);
   sculptFolder.add(params, 'maxSteps',1,25,1);
-  sculptFolder.add(params, 'symmetrical');
   sculptFolder.add(params, 'invert');
   sculptFolder.add(params, 'flatShading').onChange( val => {
     if ( refs.targetMesh ) {
