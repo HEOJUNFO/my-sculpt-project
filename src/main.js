@@ -70,6 +70,7 @@ const params = {
 
   // 투명도
   brushOpacity: 1.0,
+  modelOpacity: 1.0,
 
   // 메모 모드
   memoMode: false,
