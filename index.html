@@ -7,59 +7,99 @@
     body { margin: 0; }
     canvas { display: block; }
 
-    /* 모델 리스트 컨테이너 스타일 그대로 */
+    /* 모델 리스트 컨테이너 */
     #model-list-container {
       position: absolute;
       left: 10px;
       top: 20%;
       transform: translateY(-50%);
-      width: 250px; /* 리스트 전체 폭 200px */
+      width: 300px;               /* 기본 펼쳐진 상태 폭 */
       background: rgba(0,0,0,0.5);
       color: #fff;
       font: 14px sans-serif;
       padding: 10px;
       border: 1px solid #444;
       border-radius: 4px;
+
+      /* 가로 접기 애니메이션 */
+      transition: width 0.3s ease;
+      overflow: hidden; /* 접힘 시 내부 요소가 잘려 보이도록 */
     }
-    #model-list-container h3 {
-      margin-top: 0;
+
+    /* (★) 가로 접힘 상태 */
+    #model-list-container.collapsed-horizontal {
+      width: 50px; /* 접혔을 때 폭 (원하는 값으로 조절) */
+      padding: 10px 5px; /* 버튼만 보이게 최소한으로 간격 줄임 */
     }
+
+    /* 상단 헤더 영역 (제목 + 가로 접기 버튼) */
+    #model-list-header {
+      display: flex;
+      align-items: center;
+      margin-bottom: 8px; /* 아래쪽 약간 여백 */
+    }
+
+    #model-list-header h3 {
+      margin: 0;
+      flex: 1; /* 오른쪽 버튼을 오른쪽 끝으로 밀기 */
+      font-size: 16px;
+    }
+
+    /* 접혔을 때, 제목/기타 숨기기 */
+    #model-list-container.collapsed-horizontal #model-list-header h3 {
+      display: none;
+    }
+
+    /* 접혔을 때, 모델 리스트 숨기기 */
+    #model-list-container.collapsed-horizontal #model-list {
+      display: none;
+    }
+
+    /* 가로 접기 버튼 */
+    #toggle-horizontal {
+      background: transparent;
+      color: #fff;
+      border: none;
+      font-size: 16px;
+      cursor: pointer;
+    }
+
+    /* 실제 모델 리스트 <ul> */
     #model-list {
       list-style: none;
       padding: 0;
       margin: 0;
     }
 
-      /* 실제 파일명 텍스트 부분에만 ellipsis 적용 */
-  .model-filename {
-    flex: 1;               /* 남은 공간을 텍스트가 차지 */
-    overflow: hidden;      
-    white-space: nowrap;
-    text-overflow: ellipsis;
-    display: block;        /* inline-block도 가능 */
-    min-width: 0;          /* flex 레이아웃에서 ellipsis가 동작하려면 min-width: 0 필요 */
-  }
-
-  .model-filename--active {
-    font-weight: bold;
-    color: #ff6;  /* 활성 색상 */
-  }
-  .model-filename--inactive {
-    font-weight: normal;
-    color: #fff;  /* 비활성 색상 */
-  }
-
-
+    /* 모델 리스트 항목 하나 (li) */
     .model-list-item {
-    display: flex;                /* Flex 컨테이너 */
-    align-items: center;          /* 수직 가운데 정렬 */
-    gap: 8px;                     /* 요소 사이 간격 */
-    
-    /* 아래 속성들은 list 스타일 조정 */
-    cursor: pointer;
-    padding: 4px 0;
-    font-size: 14px;        /* 적당한 폰트 크기 */
-  }
+      display: flex;         /* Flex 컨테이너 */
+      align-items: center;   
+      gap: 8px;              /* 내부 요소 간격 */
+      cursor: pointer;
+      padding: 4px 0;
+      font-size: 14px;
+    }
+
+    /* 파일명에만 ellipsis 적용할 div/span */
+    .model-filename {
+      flex: 1;                /* 남은 공간 모두 사용 */
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+      display: block;         /* 또는 inline-block */
+      min-width: 0;           /* flex 레이아웃 + ellipsis 핵심 */
+    }
+
+    /* 활성/비활성 색상 */
+    .model-filename--active {
+      font-weight: bold;
+      color: #ff6;
+    }
+    .model-filename--inactive {
+      font-weight: normal;
+      color: #fff;
+    }
 
     /* 새 메모 입력 모달 */
     #memo-modal-new {
@@ -86,15 +126,22 @@
       border-radius: 8px;
       color: #fff;
     }
-
   </style>
 </head>
 <body>
   <div id="model-list-container">
-    <h3>Model List</h3>
+    <!-- 상단 헤더 (제목 + 접기버튼) -->
+    <div id="model-list-header">
+      <h3>Model List</h3>
+      <!-- 오른쪽으로 접기(가로) 버튼 -->
+      <button id="toggle-horizontal">&gt;</button>
+    </div>
+
+    <!-- 실제 모델 리스트 -->
     <ul id="model-list"></ul>
   </div>
 
+  <!-- 새 메모 입력 모달 -->
   <div id="memo-modal-new">
     <h2>새 메모 작성</h2>
     <textarea id="memo-input-new" rows="4" cols="30"></textarea>
@@ -102,6 +149,7 @@
     <button id="memo-new-ok-btn">확인</button>
   </div>
 
+  <!-- 기존 메모 수정 모달 -->
   <div id="memo-modal-edit">
     <h2>메모 수정</h2>
     <textarea id="memo-input-edit" rows="4" cols="30"></textarea>
@@ -110,7 +158,18 @@
     <button id="memo-edit-delete-btn">Delete</button>
   </div>
 
-  <!-- Vite를 사용할 때는 ESM(ES Modules) 방식으로 JS 파일을 import -->
+  <!-- Vite: ESM import -->
   <script type="module" src="/src/main.js"></script>
+
+  <script>
+    // 가로 접기 버튼 동작
+    const container = document.getElementById('model-list-container');
+    const toggleHorzBtn = document.getElementById('toggle-horizontal');
+
+    toggleHorzBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      container.classList.toggle('collapsed-horizontal');
+    });
+  </script>
 </body>
 </html>
