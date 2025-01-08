@@ -6,58 +6,103 @@
   <style>
     body { margin: 0; }
     canvas { display: block; }
+
+    /* 모델 리스트 컨테이너 스타일 그대로 */
+    #model-list-container {
+      position: absolute;
+      left: 10px;
+      top: 20%;
+      transform: translateY(-50%);
+      width: 250px; /* 리스트 전체 폭 200px */
+      background: rgba(0,0,0,0.5);
+      color: #fff;
+      font: 14px sans-serif;
+      padding: 10px;
+      border: 1px solid #444;
+      border-radius: 4px;
+    }
+    #model-list-container h3 {
+      margin-top: 0;
+    }
+    #model-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+
+      /* 실제 파일명 텍스트 부분에만 ellipsis 적용 */
+  .model-filename {
+    flex: 1;               /* 남은 공간을 텍스트가 차지 */
+    overflow: hidden;      
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    display: block;        /* inline-block도 가능 */
+    min-width: 0;          /* flex 레이아웃에서 ellipsis가 동작하려면 min-width: 0 필요 */
+  }
+
+  .model-filename--active {
+    font-weight: bold;
+    color: #ff6;  /* 활성 색상 */
+  }
+  .model-filename--inactive {
+    font-weight: normal;
+    color: #fff;  /* 비활성 색상 */
+  }
+
+
+    .model-list-item {
+    display: flex;                /* Flex 컨테이너 */
+    align-items: center;          /* 수직 가운데 정렬 */
+    gap: 8px;                     /* 요소 사이 간격 */
+    
+    /* 아래 속성들은 list 스타일 조정 */
+    cursor: pointer;
+    padding: 4px 0;
+    font-size: 14px;        /* 적당한 폰트 크기 */
+  }
+
+    /* 새 메모 입력 모달 */
+    #memo-modal-new {
+      display: none;
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(0,0,0,0.8);
+      padding: 20px;
+      border-radius: 8px;
+      color: #fff;
+    }
+
+    /* 기존 메모 수정 모달 */
+    #memo-modal-edit {
+      display: none;
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(0,0,0,0.8);
+      padding: 20px;
+      border-radius: 8px;
+      color: #fff;
+    }
+
   </style>
 </head>
 <body>
-  <div id="model-list-container" 
-       style="
-         position: absolute;
-         left: 10px;
-         top: 50%;
-         transform: translateY(-50%);
-         width: 200px;
-         background: rgba(0,0,0,0.5);
-         color: #fff;
-         font: 14px sans-serif;
-         padding: 10px;
-         border: 1px solid #444;
-         border-radius: 4px;
-       ">
-    <h3 style="margin-top:0;">Model List</h3>
-    <ul id="model-list" style="list-style:none; padding:0; margin:0;"></ul>
+  <div id="model-list-container">
+    <h3>Model List</h3>
+    <ul id="model-list"></ul>
   </div>
 
-  <div id="memo-modal-new"
-       style="
-         display: none;
-         position: fixed;
-         top: 50%;
-         left: 50%;
-         transform: translate(-50%, -50%);
-         background: rgba(0,0,0,0.8);
-         padding: 20px;
-         border-radius: 8px;
-         color: #fff;
-       ">
+  <div id="memo-modal-new">
     <h2>새 메모 작성</h2>
     <textarea id="memo-input-new" rows="4" cols="30"></textarea>
     <br/><br/>
     <button id="memo-new-ok-btn">확인</button>
   </div>
 
-  <!-- 기존 메모 수정 모달 -->
-  <div id="memo-modal-edit"
-       style="
-         display: none;
-         position: fixed;
-         top: 50%;
-         left: 50%;
-         transform: translate(-50%, -50%);
-         background: rgba(0,0,0,0.8);
-         padding: 20px;
-         border-radius: 8px;
-         color: #fff;
-       ">
+  <div id="memo-modal-edit">
     <h2>메모 수정</h2>
     <textarea id="memo-input-edit" rows="4" cols="30"></textarea>
     <br/><br/>
