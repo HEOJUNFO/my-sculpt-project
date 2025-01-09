@@ -16,7 +16,7 @@ import {
 import { onDropSTL, onDragOver } from './modelManager.js';
 
 // 예: 메모 모달 버튼 (필요시)
-import { onMemoNewOkBtn, onMemoEditUpdateBtn, onMemoEditDeleteBtn } from './memo.js';
+import { onMemoNewOkBtn, onMemoEditUpdateBtn, onMemoEditDeleteBtn,makeDraggable } from './memo.js';
 
 /**
  * 프로그램 진입점
@@ -39,6 +39,9 @@ function main() {
   window.addEventListener('drop', onDropSTL, false);
 
   //    - 메모 모달 버튼 (HTML 내 버튼 요소가 존재한다고 가정)
+  makeDraggable(document.getElementById('memo-modal-new'));
+  makeDraggable(document.getElementById('memo-modal-edit'));
+
   const memoNewOkBtn      = document.getElementById('memo-new-ok-btn');
   const memoEditUpdateBtn = document.getElementById('memo-edit-update-btn');
   const memoEditDeleteBtn = document.getElementById('memo-edit-delete-btn');
