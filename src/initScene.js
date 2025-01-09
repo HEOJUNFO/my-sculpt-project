@@ -40,7 +40,7 @@ const params = {
   // Sculpting
   size: 0.1,
   brush: 'clay',
-  intensity: 50,
+  intensity: 25,
   maxSteps: 10,
   invert: false,
   symmetrical: false,
