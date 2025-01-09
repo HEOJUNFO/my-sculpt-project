@@ -222,20 +222,21 @@
       <button class="brush-btn" id="btn-flatten">flatten</button>
     </div>
     <div class="slider-row">
-      <label for="sizeRange">크기(Size)</label>
-      <input type="range" id="sizeRange" min="0.025" max="0.25" step="0.005" value="0.1" />
-    </div>
-    <div class="slider-row">
-      <label for="intensityRange">강도(Intensity)</label>
+      <label for="intensityRange">Intensity (Ctrl + wheel) </label>
       <input type="range" id="intensityRange" min="1" max="100" step="1" value="50" />
     </div>
+    <div class="slider-row">
+      <label id="sizeLabel" for="sizeRange">Size (Shift + wheel)</label>
+      <input type="range" id="sizeRange" min="0.025" max="0.25" step="0.005" value="0.1" />
+    </div>
+   
   </div>
 
   <!-- Vite import -->
   <script type="module" src="/src/main.js"></script>
 
   <script>
-    // (기존) 가로 접기 버튼
+    // ▼ 모델 리스트 접기 버튼
     const container = document.getElementById('model-list-container');
     const toggleHorzBtn = document.getElementById('toggle-horizontal');
     toggleHorzBtn.addEventListener('click', e => {
@@ -243,43 +244,46 @@
       container.classList.toggle('collapsed-horizontal');
     });
 
-    // (추가) Sculpt UI 로직
-    const btnNormal = document.getElementById('btn-normal');
-    const btnClay   = document.getElementById('btn-clay');
-    const btnFlatten= document.getElementById('btn-flatten');
-
-    const sizeRange = document.getElementById('sizeRange');
-    const intensityRange = document.getElementById('intensityRange');
+    // ▼ 브러시 UI (임시)
+    const btnNormal   = document.getElementById('btn-normal');
+    const btnClay     = document.getElementById('btn-clay');
+    const btnFlatten  = document.getElementById('btn-flatten');
 
     let currentBrush = 'normal'; // default
-    let sizeValue = 0.1;
-    let intensityValue = 50;
-
     function setBrushMode(mode) {
       currentBrush = mode;
-      // 활성화/비활성화
       btnNormal.classList.remove('active');
       btnClay.classList.remove('active');
       btnFlatten.classList.remove('active');
-      if (mode === 'normal')   btnNormal.classList.add('active');
-      if (mode === 'clay')     btnClay.classList.add('active');
-      if (mode === 'flatten')  btnFlatten.classList.add('active');
+      if (mode === 'normal')  btnNormal.classList.add('active');
+      if (mode === 'clay')    btnClay.classList.add('active');
+      if (mode === 'flatten') btnFlatten.classList.add('active');
     }
-
-    btnNormal.addEventListener('click', ()=> setBrushMode('normal'));
-    btnClay.addEventListener('click',  ()=> setBrushMode('clay'));
-    btnFlatten.addEventListener('click',()=> setBrushMode('flatten'));
-
-    sizeRange.addEventListener('input', ()=>{
-      sizeValue = parseFloat(sizeRange.value);
-   
-    });
-    intensityRange.addEventListener('input', ()=>{
-      intensityValue = parseFloat(intensityRange.value);
-    });
-
-    // 초기 브러시: normal
+    btnNormal.addEventListener('click',   ()=> setBrushMode('normal'));
+    btnClay.addEventListener('click',     ()=> setBrushMode('clay'));
+    btnFlatten.addEventListener('click',  ()=> setBrushMode('flatten'));
     setBrushMode('normal');
+
+    // ▼ 슬라이더
+    const sizeRange = document.getElementById('sizeRange');
+    const intensityRange = document.getElementById('intensityRange');
+    sizeRange.addEventListener('input', ()=> {
+      // ...
+    });
+    intensityRange.addEventListener('input', ()=> {
+      // ...
+    });
+
+    // ▼ OS 체크 → sizeLabel 문구 교체
+    const isMac = navigator.userAgent.toLowerCase().includes('mac');
+    const sizeLabel = document.getElementById('sizeLabel');
+    if (sizeLabel) {
+      if (isMac) {
+        sizeLabel.textContent = 'Size (Command + wheel)';
+      } else {
+        sizeLabel.textContent = 'Size (Shift + wheel)';
+      }
+    }
   </script>
 </body>
 </html>
