@@ -40,77 +40,94 @@ function createInactiveMaterial() {
 }
 
 export function updateModelListUI() {
-  const ul = document.getElementById('model-list');
-  if ( !ul ) return;
-
-  ul.innerHTML = '';
-
-  modelList.forEach( (item, idx) => {
-    // li
-    const li = document.createElement('li');
-    li.classList.add('model-list-item');
-
-    // 파일명
-    const filenameDiv = document.createElement('div');
-    filenameDiv.classList.add('model-filename');
-    let text = `${idx + 1}. ${item.fileName}`;
-    if ( idx === activeItemIndex ) {
-      filenameDiv.classList.add('model-filename--active');
+    const ul = document.getElementById('model-list');
+    if ( !ul ) return;
+  
+    // (추가) 화면 중앙에 위치한 안내 DIV
+    const dragHint = document.getElementById('drag-hint');
+  
+    // 리스트 초기화
+    ul.innerHTML = '';
+  
+    // 모델이 비어있으면 => 중앙 안내 문구 표시
+    if ( modelList.length === 0 ) {
+      if (dragHint) {
+        dragHint.style.display = 'block';
+      }
+      return; // 리스트 생성 로직은 생략
     } else {
-      filenameDiv.classList.add('model-filename--inactive');
+      // 모델이 하나 이상 있으면 => 중앙 안내 문구 숨김
+      if (dragHint) {
+        dragHint.style.display = 'none';
+      }
     }
-    filenameDiv.textContent = text;
-
-    // 슬라이더
-    const opacitySlider = document.createElement('input');
-    opacitySlider.type = 'range';
-    opacitySlider.min = '0';
-    opacitySlider.max = '1';
-    opacitySlider.step = '0.01';
-    opacitySlider.style.width = '80px';
-
-    // 현재 opacity
-    const currentOpacity = (item.customOpacity !== undefined)
-      ? item.customOpacity
-      : (item.mesh.material.opacity ?? 1.0);
-    opacitySlider.value = String(currentOpacity);
-
-      // input 이벤트
+  
+    // ▼ 여기부터는 modelList가 1개 이상일 때의 로직
+    modelList.forEach( (item, idx) => {
+      // li
+      const li = document.createElement('li');
+      li.classList.add('model-list-item');
+  
+      // 파일명
+      const filenameDiv = document.createElement('div');
+      filenameDiv.classList.add('model-filename');
+      let text = `${idx + 1}. ${item.fileName}`;
+      if ( idx === activeItemIndex ) {
+        filenameDiv.classList.add('model-filename--active');
+      } else {
+        filenameDiv.classList.add('model-filename--inactive');
+      }
+      filenameDiv.textContent = text;
+  
+      // 슬라이더
+      const opacitySlider = document.createElement('input');
+      opacitySlider.type = 'range';
+      opacitySlider.min = '0';
+      opacitySlider.max = '1';
+      opacitySlider.step = '0.01';
+      opacitySlider.style.width = '80px';
+  
+      // 현재 opacity
+      const currentOpacity = (item.customOpacity !== undefined)
+        ? item.customOpacity
+        : (item.mesh.material.opacity ?? 1.0);
+      opacitySlider.value = String(currentOpacity);
+  
+      // 슬라이더 변경 이벤트
       opacitySlider.addEventListener('input', e => {
         e.stopPropagation();
         const val = parseFloat(opacitySlider.value);
         item.customOpacity = val;
         item.mesh.material.opacity = val;
       });
-
-    // 삭제 버튼
-    const deleteBtn = document.createElement('span');
-    deleteBtn.textContent = ' ❌';
-    deleteBtn.style.color = '#f66';
-    deleteBtn.style.cursor = 'pointer';
-    deleteBtn.addEventListener('click', e => {
-      e.stopPropagation();
-      removeFromList(idx);
-    });
-
-    // li 클릭 -> 활성 모델 변경
-    li.addEventListener('click', (e) => {
+  
+      // 삭제 버튼
+      const deleteBtn = document.createElement('span');
+      deleteBtn.textContent = ' ❌';
+      deleteBtn.style.color = '#f66';
+      deleteBtn.style.cursor = 'pointer';
+      deleteBtn.addEventListener('click', e => {
+        e.stopPropagation();
+        removeFromList(idx);
+      });
+  
+      // li 클릭 -> 활성 모델 변경
+      li.addEventListener('click', (e) => {
         if ( e.target === opacitySlider ) {
-          return;
+          return; // 슬라이더 클릭은 무시 (활성화 변경 X)
         }
-
         activeItemIndex = idx;
         setTargetMeshAsActive(item.mesh);
       });
-
-    // 구성
-    li.appendChild(filenameDiv);
-    li.appendChild(opacitySlider);
-    li.appendChild(deleteBtn);
-
-    ul.appendChild(li);
-  });
-}
+  
+      // li 구성
+      li.appendChild(filenameDiv);
+      li.appendChild(opacitySlider);
+      li.appendChild(deleteBtn);
+  
+      ul.appendChild(li);
+    });
+  }
 
 function setTargetMeshAsActive( mesh ) {
   if ( refs.bvhHelper ) {
