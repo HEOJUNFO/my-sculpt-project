@@ -42,7 +42,7 @@ THREE.BufferGeometry.prototype.disposeBoundsTree = disposeBoundsTree;
 
 // ---------------------- 전역 상태 ----------------------
 let renderer, stats;
-let brush, symmetryBrush;
+let brush
 let brushActive = false;
 let mouse = new THREE.Vector2(), lastMouse = new THREE.Vector2();
 let mouseState = false, lastMouseState = false;
@@ -141,9 +141,6 @@ function init() {
   brush.renderOrder = 9999;
   scene.add(brush);
 
-  symmetryBrush = brush.clone();
-  scene.add(symmetryBrush);
-
   // ▼ TrackballControls
   const controls = new TrackballControls(camera, renderer.domElement);
   controls.rotateSpeed = 3;
@@ -181,7 +178,6 @@ function init() {
   sculptFolder.add(params, 'brushOpacity',0.0,1.0,0.01).name('Brush Opacity')
     .onChange(val => {
       brush.material.opacity = val;
-      symmetryBrush.material.opacity = val;
     });
   sculptFolder.open();
 
@@ -311,7 +307,6 @@ function renderLoop() {
 
   if ( params.memoMode || refs.controls.active || ! brushActive || ! refs.targetMesh ) {
     brush.visible = false;
-    symmetryBrush.visible = false;
     lastCastPose.setScalar( Infinity );
   } else {
     const raycaster = new THREE.Raycaster();
@@ -324,10 +319,8 @@ function renderLoop() {
       brush.scale.set( params.size, params.size, 0.1 );
       brush.position.copy( hit.point );
 
-      symmetryBrush.visible = params.symmetrical;
-      symmetryBrush.scale.set( params.size, params.size, 0.1 );
-      symmetryBrush.position.copy( hit.point );
-      symmetryBrush.position.x *= -1;
+      const zFactor = 0.05 + (params.intensity * 0.01);
+      brush.scale.z = zFactor;
 
       refs.controls.enabled = false;
 
@@ -337,11 +330,7 @@ function renderLoop() {
 
       if ( ! ( mouseState || lastMouseState ) ) {
         performStroke( hit.point, brush, true, {}, refs.targetMesh, params, rightClick );
-        if ( params.symmetrical ) {
-          hit.point.x *= -1;
-          performStroke( hit.point, symmetryBrush, true, {}, refs.targetMesh, params, rightClick );
-          hit.point.x *= -1;
-        }
+      
         lastMouse.copy( mouse );
         lastCastPose.copy( hit.point );
 
@@ -373,11 +362,7 @@ function renderLoop() {
           mdist -= mstep;
 
           performStroke( lastCastPose, brush, false, sets, refs.targetMesh, params, rightClick );
-          if ( params.symmetrical ) {
-            lastCastPose.x *= -1;
-            performStroke( lastCastPose, symmetryBrush, false, sets, refs.targetMesh, params, rightClick );
-            lastCastPose.x *= -1;
-          }
+         
 
           stepCount++;
           if ( stepCount > params.maxSteps ) {
@@ -394,18 +379,13 @@ function renderLoop() {
         } else {
           // 움직임 작으면 위치만
           performStroke( hit.point, brush, true, {}, refs.targetMesh, params, rightClick );
-          if ( params.symmetrical ) {
-            hit.point.x *= -1;
-            performStroke( hit.point, symmetryBrush, true, {}, refs.targetMesh, params, rightClick );
-            hit.point.x *= -1;
-          }
+        
         }
       }
 
     } else {
       refs.controls.enabled = true;
       brush.visible = false;
-      symmetryBrush.visible = false;
       lastMouse.copy( mouse );
       lastCastPose.setScalar( Infinity );
     }
@@ -468,12 +448,41 @@ function onPointerMove( e ) {
   brushActive = true;
 }
 
-function onWheel( e ) {
+const isMac = navigator.userAgent.toLowerCase().includes('mac');
+
+function onWheel(e) {
   let delta = e.deltaY;
+
+  // FireFox 등 deltaMode 보정
   if ( e.deltaMode === 1 ) delta *= 40;
   if ( e.deltaMode === 2 ) delta *= 40;
-  params.size += delta * 0.0001;
-  params.size = Math.max( Math.min( params.size, 0.25 ), 0.025 );
+
+  // (A) Mac → Command(=metaKey) / 그 외 → Shift
+  const sizeKeyPressed = isMac ? e.metaKey : e.shiftKey;
+
+  // 1) size 조절
+  if ( sizeKeyPressed ) {
+    params.size += delta * 0.0001;
+    params.size = Math.max(Math.min(params.size, 0.25), 0.025);
+
+    // ▼ sizeRange 슬라이더 값도 동기화
+    const sizeRange = document.getElementById('sizeRange');
+    if (sizeRange) {
+      sizeRange.value = params.size.toFixed(4);
+    }
+
+  }
+  // 2) intensity 조절 (Ctrl)
+  else if ( e.ctrlKey ) {
+    params.intensity += delta * 0.1;
+    params.intensity = Math.max(1, Math.min(params.intensity, 100));
+
+    // ▼ intensityRange 슬라이더 값도 동기화
+    const intensityRange = document.getElementById('intensityRange');
+    if (intensityRange) {
+      intensityRange.value = String(params.intensity);
+    }
+  }
 }
 
 function onWindowResize() {
