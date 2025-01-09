@@ -44,13 +44,22 @@ function main() {
   const memoEditDeleteBtn = document.getElementById('memo-edit-delete-btn');
 
   if (memoNewOkBtn) {
-    memoNewOkBtn.addEventListener('click', () => onMemoNewOkBtn(scene));
+    memoNewOkBtn.addEventListener('click', (e) => {
+      e.stopPropagation(); 
+      onMemoNewOkBtn(scene);
+    });
   }
   if (memoEditUpdateBtn) {
-    memoEditUpdateBtn.addEventListener('click', () => onMemoEditUpdateBtn(scene));
+    memoEditUpdateBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      onMemoEditUpdateBtn(scene);
+    });
   }
   if (memoEditDeleteBtn) {
-    memoEditDeleteBtn.addEventListener('click', () => onMemoEditDeleteBtn(scene));
+    memoEditDeleteBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      onMemoEditDeleteBtn(scene);
+    });
   }
 
   // 3) 렌더 루프 시작
