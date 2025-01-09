@@ -183,9 +183,21 @@
       width: 100%;
     }
 
+    #drag-hint {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: #ccc;
+  font-size: 24px;
+  text-align: center;
+  pointer-events: none; /* 마우스 이벤트 무시 */
+}
+
   </style>
 </head>
 <body>
+  <div id="drag-hint">Drag STL file here!</div>
   <!-- 기존: 모델 리스트 (가로 접기) -->
   <div id="model-list-container">
     <div id="model-list-header">
