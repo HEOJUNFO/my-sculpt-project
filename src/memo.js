@@ -13,7 +13,7 @@ let editingMemoIndex = -1;
 export function openNewMemoModal( point3D ) {
   pendingMemoPosition.copy( point3D );
   const modal = document.getElementById('memo-modal-new');
-  makeDraggable(modal);
+
   const input = document.getElementById('memo-input-new');
   modal.style.display = 'block';
   input.value = '';
@@ -27,7 +27,7 @@ export function closeNewMemoModal() {
 export function openEditMemoModal( memoIndex ) {
   editingMemoIndex = memoIndex;
   const modal = document.getElementById('memo-modal-edit');
-  makeDraggable(modal);
+
   const input = document.getElementById('memo-input-edit');
   modal.style.display = 'block';
 
