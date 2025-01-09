@@ -220,22 +220,63 @@ function addModelToScene( geometry, fileName ) {
     setTargetMeshAsActive( newMesh );
   }
 
-export function onDropSTL( e ) {
-  e.preventDefault();
-  const files = e.dataTransfer.files;
-  if ( !files || files.length === 0 ) return;
-
-  for ( let i = 0; i < files.length; i++ ) {
-    const file = files[i];
-    loadStlFileAsGeometry( file )
-      .then( geometry => {
-        addModelToScene( geometry, file.name );
-      })
-      .catch( err => {
-        console.error( 'STL load error:', err );
-      });
+  export function onDropSTL(e) {
+    e.preventDefault();
+    
+    const items = e.dataTransfer.items;
+    if (!items || items.length === 0) return;
+    
+    // 각 item을 돌면서 파일/디렉터리인지 판별
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      if (item.kind === 'file') {
+        const entry = item.webkitGetAsEntry();
+        if (entry) {
+          if (entry.isFile) {
+            // 단일 파일 처리
+            entry.file((file) => {
+              if (file.name.toLowerCase().endsWith('.stl')) {
+                loadStlFileAsGeometry(file)
+                  .then((geometry) => {
+                    addModelToScene(geometry, file.name);
+                  })
+                  .catch((err) => console.error('STL load error:', err));
+              }
+            });
+          } else if (entry.isDirectory) {
+            // 디렉터리 -> 재귀 탐색
+            readDirectory(entry);
+          }
+        }
+      }
+    }
   }
-}
+  
+  // 디렉터리 내부를 재귀적으로 읽어 .stl 파일 찾아 로딩
+  function readDirectory(dirEntry) {
+    const reader = dirEntry.createReader();
+    reader.readEntries((entries) => {
+      for (const entry of entries) {
+        if (entry.isFile) {
+          entry.file((file) => {
+            if (file.name.toLowerCase().endsWith('.stl')) {
+              loadStlFileAsGeometry(file)
+                .then((geometry) => {
+                  addModelToScene(geometry, file.name);
+                })
+                .catch((err) => console.error('STL load error:', err));
+            }
+          });
+        } else if (entry.isDirectory) {
+          // 서브폴더가 있을 경우 다시 재귀
+          readDirectory(entry);
+        }
+      }
+    }, (error) => {
+      console.error(error);
+    });
+  }
+  
 
 export function onDragOver( e ) {
   e.preventDefault();
