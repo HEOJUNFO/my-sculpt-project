@@ -11,7 +11,7 @@ import {
   lastCastPose,
   brushActive,
   rightClick,
-    someUpdateFunc,
+  someUpdateFunc,
 } from './eventHandlers.js';
 
 /**
