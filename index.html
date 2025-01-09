@@ -3,6 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <title>My Three.js Vite Project</title>
+  <script type="module" src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.esm.js"></script>
+<script nomodule src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.js"></script>
   <style>
     body { margin: 0; }
     canvas { display: block; }
@@ -133,7 +135,7 @@
       position: absolute;
       left: 10px;
       bottom: 10px;
-      width: 160px;          
+      width: 210px;          
       background: rgba(0,0,0,0.5);
       color: #fff;
       font: 14px sans-serif;
@@ -160,17 +162,24 @@
       margin-bottom: 8px;
     }
     .brush-btn {
-      flex: 1;
+      display: inline-flex;       /* 아이콘 + 텍스트 세로 중앙정렬 */
+      align-items: center;
+      justify-content: center;
+      width: 80px;
+      height: 36px;
       background: #666;
       color: #fff;
       border: none;
       border-radius: 4px;
-      padding: 8px;
       cursor: pointer;
+      font-size: 14px;
       text-align: center;
     }
+    .brush-btn ion-icon {
+      margin-right: 4px; /* 아이콘 오른쪽 약간 간격 */
+    }
     .brush-btn.active {
-      background: #999;
+      background: #bbb;
     }
 
     /* 슬라이더 행 */
@@ -232,9 +241,24 @@
     <h2>자유 수정</h2>
     <hr />
     <div class="brush-buttons">
-      <button class="brush-btn" id="btn-normal">normal</button>
-      <button class="brush-btn" id="btn-clay">clay</button>
-      <button class="brush-btn" id="btn-flatten">flatten</button>
+      <!-- Normal -->
+      <button class="brush-btn" id="btn-normal">
+        <!-- 아이콘: hammer -->
+        <ion-icon name="hammer" style="vertical-align: middle;"></ion-icon>
+        Normal
+      </button>
+      <!-- Clay -->
+      <button class="brush-btn" id="btn-clay">
+        <!-- 아이콘: flask, cube, water 등 원하는 것 -->
+        <ion-icon name="water" style="vertical-align: middle;"></ion-icon>
+        Clay
+      </button>
+      <!-- Flatten -->
+      <button class="brush-btn" id="btn-flatten">
+        <!-- 아이콘: remove-circle, cut, etc. -->
+        <ion-icon name="remove-circle" style="vertical-align: middle;"></ion-icon>
+        Flatten
+      </button>
     </div>
     <div class="slider-row">
       <label for="intensityRange">Intensity (Ctrl + wheel) </label>
@@ -282,11 +306,12 @@
     // ▼ 슬라이더
     const sizeRange = document.getElementById('sizeRange');
     const intensityRange = document.getElementById('intensityRange');
-    sizeRange.addEventListener('input', ()=> {
-      // ...
+    sizeRange.addEventListener('input', ()=>{
+      sizeValue = parseFloat(sizeRange.value);
+   
     });
-    intensityRange.addEventListener('input', ()=> {
-      // ...
+    intensityRange.addEventListener('input', ()=>{
+      intensityValue = parseFloat(intensityRange.value);
     });
 
     // ▼ OS 체크 → sizeLabel 문구 교체

@@ -60,7 +60,7 @@ export function startRenderLoop(renderer, scene, camera, stats) {
           refs.brush.position.copy( hit.point );
 
           // 예: intensity를 z축 두께로 표현
-          const zFactor = 0.05 + (refs.params.intensity * 0.01);
+          const zFactor = 0.01 + (refs.params.intensity * 0.01);
           refs.brush.scale.z = zFactor;
         }
 
