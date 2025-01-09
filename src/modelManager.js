@@ -170,37 +170,38 @@ function removeFromList( index ) {
 }
 
 function addModelToScene( geometry, fileName ) {
-  if ( !initialGeometry ) {
-    initialGeometry = geometry.clone();
-    initialFileName = fileName;
+    if ( !initialGeometry ) {
+      initialGeometry = geometry.clone();
+      initialFileName = fileName;
+    }
+  
+    centerAndScaleGeometry( geometry );
+    geometry = BufferGeometryUtils.mergeVertices( geometry );
+    geometry.computeVertexNormals();
+    geometry.attributes.position.setUsage( THREE.DynamicDrawUsage );
+    geometry.attributes.normal.setUsage( THREE.DynamicDrawUsage );
+    geometry.computeBoundsTree({ setBoundingBox: false });
+  
+    const mat = createActiveMaterial();
+    const newMesh = new THREE.Mesh( geometry, mat );
+    newMesh.frustumCulled = false;
+    refs.scene.add( newMesh );
+  
+    const item = {
+      fileName,
+      geometry: geometry.clone(),      // 현재 적용된 geometry
+      mesh: newMesh,
+      customOpacity: mat.opacity,
+      originalGeometry: geometry.clone()  // ← 원본 geometry를 별도로 복사해 저장
+    };
+    modelList.push( item );
+  
+    if ( modelList.length === 1 ) {
+      fitCameraToObject( refs.camera, newMesh, refs.controls );
+    }
+  
+    setTargetMeshAsActive( newMesh );
   }
-
-  centerAndScaleGeometry( geometry );
-  geometry = BufferGeometryUtils.mergeVertices( geometry );
-  geometry.computeVertexNormals();
-  geometry.attributes.position.setUsage( THREE.DynamicDrawUsage );
-  geometry.attributes.normal.setUsage( THREE.DynamicDrawUsage );
-  geometry.computeBoundsTree({ setBoundingBox: false });
-
-  const mat = createActiveMaterial();
-  const newMesh = new THREE.Mesh( geometry, mat );
-  newMesh.frustumCulled = false;
-  refs.scene.add( newMesh );
-
-  const item = {
-    fileName,
-    geometry: geometry.clone(),
-    mesh: newMesh,
-    customOpacity: mat.opacity,
-  };
-  modelList.push( item );
-
-  if ( modelList.length === 1 ) {
-    fitCameraToObject( refs.camera, newMesh, refs.controls );
-  }
-
-  setTargetMeshAsActive( newMesh );
-}
 
 export function onDropSTL( e ) {
   e.preventDefault();
@@ -224,28 +225,39 @@ export function onDragOver( e ) {
 }
 
 export function reset() {
-  if ( !initialGeometry ) {
-    console.log('No initial model to reset to.');
-    return;
+    // 활성 모델이 없으면 종료
+    if ( activeItemIndex < 0 ) {
+      console.log('No active item to reset.');
+      return;
+    }
+  
+    const activeItem = modelList[ activeItemIndex ];
+    if ( !activeItem.originalGeometry ) {
+      console.log('No original geometry stored for this item.');
+      return;
+    }
+  
+    // 지금 편집 중인 메쉬의 geometry를 교체
+    const oldGeo = activeItem.mesh.geometry;
+    oldGeo.dispose(); // 기존 geometry 메모리 해제
+    activeItem.mesh.geometry = activeItem.originalGeometry.clone();
+    activeItem.mesh.geometry.computeVertexNormals();
+    activeItem.mesh.geometry.computeBoundsTree({ setBoundingBox: false });
+  
+    // bvhHelper 리셋
+    if ( refs.bvhHelper ) {
+      refs.scene.remove( refs.bvhHelper );
+      refs.bvhHelper = null;
+    }
+    const newHelper = new MeshBVHHelper( activeItem.mesh, refs.params.depth );
+    if ( refs.params.displayHelper ) {
+      refs.scene.add( newHelper );
+    }
+    newHelper.update();
+    refs.bvhHelper = newHelper;
+  
+    console.log(`Reset model: ${activeItem.fileName}`);
   }
-  modelList.forEach( item => {
-    refs.scene.remove( item.mesh );
-  });
-  modelList = [];
-  activeItemIndex = -1;
-
-  if ( refs.bvhHelper ) {
-    refs.scene.remove( refs.bvhHelper );
-    refs.bvhHelper = null;
-  }
-  refs.targetMesh = null;
-
-  if ( !initialFileName ) {
-    addModelToScene( initialGeometry.clone(), 'InitialModel' );
-  } else {
-    addModelToScene( initialGeometry.clone(), initialFileName );
-  }
-}
 
 export function saveChanges() {
   if ( activeItemIndex < 0 ) {
