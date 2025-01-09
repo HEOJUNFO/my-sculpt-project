@@ -1,12 +1,10 @@
 // src/main.js
 
 import Stats from 'three/examples/jsm/libs/stats.module.js';
-import * as dat from 'three/examples/jsm/libs/lil-gui.module.min.js';
+import * as dat from 'three/examples/jsm/libs/lil-gui.module.min.js'; 
+
 import * as THREE from 'three';
-
-// ▼ TrackballControls import
 import { TrackballControls } from 'three/examples/jsm/controls/TrackballControls.js';
-
 import {
   acceleratedRaycast,
   computeBoundsTree,
@@ -16,7 +14,7 @@ import {
 // 스컬팅 로직
 import { performStroke, updateNormals } from './sculpt.js';
 
-// 메모 로직 (memos 배열, 메모 오브젝트 등)
+// 메모 로직
 import {
   memos,
   openNewMemoModal,
@@ -26,9 +24,9 @@ import {
   onMemoEditDeleteBtn
 } from './memo.js';
 
-// 모델 관리 (STL 드롭, 모델 리스트, reset/save/export, etc.)
+// 모델 관리
 import {
-  refs,  // { scene, camera, controls, targetMesh, bvhHelper, params, matcaps }
+  refs,
   reset,
   saveChanges,
   exportCurrentModel,
@@ -56,9 +54,9 @@ const params = {
   matcap: 'Clay',
 
   // Sculpting
-  size: 0.1,
-  brush: 'clay',
-  intensity: 50,
+  size: 0.1,         // (★) 초기값
+  brush: 'clay',     // (★) 초기값
+  intensity: 50,     // (★) 초기값
   maxSteps: 10,
   invert: false,
   symmetrical: false,
@@ -146,16 +144,13 @@ function init() {
   symmetryBrush = brush.clone();
   scene.add(symmetryBrush);
 
-  // ▼ TrackballControls로 교체
-  // (OrbitControls -> TrackballControls)
+  // ▼ TrackballControls
   const controls = new TrackballControls(camera, renderer.domElement);
-  // 필요시 추가 설정 (rotateSpeed, zoomSpeed, etc.)
- controls.rotateSpeed = 3;
-
+  controls.rotateSpeed = 3;
   controls.addEventListener('start', ()=>{ controls.active = true; });
-  controls.addEventListener('end', ()=>{ controls.active = false; });
+  controls.addEventListener('end',   ()=>{ controls.active = false; });
 
-  // modelManager.js에서 사용할 참조
+  // 참조 연결
   refs.scene = scene;
   refs.camera = camera;
   refs.controls = controls;
@@ -175,9 +170,6 @@ function init() {
 
   // Sculpt Folder
   const sculptFolder = gui.addFolder('Sculpting');
-  sculptFolder.add(params, 'brush', [ 'normal','clay','flatten' ]);
-  sculptFolder.add(params, 'size', 0.025,0.25,0.005);
-  sculptFolder.add(params, 'intensity',1,100,1);
   sculptFolder.add(params, 'maxSteps',1,25,1);
   sculptFolder.add(params, 'invert');
   sculptFolder.add(params, 'flatShading').onChange( val => {
@@ -238,6 +230,8 @@ function init() {
     }
   }, 'rebuildBVH');
   gui.open();
+  
+  setupCustomSculptUI();
 
   // 메모 모달 버튼
   document.getElementById('memo-new-ok-btn').addEventListener('click', () => onMemoNewOkBtn( scene ));
@@ -256,12 +250,59 @@ function init() {
 
 }
 
-// 렌더 루프
+// ---------------------- (추가) UI 함수: brush + slider ----------------------
+function setupCustomSculptUI() {
+  // (1) 브러시 버튼
+  const btnNormal   = document.getElementById('btn-normal');
+  const btnClay     = document.getElementById('btn-clay');
+  const btnFlatten  = document.getElementById('btn-flatten');
+
+  // 만약 HTML에 존재한다면...
+  // brush-btn.active 변환
+  function setBrushMode(mode) {
+    params.brush = mode; // sculpt에서 참조
+    // 버튼 상태 업데이트
+    btnNormal.classList.remove('active');
+    btnClay.classList.remove('active');
+    btnFlatten.classList.remove('active');
+
+    if (mode === 'normal')  btnNormal.classList.add('active');
+    if (mode === 'clay')    btnClay.classList.add('active');
+    if (mode === 'flatten') btnFlatten.classList.add('active');
+  }
+  // 이벤트
+  if (btnNormal && btnClay && btnFlatten) {
+    btnNormal.addEventListener('click', ()=> setBrushMode('normal'));
+    btnClay.addEventListener('click',   ()=> setBrushMode('clay'));
+    btnFlatten.addEventListener('click',()=> setBrushMode('flatten'));
+  }
+
+  // 초기값
+  setBrushMode(params.brush);
+
+  // (2) 슬라이더: sizeRange, intensityRange
+  const sizeRange      = document.getElementById('sizeRange');
+  const intensityRange = document.getElementById('intensityRange');
+
+  if (sizeRange) {
+    sizeRange.value = String(params.size);
+    sizeRange.addEventListener('input', () => {
+      params.size = parseFloat(sizeRange.value);
+    });
+  }
+  if (intensityRange) {
+    intensityRange.value = String(params.intensity);
+    intensityRange.addEventListener('input', () => {
+      params.intensity = parseFloat(intensityRange.value);
+    });
+  }
+}
+
+// ---------------------- 렌더 루프 ----------------------
 function renderLoop() {
   requestAnimationFrame(renderLoop);
   stats.begin();
 
-  // TrackballControls는 매 프레임 update() 필요
   refs.controls.update();
 
   if ( refs.targetMesh ) {
@@ -288,7 +329,6 @@ function renderLoop() {
       symmetryBrush.position.copy( hit.point );
       symmetryBrush.position.x *= -1;
 
-      // TrackballControls: camera movement is manual, we just disable interactions if needed
       refs.controls.enabled = false;
 
       if ( lastCastPose.x === Infinity ) {
@@ -309,7 +349,7 @@ function renderLoop() {
         // 스컬팅 로직
         const mdx = ( mouse.x - lastMouse.x ) * window.innerWidth * window.devicePixelRatio;
         const mdy = ( mouse.y - lastMouse.y ) * window.innerHeight * window.devicePixelRatio;
-        let mdist = Math.sqrt( mdx * mdx + mdy * mdy );
+        let mdist = Math.sqrt( mdx*mdx + mdy*mdy );
         let castDist = hit.point.distanceTo( lastCastPose );
 
         const step = params.size * 0.15;
