@@ -100,30 +100,33 @@
       color: #fff;
     }
 
-    /* 새 메모 입력 모달 */
     #memo-modal-new {
-      display: none;
-      position: fixed;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      background: rgba(0,0,0,0.8);
-      padding: 20px;
-      border-radius: 8px;
-      color: #fff;
-    }
-    /* 기존 메모 수정 모달 */
-    #memo-modal-edit {
-      display: none;
-      position: fixed;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      background: rgba(0,0,0,0.8);
-      padding: 20px;
-      border-radius: 8px;
-      color: #fff;
-    }
+  display: none;
+  position: fixed; /* ← 여기서 absolute 대신 fixed로 */
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(0,0,0,0.8);
+  padding: 20px;
+  border-radius: 8px;
+  color: #fff;
+  cursor: move; /* 마우스 포인터가 '드래그'임을 표시 */
+  z-index: 9999; /* 다른 요소보다 위로 */
+}
+/* 기존 메모 수정 모달 */
+#memo-modal-edit {
+  display: none;
+  position: fixed; 
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(0,0,0,0.8);
+  padding: 20px;
+  border-radius: 8px;
+  color: #fff;
+  cursor: move;
+  z-index: 9999;
+}
 
     /* ---- (추가) Sculpt UI (하단) ---- */
     #sculpt-ui {

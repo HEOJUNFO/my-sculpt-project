@@ -13,6 +13,7 @@ let editingMemoIndex = -1;
 export function openNewMemoModal( point3D ) {
   pendingMemoPosition.copy( point3D );
   const modal = document.getElementById('memo-modal-new');
+  makeDraggable(modal);
   const input = document.getElementById('memo-input-new');
   modal.style.display = 'block';
   input.value = '';
@@ -26,6 +27,7 @@ export function closeNewMemoModal() {
 export function openEditMemoModal( memoIndex ) {
   editingMemoIndex = memoIndex;
   const modal = document.getElementById('memo-modal-edit');
+  makeDraggable(modal);
   const input = document.getElementById('memo-input-edit');
   modal.style.display = 'block';
 
@@ -108,3 +110,35 @@ export function onMemoEditDeleteBtn( scene ) {
 
   closeEditMemoModal();
 }
+
+export function makeDraggable(modalElement) {
+    let isDragging = false;
+    let offsetX = 0;
+    let offsetY = 0;
+  
+    // 마우스를 누르면 드래그 시작
+    modalElement.addEventListener('mousedown', (e) => {
+      isDragging = true;
+  
+      // 모달의 현재 위치와, 마우스 다운 지점의 상대적 오프셋
+      // (modalElement.getBoundingClientRect()를 써도 됩니다.)
+      offsetX = e.clientX - modalElement.offsetLeft;
+      offsetY = e.clientY - modalElement.offsetTop;
+    });
+  
+    // 전역 document에 mousemove 리스너 → 드래그 중에 위치 이동
+    document.addEventListener('mousemove', (e) => {
+      if (!isDragging) return;
+      const x = e.clientX - offsetX;
+      const y = e.clientY - offsetY;
+  
+      // 모달 위치 변경
+      modalElement.style.left = x + 'px';
+      modalElement.style.top = y + 'px';
+    });
+  
+    // 전역 document에 mouseup 리스너 → 드래그 종료
+    document.addEventListener('mouseup', () => {
+      isDragging = false;
+    });
+  }
