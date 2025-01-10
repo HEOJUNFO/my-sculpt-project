@@ -248,78 +248,85 @@ export function placeGizmoAtMeshCenter(mesh) {
 
 /** 모델 리스트 UI 업데이트 */
 export function updateModelListUI() {
-  const ul = document.getElementById('model-list');
-  if (!ul) return;
-
-  const dragHint = document.getElementById('drag-hint');
-  ul.innerHTML = '';
-
-  if (modelList.length === 0) {
-    if (dragHint) {
-      dragHint.style.display = 'block';
-    }
-    return; 
-  } else {
-    if (dragHint) {
-      dragHint.style.display = 'none';
-    }
-  }
-
-  modelList.forEach((item, idx) => {
-    const li = document.createElement('li');
-    li.classList.add('model-list-item');
-
-    const filenameDiv = document.createElement('div');
-    filenameDiv.classList.add('model-filename');
-    let text = `${idx + 1}. ${item.fileName}`;
-    if (idx === activeItemIndex) {
-      filenameDiv.classList.add('model-filename--active');
+    const ul = document.getElementById('model-list');
+    if (!ul) return;
+  
+    const dragHint = document.getElementById('drag-hint');
+    ul.innerHTML = '';
+  
+    // 배경색 4가지를 순환하기 위한 배열
+    const backgroundColors = ['#d1d1d1', '#E0bcbc', '#f3f4c5', '#a3a3a3'];
+  
+    if (modelList.length === 0) {
+      if (dragHint) {
+        dragHint.style.display = 'block';
+      }
+      return; 
     } else {
-      filenameDiv.classList.add('model-filename--inactive');
+      if (dragHint) {
+        dragHint.style.display = 'none';
+      }
     }
-    filenameDiv.textContent = text;
-
-    const opacitySlider = document.createElement('input');
-    opacitySlider.type = 'range';
-    opacitySlider.min = '0';
-    opacitySlider.max = '1';
-    opacitySlider.step = '0.01';
-    opacitySlider.style.width = '80px';
-
-    const currentOpacity = (item.customOpacity !== undefined)
-      ? item.customOpacity
-      : (item.mesh.material.opacity ?? 1.0);
-    opacitySlider.value = String(currentOpacity);
-
-    opacitySlider.addEventListener('input', e => {
-      e.stopPropagation();
-      const val = parseFloat(opacitySlider.value);
-      item.customOpacity = val;
-      item.mesh.material.opacity = val;
+  
+    modelList.forEach((item, idx) => {
+      const li = document.createElement('li');
+      li.classList.add('model-list-item');
+  
+      // 색상 순환 적용
+      li.style.backgroundColor = backgroundColors[idx % 4];
+  
+      const filenameDiv = document.createElement('div');
+      filenameDiv.classList.add('model-filename');
+      let text = `${idx + 1}. ${item.fileName}`;
+      if (idx === activeItemIndex) {
+        filenameDiv.classList.add('model-filename--active');
+      } else {
+        filenameDiv.classList.add('model-filename--inactive');
+      }
+      filenameDiv.textContent = text;
+  
+      const opacitySlider = document.createElement('input');
+      opacitySlider.type = 'range';
+      opacitySlider.min = '0';
+      opacitySlider.max = '1';
+      opacitySlider.step = '0.01';
+      opacitySlider.style.width = '80px';
+      opacitySlider.classList.add('custom-slider');
+  
+      const currentOpacity = (item.customOpacity !== undefined)
+        ? item.customOpacity
+        : (item.mesh.material.opacity ?? 1.0);
+      opacitySlider.value = String(currentOpacity);
+  
+      opacitySlider.addEventListener('input', e => {
+        e.stopPropagation();
+        const val = parseFloat(opacitySlider.value);
+        item.customOpacity = val;
+        item.mesh.material.opacity = val;
+      });
+  
+      const deleteBtn = document.createElement('span');
+      deleteBtn.textContent = ' ❌';
+      deleteBtn.style.color = '#f66';
+      deleteBtn.style.cursor = 'pointer';
+      deleteBtn.addEventListener('click', e => {
+        e.stopPropagation();
+        removeFromList(idx);
+      });
+  
+      li.addEventListener('click', (e) => {
+        if (e.target === opacitySlider) return;
+        activeItemIndex = idx;
+        setTargetMeshAsActive(item.mesh);
+        fitCameraToObject(refs.camera, item.mesh, refs.controls);
+      });
+  
+      li.appendChild(filenameDiv);
+      li.appendChild(opacitySlider);
+      li.appendChild(deleteBtn);
+      ul.appendChild(li);
     });
-
-    const deleteBtn = document.createElement('span');
-    deleteBtn.textContent = ' ❌';
-    deleteBtn.style.color = '#f66';
-    deleteBtn.style.cursor = 'pointer';
-    deleteBtn.addEventListener('click', e => {
-      e.stopPropagation();
-      removeFromList(idx);
-    });
-
-    li.addEventListener('click', (e) => {
-      if (e.target === opacitySlider) return;
-      activeItemIndex = idx;
-      setTargetMeshAsActive(item.mesh);
-      fitCameraToObject(refs.camera, item.mesh, refs.controls);
-    });
-
-    li.appendChild(filenameDiv);
-    li.appendChild(opacitySlider);
-    li.appendChild(deleteBtn);
-    ul.appendChild(li);
-  });
-}
+  }
 
 /** 활성 메쉬 교체 */
 function setTargetMeshAsActive(mesh) {
