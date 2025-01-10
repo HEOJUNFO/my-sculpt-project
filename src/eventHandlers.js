@@ -29,10 +29,9 @@ export function onPointerDown(e) {
   const isNewOpen  = newModal && newModal.style.display === 'block';
   const isEditOpen = editModal && editModal.style.display === 'block';
 
-  // (★) 메모 모드이면서, 모달도 열려 있으면 → 메모 작업을 막고 리턴
-  //      만약 메모 모드가 false면(즉 sculpt 모드면), 모달이 열려 있어도 sculpt 작업은 가능.
+  // (★) 메모 모드이면서, 모달도 열려 있으면 → 메모 작업 스킵
   if ( refs.params.memoMode && (isNewOpen || isEditOpen) ) {
-    return;  // 메모 작업 스킵
+    return;
   }
 
   // 2) 일반 포인터 상태 갱신
@@ -47,10 +46,9 @@ export function onPointerDown(e) {
   raycaster.firstHitOnly = true;
 
   // 3) 메모 모드 체크
-  //    (memoMode === true 이지만 "모달이 열려 있지 않은" 상태에서만 새 메모 생성/편집 가능)
   if ( refs.params.memoMode ) {
-    // 메모 오브젝트들부터 체크
-    const memoHits = raycaster.intersectObjects(memos.map(m => m.object), true);
+    // 메모 오브젝트 클릭 → 수정 모달
+    const memoHits = raycaster.intersectObjects( memos.map(m => m.object), true );
     if ( memoHits && memoHits.length > 0 ) {
       const memoObj = memoHits[0].object;
       const foundIndex = memos.findIndex(m => m.object === memoObj);
@@ -60,21 +58,26 @@ export function onPointerDown(e) {
       }
     }
 
-    // 아니라면, targetMesh에 닿은 위치에 새 메모
+    // 그 외 → targetMesh에 새 메모
     if ( refs.targetMesh ) {
-      const meshHits = raycaster.intersectObject(refs.targetMesh, true);
+      const meshHits = raycaster.intersectObject( refs.targetMesh, true );
       if ( meshHits && meshHits.length > 0 ) {
-        openNewMemoModal(meshHits[0].point);
+        openNewMemoModal( meshHits[0].point );
       }
     }
     return;
   }
 
-  // 4) Sculpt 모드
+  if ( refs.params.transformMode ) {
+    return;
+  }
+
+  // 5) Sculpt 모드
   if (!refs.targetMesh) return;
   const res = raycaster.intersectObject(refs.targetMesh);
   refs.controls.enabled = (res.length === 0);
 }
+
 
 /** 
  * Pointer Up 
