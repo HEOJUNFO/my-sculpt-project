@@ -33,7 +33,7 @@ THREE.BufferGeometry.prototype.disposeBoundsTree = disposeBoundsTree;
 // ---------------------- 전역 파라미터 ----------------------
 // 메모 모드와 트랜스폼 모드를 둘 다 갖고 있고, 둘 중 하나만 켜질 수 있도록.
 const params = {
-  matcap: 'Clay',
+  matcap: 'White2',
 
   // Sculpting
   size: 0.1,
@@ -99,6 +99,11 @@ export function initScene() {
   matcaps['Red Wax']     = new THREE.TextureLoader().load('textures/763C39_431510_210504_55241C-256px.png');
   matcaps['Shiny Green'] = new THREE.TextureLoader().load('textures/3B6E10_E3F2C3_88AC2E_99CE51-256px.png');
   matcaps['Normal']      = new THREE.TextureLoader().load('textures/7877EE_D87FC5_75D9C7_1C78C0-256px.png');
+  matcaps['White1']      = new THREE.TextureLoader().load('textures/B1A395_EFE6E1_635A47_786D5D-256px.png');
+  matcaps['White2']      = new THREE.TextureLoader().load('textures/B5987E_F8E4DC_6F5939_E9CCBA-256px.png');
+  matcaps['White3']      = new THREE.TextureLoader().load('textures/BEE2E9_7E6A53_9AA09C_87837E-256px.png');
+  matcaps['White4']      = new THREE.TextureLoader().load('textures/BFB5A4_DEDCCB_D7D4CC_DCD3C2-256px.png');
+  
 
   // 브러시(LineSegments) (원래 main.js에서 있던 로직)
   const brushMat = new THREE.LineBasicMaterial({
