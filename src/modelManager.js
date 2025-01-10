@@ -311,6 +311,7 @@ export function updateModelListUI() {
       if (e.target === opacitySlider) return;
       activeItemIndex = idx;
       setTargetMeshAsActive(item.mesh);
+      fitCameraToObject(refs.camera, item.mesh, refs.controls);
     });
 
     li.appendChild(filenameDiv);
