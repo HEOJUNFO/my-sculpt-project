@@ -13,6 +13,160 @@ export let activeItemIndex = -1;
 export let initialGeometry = null;
 export let initialFileName = null;
 
+const undoStack = [];
+const redoStack = [];
+
+// ------------------------
+// ▼ Undo/Redo 핵심 함수들
+// ------------------------
+
+function pushUndoState() {
+    if (activeItemIndex < 0) return;       // 모델이 없다면 패스
+    const item = modelList[activeItemIndex];
+    if (!item) return;
+  
+    const mesh = item.mesh;
+    const geo = mesh.geometry;
+  
+    const posAttr = geo.attributes.position;
+    const normalAttr = geo.attributes.normal;
+    if (!posAttr || !normalAttr) return;
+  
+    // 복사
+    const positionsCopy = new Float32Array(posAttr.array.length);
+    positionsCopy.set(posAttr.array);
+    const normalsCopy = new Float32Array(normalAttr.array.length);
+    normalsCopy.set(normalAttr.array);
+  
+    undoStack.push({
+      itemIndex: activeItemIndex, // 어느 모델에 대한 것인지
+      positions: positionsCopy,
+      normals: normalsCopy,
+    });
+  
+    console.log('pushUndoState - itemIndex:', activeItemIndex, 'undoStack size=', undoStack.length);
+  }
+  
+  /**
+   * Redo 데이터 푸시
+   */
+  function pushRedoState() {
+    if (activeItemIndex < 0) return;
+    const item = modelList[activeItemIndex];
+    if (!item) return;
+  
+    const mesh = item.mesh;
+    const geo = mesh.geometry;
+  
+    const posAttr = geo.attributes.position;
+    const normalAttr = geo.attributes.normal;
+    if (!posAttr || !normalAttr) return;
+  
+    const positionsCopy = new Float32Array(posAttr.array.length);
+    positionsCopy.set(posAttr.array);
+    const normalsCopy = new Float32Array(normalAttr.array.length);
+    normalsCopy.set(normalAttr.array);
+  
+    redoStack.push({
+      itemIndex: activeItemIndex,
+      positions: positionsCopy,
+      normals: normalsCopy,
+    });
+  
+    console.log('pushRedoState - itemIndex:', activeItemIndex, 'redoStack size=', redoStack.length);
+  }
+  
+  /**
+   * Undo 실행
+   * - pop undoStack
+   * - 만약 lastState.itemIndex != activeItemIndex면, 모델 강제 교체
+   * - geometry 복원
+   * - 현재 상태는 redoStack에 push
+   */
+  function undo() {
+    if (undoStack.length === 0) {
+      console.log('No more undo states.');
+      return;
+    }
+  
+    // Undo 스택에서 마지막 상태를 꺼냄
+    const lastState = undoStack.pop();
+  
+    // 현재 상태를 redo 스택에 저장
+    pushRedoState();
+  
+    // 만약 lastState.itemIndex와 현재 activeItemIndex가 다르면,
+    // 해당 모델로 강제 전환
+    if (lastState.itemIndex !== activeItemIndex) {
+      setTargetMeshAsActive(modelList[lastState.itemIndex].mesh);
+    }
+  
+    // 이제 refs.targetMesh는 lastState.itemIndex의 모델
+    const item = modelList[lastState.itemIndex];
+    const mesh = item.mesh;
+    const geo = mesh.geometry;
+  
+    const posAttr = geo.attributes.position;
+    const normalAttr = geo.attributes.normal;
+    if (!posAttr || !normalAttr) return;
+  
+    posAttr.array.set(lastState.positions);
+    normalAttr.array.set(lastState.normals);
+    posAttr.needsUpdate = true;
+    normalAttr.needsUpdate = true;
+  
+    geo.computeBoundsTree({ setBoundingBox: false });
+    if (refs.bvhHelper && refs.bvhHelper.parent !== null) {
+      refs.bvhHelper.update();
+    }
+  
+    console.log('Undo done for itemIndex=', lastState.itemIndex, 'undoStack size=', undoStack.length);
+  }
+  
+  /**
+   * Redo 실행
+   * - pop redoStack
+   * - 만약 lastState.itemIndex != activeItemIndex면, 모델 강제 전환
+   * - geometry 복원
+   * - 현재 상태는 undoStack에 push
+   */
+  function redo() {
+    if (redoStack.length === 0) {
+      console.log('No more redo states in redoStack.');
+      return;
+    }
+  
+    const lastState = redoStack.pop();
+  
+    // 현재 상태를 undo 스택에 저장
+    pushUndoState();
+  
+    // 모델 강제 전환
+    if (lastState.itemIndex !== activeItemIndex) {
+      setTargetMeshAsActive(modelList[lastState.itemIndex].mesh);
+    }
+  
+    const item = modelList[lastState.itemIndex];
+    const mesh = item.mesh;
+    const geo = mesh.geometry;
+  
+    const posAttr = geo.attributes.position;
+    const normalAttr = geo.attributes.normal;
+    if (!posAttr || !normalAttr) return;
+  
+    posAttr.array.set(lastState.positions);
+    normalAttr.array.set(lastState.normals);
+    posAttr.needsUpdate = true;
+    normalAttr.needsUpdate = true;
+  
+    geo.computeBoundsTree({ setBoundingBox: false });
+    if (refs.bvhHelper && refs.bvhHelper.parent !== null) {
+      refs.bvhHelper.update();
+    }
+  
+    console.log('Redo done for itemIndex=', lastState.itemIndex, 'redoStack size=', redoStack.length);
+  }
+
 /** 
  * refs: scene, camera, controls, etc.
  * 여기서 transformControls도 initScene에서 할당
@@ -23,7 +177,7 @@ export const refs = {
   controls: null,
   targetMesh: null,
   bvhHelper: null,
-  params: null,      // (matcap, displayHelper, modelOpacity, etc.)
+  params: null,      // (matcap, displayHelper, modelOpacity, transformMode, etc.)
   matcaps: null,
   transformControls: null, 
 };
@@ -47,10 +201,7 @@ function createInactiveMaterial() {
 }
 
 /** 
- * (추가) "바운딩박스 중심"에 기즈모(TransformControls)를 두도록
- * 1) 새로운 pivot 객체를 만들고
- * 2) mesh를 pivot 아래로 편입
- * 3) TransformControls.attach(pivot)
+ * 바운딩박스 중심에 기즈모(TransformControls)
  */
 export function placeGizmoAtMeshCenter(mesh) {
   if (!mesh || !refs.transformControls) return;
@@ -64,17 +215,16 @@ export function placeGizmoAtMeshCenter(mesh) {
   pivot.position.copy(center);
   pivot.name = 'PivotForMesh';
 
-  // 씬에 추가
   refs.scene.add(pivot);
 
-  // 3) 메쉬의 월드 위치/회전 기록
+  // 3) 메쉬의 월드 위치/회전
   const meshWorldPos = new THREE.Vector3();
   mesh.getWorldPosition(meshWorldPos);
 
   const meshWorldQuat = new THREE.Quaternion();
   mesh.getWorldQuaternion(meshWorldQuat);
 
-  // 4) 메쉬를 pivot 자식으로 이동
+  // 4) 메쉬를 pivot 자식으로
   if (mesh.parent) {
     mesh.parent.remove(mesh);
   }
@@ -84,11 +234,11 @@ export function placeGizmoAtMeshCenter(mesh) {
   mesh.position.copy(pivot.worldToLocal(meshWorldPos));
   mesh.quaternion.copy(meshWorldQuat);
 
-  // 5) TransformControls를 pivot에 attach
-  refs.transformControls.detach(); // 혹시 이전 attach 있었다면 해제
+  // 5) TransformControls
+  refs.transformControls.detach();
   refs.transformControls.attach(pivot);
 
-  // helper도 씬에 추가 (만약 필요하면)
+  // helper
   if (!refs.scene.getObjectByName('transformControlsHelper')) {
     const helper = refs.transformControls.getHelper();
     helper.name = 'transformControlsHelper';
@@ -101,31 +251,24 @@ export function updateModelListUI() {
   const ul = document.getElementById('model-list');
   if (!ul) return;
 
-  // 중앙 안내 문구
   const dragHint = document.getElementById('drag-hint');
-
-  // 리스트 초기화
   ul.innerHTML = '';
 
-  // 모델이 비어 있으면 => 안내 표시
   if (modelList.length === 0) {
     if (dragHint) {
       dragHint.style.display = 'block';
     }
     return; 
   } else {
-    // 모델이 하나 이상 → 안내 숨김
     if (dragHint) {
       dragHint.style.display = 'none';
     }
   }
 
-  // modelList가 1개 이상
   modelList.forEach((item, idx) => {
     const li = document.createElement('li');
     li.classList.add('model-list-item');
 
-    // 파일명
     const filenameDiv = document.createElement('div');
     filenameDiv.classList.add('model-filename');
     let text = `${idx + 1}. ${item.fileName}`;
@@ -136,13 +279,13 @@ export function updateModelListUI() {
     }
     filenameDiv.textContent = text;
 
-    // 투명도 슬라이더
     const opacitySlider = document.createElement('input');
     opacitySlider.type = 'range';
     opacitySlider.min = '0';
     opacitySlider.max = '1';
     opacitySlider.step = '0.01';
     opacitySlider.style.width = '80px';
+
     const currentOpacity = (item.customOpacity !== undefined)
       ? item.customOpacity
       : (item.mesh.material.opacity ?? 1.0);
@@ -155,7 +298,6 @@ export function updateModelListUI() {
       item.mesh.material.opacity = val;
     });
 
-    // 삭제 버튼
     const deleteBtn = document.createElement('span');
     deleteBtn.textContent = ' ❌';
     deleteBtn.style.color = '#f66';
@@ -165,14 +307,12 @@ export function updateModelListUI() {
       removeFromList(idx);
     });
 
-    // li 클릭 -> 활성 모델 변경
     li.addEventListener('click', (e) => {
       if (e.target === opacitySlider) return;
       activeItemIndex = idx;
       setTargetMeshAsActive(item.mesh);
     });
 
-    // 구성
     li.appendChild(filenameDiv);
     li.appendChild(opacitySlider);
     li.appendChild(deleteBtn);
@@ -217,7 +357,7 @@ function setTargetMeshAsActive(mesh) {
 
   updateModelListUI();
 
-  // (★) transformMode가 true → 바운딩박스 중심에 기즈모 생성
+  // transformMode가 true → 바운딩박스 중심에 기즈모
   if (refs.params.transformMode && mesh) {
     placeGizmoAtMeshCenter(mesh);
   }
@@ -310,7 +450,6 @@ export function onDropSTL(e) {
   }
 }
 
-// 디렉토리 재귀 탐색
 function readDirectory(dirEntry) {
   const reader = dirEntry.createReader();
   reader.readEntries((entries) => {
@@ -406,3 +545,15 @@ export function exportCurrentModel() {
 
   console.log('Exported current model as STL.');
 }
+
+// ------------------------
+// ▼ Undo/Redo 함수들 export
+// ------------------------
+export {
+  pushUndoState,
+  pushRedoState,
+  undo,
+  redo,
+  undoStack,
+  redoStack
+};

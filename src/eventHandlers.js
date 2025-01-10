@@ -1,7 +1,7 @@
 // src/eventHandlers.js
 
 import * as THREE from 'three';
-import { refs } from './modelManager.js';
+import { pushUndoState, refs,redoStack } from './modelManager.js';
 import { memos, openEditMemoModal, openNewMemoModal } from './memo.js';
 
 /** 
@@ -76,6 +76,11 @@ export function onPointerDown(e) {
   if (!refs.targetMesh) return;
   const res = raycaster.intersectObject(refs.targetMesh);
   refs.controls.enabled = (res.length === 0);
+
+  if (res.length !== 0) {
+     pushUndoState();
+     redoStack.length = 0;
+  }
 }
 
 
