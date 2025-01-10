@@ -200,33 +200,36 @@ export function initScene() {
   });
   helperFolder.open();
 
-  // (1) Memo Mode
-  gui.add(params, 'memoMode').name('Memo Mode').onChange( value => {
+  const memoCtrl = gui.add(params, 'memoMode')
+  .name('Memo Mode')
+  .onChange((value) => {
     if (value) {
-      // 만약 메모 모드를 true로 바꿨다면 => transformMode 끔
+      // 변수만 false로 설정
       params.transformMode = false;
+      // transform UI 수동 갱신
+      transformCtrl.updateDisplay();
       // transformControls 제거
-      transformControls.detach();
-      scene.remove(transformControls);
+      refs.transformControls?.detach();
+      refs.scene.remove(refs.transformControls);
     }
   });
 
-  // (1) Transform Mode
-gui.add(params, 'transformMode').name('Transform Mode').onChange( (value) => {
+const transformCtrl = gui.add(params, 'transformMode')
+  .name('Transform Mode')
+  .onChange((value) => {
     if (value) {
-      // transformMode 켜면 memoMode 끔
+      // 변수만 false로 설정
       params.memoMode = false;
-  
+      // memo UI 수동 갱신
+      memoCtrl.updateDisplay();
+
       if (refs.targetMesh) {
-        // 바운딩 박스 중간에 pivot 객체 생성 & 메쉬 재배치
         placeGizmoAtMeshCenter(refs.targetMesh);
-        // (추가) TransformControls 모드도 params.transformType에 맞춰 설정
         refs.transformControls?.setMode(params.transformType);
       }
-    } else {
-      // TransformControls 해제
+    }
+    else {
       refs.transformControls.detach();
-      // helper 제거
       refs.scene.remove(refs.transformControls.getHelper());
     }
   });
