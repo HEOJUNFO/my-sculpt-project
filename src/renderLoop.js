@@ -37,7 +37,8 @@ export function startRenderLoop(renderer, scene, camera, stats) {
       refs.params.memoMode ||
       refs.controls.active ||
       ! brushActive ||
-      ! refs.targetMesh
+      ! refs.targetMesh ||
+      refs.params.transformMode
     ) {
       // 메모 모드이거나, 카메라 컨트롤 중이거나, 브러시 비활성시
       // → 브러시 숨기기
