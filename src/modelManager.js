@@ -13,14 +13,14 @@ export let activeItemIndex = -1;
 export let initialGeometry = null;
 export let initialFileName = null;
 
-const undoStack = [];
-const redoStack = [];
+export const undoStack = [];
+export const redoStack = [];
 
 // ------------------------
 // ▼ Undo/Redo 핵심 함수들
 // ------------------------
 
-function pushUndoState() {
+export function pushUndoState() {
     if (activeItemIndex < 0) return;       // 모델이 없다면 패스
     const item = modelList[activeItemIndex];
     if (!item) return;
@@ -50,7 +50,7 @@ function pushUndoState() {
   /**
    * Redo 데이터 푸시
    */
-  function pushRedoState() {
+  export function pushRedoState() {
     if (activeItemIndex < 0) return;
     const item = modelList[activeItemIndex];
     if (!item) return;
@@ -83,7 +83,7 @@ function pushUndoState() {
    * - geometry 복원
    * - 현재 상태는 redoStack에 push
    */
-  function undo() {
+  export function undo() {
     if (undoStack.length === 0) {
       console.log('No more undo states.');
       return;
@@ -130,7 +130,7 @@ function pushUndoState() {
    * - geometry 복원
    * - 현재 상태는 undoStack에 push
    */
-  function redo() {
+  export function redo() {
     if (redoStack.length === 0) {
       console.log('No more redo states in redoStack.');
       return;
@@ -545,15 +545,3 @@ export function exportCurrentModel() {
 
   console.log('Exported current model as STL.');
 }
-
-// ------------------------
-// ▼ Undo/Redo 함수들 export
-// ------------------------
-export {
-  pushUndoState,
-  pushRedoState,
-  undo,
-  redo,
-  undoStack,
-  redoStack
-};
