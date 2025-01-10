@@ -21,6 +21,8 @@ import {
   saveChanges,
   exportCurrentModel,
   placeGizmoAtMeshCenter,
+  undo,
+  redo,
 } from './modelManager.js';
 
 // three-mesh-bvh 프로토타입 확장
@@ -243,6 +245,8 @@ gui.add(params, 'transformMode').name('Transform Mode').onChange( (value) => {
   });
 
   // Buttons
+  gui.add ({ undo }, 'undo');
+  gui.add ({ redo }, 'redo');
   gui.add({ reset }, 'reset');
   gui.add({ save: saveChanges }, 'save');
   gui.add({ export: exportCurrentModel }, 'export');
