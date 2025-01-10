@@ -9,7 +9,8 @@ import {
   onPointerUp,
   onPointerMove,
   onWheel,
-  onWindowResize
+  onWindowResize,
+  onKeyDown
 } from './eventHandlers.js';
 
 // 모델 드래그&드롭 이벤트 (필요시)
@@ -33,6 +34,7 @@ function main() {
   window.addEventListener('pointerup', onPointerUp);
   window.addEventListener('contextmenu', e => e.preventDefault()); 
   window.addEventListener('wheel', onWheel);
+  window.addEventListener('keydown', onKeyDown);
 
   //    - 드래그/드롭으로 STL 로드
   window.addEventListener('dragover', onDragOver, false);
