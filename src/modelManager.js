@@ -6,7 +6,7 @@ import { loadStlFileAsGeometry } from './stlHelpers.js';
 import { centerAndScaleGeometry } from './geometryHelpers.js';
 import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { MeshBVHHelper } from 'three-mesh-bvh';
-import { fitCameraToObject } from './cameraHelpers.js';
+import { fitCameraToObject,isObjectInCameraViewFrustum } from './cameraHelpers.js';
 
 export let modelList = [];    // [{ fileName, geometry, mesh, customOpacity }, ...]
 export let activeItemIndex = -1;
@@ -318,7 +318,13 @@ export function updateModelListUI() {
         if (e.target === opacitySlider) return;
         activeItemIndex = idx;
         setTargetMeshAsActive(item.mesh);
+          // 오브젝트가 이미 카메라 시야 안에 있으면, 카메라 맞춤 스킵
+        if (isObjectInCameraViewFrustum(refs.camera, item.mesh)) {
+            console.log('Object is already visible, skipping camera fitting.');
+         
+        }else{
         fitCameraToObject(refs.camera, item.mesh, refs.controls);
+        }
       });
   
       li.appendChild(filenameDiv);
