@@ -18,7 +18,6 @@ import { memos } from './memo.js';
 import {
   refs,
   reset,
-  saveChanges,
   exportCurrentModel,
   placeGizmoAtMeshCenter,
   undo,
@@ -256,7 +255,6 @@ const transformCtrl = gui.add(params, 'transformMode')
   gui.add ({ undo }, 'undo');
   gui.add ({ redo }, 'redo');
   gui.add({ reset }, 'reset');
-  gui.add({ save: saveChanges }, 'save');
   gui.add({ export: exportCurrentModel }, 'export');
   gui.add({
     rebuildBVH: () => {
