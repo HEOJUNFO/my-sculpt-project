@@ -186,10 +186,10 @@ export const refs = {
 function createActiveMaterial() {
   return new THREE.MeshMatcapMaterial({
     matcap: refs.matcaps[ refs.params.matcap ],
-    flatShading: refs.params.flatShading,
     transparent: true,
     opacity: refs.params.modelOpacity, 
     side: THREE.DoubleSide,
+    flatShading: false,
   });
 }
 /** 비활성 재질 */
@@ -198,6 +198,8 @@ function createInactiveMaterial() {
     color: 0xaaaaaa,
     transparent: true,
     opacity: refs.params.modelOpacity,
+    side: THREE.DoubleSide,
+    flatShading: false,
   });
 }
 
