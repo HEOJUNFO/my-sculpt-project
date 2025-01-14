@@ -51,6 +51,12 @@ const params = {
 
 // ---------------------- initScene() ----------------------
 export function initScene() {
+
+  // URL에 debug 라는 문자열이 포함되어 있는지 체크
+  const isDebugMode = window.location.href.includes('debug');
+  // 또는 location.pathname, query string 등으로 구분 가능
+  // const isDebugMode = location.pathname.includes('debug');
+
   // 1) renderer
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setPixelRatio(window.devicePixelRatio);
@@ -81,26 +87,28 @@ export function initScene() {
   camera.far = 100;
   camera.updateProjectionMatrix();
 
-  // 5) stats
-  const stats = new Stats();
-  document.body.appendChild(stats.dom);
+  // 5) stats (debug 페이지일 때만 생성/표시)
+  let stats;
+  if (isDebugMode) {
+    stats = new Stats();
+    document.body.appendChild(stats.dom);
+  }
 
   // 6) matcaps
   const matcaps = {};
   matcaps['Clay']        = new THREE.TextureLoader().load('textures/clay.jpg');
   matcaps['Clay2']       = new THREE.TextureLoader().load('textures/B67F6B_4B2E2A_6C3A34_F3DBC6-256px.png');
   matcaps['Red Clay']    = new THREE.TextureLoader().load('textures/redClay.jpg');
-  matcaps['Green']  = new THREE.TextureLoader().load('textures/green.jpg');
+  matcaps['Green']       = new THREE.TextureLoader().load('textures/green.jpg');
   matcaps['White']       = new THREE.TextureLoader().load('textures/white.jpg');
   matcaps['MatcapFV']    = new THREE.TextureLoader().load('textures/matcapFV.jpg');
   matcaps['Pearl']       = new THREE.TextureLoader().load('textures/pearl.jpg');
   matcaps['Skin']        = new THREE.TextureLoader().load('textures/skin.jpg');
-  matcaps['SkinHazardousarts'] = new THREE.TextureLoader().load('textures/skinhazardousarts.jpg');
+  matcaps['SkinHazardousarts']  = new THREE.TextureLoader().load('textures/skinhazardousarts.jpg');
   matcaps['SkinHazardousarts2'] = new THREE.TextureLoader().load('textures/skinhazardousarts2.jpg');
   matcaps['Red Wax']     = new THREE.TextureLoader().load('textures/763C39_431510_210504_55241C-256px.png');
   matcaps['Shiny Green'] = new THREE.TextureLoader().load('textures/3B6E10_E3F2C3_88AC2E_99CE51-256px.png');
   matcaps['Normal']      = new THREE.TextureLoader().load('textures/7877EE_D87FC5_75D9C7_1C78C0-256px.png');
- 
   
   // 브러시(LineSegments)
   const brushMat = new THREE.LineBasicMaterial({
@@ -152,117 +160,120 @@ export function initScene() {
   refs.brush = brush;
   refs.transformControls = transformControls;
 
-  // dat.GUI
-  const gui = new dat.GUI();
+  // dat.GUI (debug 페이지일 때만 생성)
+  let gui;
+  if (isDebugMode) {
+    gui = new dat.GUI();
 
-  // Model Folder
-  const modelFolder = gui.addFolder('Model');
-  modelFolder.add(params, 'matcap', Object.keys(matcaps)).name('Matcap');
+    // Model Folder
+    const modelFolder = gui.addFolder('Model');
+    modelFolder.add(params, 'matcap', Object.keys(matcaps)).name('Matcap');
 
-  modelFolder.add({
-    addSphere: () => {
-      // (아래 addModelToScene이 modelManager.js 등에 정의되어 있다고 가정)
-      addModelToScene(new THREE.IcosahedronGeometry(1, 200), 'Icosahedron');
-      fitCameraToObject(camera, refs.targetMesh, controls);
-    }
-  }, 'addSphere').name('Add Sphere');
+    modelFolder.add({
+      addSphere: () => {
+        addModelToScene(new THREE.IcosahedronGeometry(1, 200), 'Icosahedron');
+        fitCameraToObject(camera, refs.targetMesh, controls);
+      }
+    }, 'addSphere').name('Add Sphere');
 
-  modelFolder.open();
+    modelFolder.open();
 
-  // Sculpt Folder
-  const sculptFolder = gui.addFolder('Sculpting');
-  sculptFolder.add(params, 'maxSteps',1,25,1);
-  sculptFolder.add(params, 'brushOpacity', 0.0, 1.0, 0.01).name('Brush Opacity')
-    .onChange(val => {
-      brush.material.opacity = val;
-    });
-  sculptFolder.open();
+    // Sculpt Folder
+    const sculptFolder = gui.addFolder('Sculpting');
+    sculptFolder.add(params, 'maxSteps',1,25,1);
+    sculptFolder
+      .add(params, 'brushOpacity', 0.0, 1.0, 0.01)
+      .name('Brush Opacity')
+      .onChange(val => {
+        brush.material.opacity = val;
+      });
+    sculptFolder.open();
 
-  // BVH Helper
-  const helperFolder = gui.addFolder('BVH Helper');
-  helperFolder.add(params, 'depth', 1, 20, 1).onChange(val => {
-    if ( refs.bvhHelper ) {
-      refs.bvhHelper.depth = parseFloat(val);
-      refs.bvhHelper.update();
-    }
-  });
-  helperFolder.add(params, 'displayHelper').onChange(display => {
-    if (!refs.bvhHelper) return;
-    if ( display ) {
-      scene.add(refs.bvhHelper);
-      refs.bvhHelper.update();
-    } else {
-      scene.remove(refs.bvhHelper);
-    }
-  });
-  helperFolder.open();
-
-  // Memo Mode
-  const memoCtrl = gui.add(params, 'memoMode')
-    .name('Memo Mode')
-    .onChange((value) => {
-      if (value) {
-        // 변수만 false로 설정
-        params.transformMode = false;
-        // transform UI 수동 갱신
-        transformCtrl.updateDisplay();
-        // transformControls 제거
-        refs.transformControls?.detach();
-        refs.scene.remove(refs.transformControls);
+    // BVH Helper
+    const helperFolder = gui.addFolder('BVH Helper');
+    helperFolder.add(params, 'depth', 1, 20, 1).onChange(val => {
+      if ( refs.bvhHelper ) {
+        refs.bvhHelper.depth = parseFloat(val);
+        refs.bvhHelper.update();
       }
     });
-
-  // Transform Mode
-  const transformCtrl = gui.add(params, 'transformMode')
-    .name('Transform Mode')
-    .onChange((value) => {
-      if (value) {
-        // 변수만 false로 설정
-        params.memoMode = false;
-        // memo UI 수동 갱신
-        memoCtrl.updateDisplay();
-
-        if (refs.targetMesh) {
-          placeGizmoAtMeshCenter(refs.targetMesh);
-          refs.transformControls?.setMode(params.transformType);
-        }
+    helperFolder.add(params, 'displayHelper').onChange(display => {
+      if (!refs.bvhHelper) return;
+      if ( display ) {
+        scene.add(refs.bvhHelper);
+        refs.bvhHelper.update();
       } else {
-        refs.transformControls.detach();
-        refs.scene.remove(refs.transformControls.getHelper());
+        scene.remove(refs.bvhHelper);
       }
     });
-  
-  // Transform Type
-  gui.add(params, 'transformType', [ 'translate', 'rotate', 'scale' ] )
-     .name('Transform Mode Type')
-     .onChange((mode) => {
-       if (refs.transformControls) {
-         refs.transformControls.setMode(mode);
-       }
-     });
+    helperFolder.open();
 
-  // Hide Memo
-  gui.add(params, 'memoHide').name('Hide Memo').onChange((hideVal) => {
-    memos.forEach((m) => {
-      m.object.visible = !hideVal;
+    // Memo Mode
+    const memoCtrl = gui.add(params, 'memoMode')
+      .name('Memo Mode')
+      .onChange((value) => {
+        if (value) {
+          // 변수만 false로 설정
+          params.transformMode = false;
+          // transform UI 수동 갱신
+          transformCtrl.updateDisplay();
+          // transformControls 제거
+          refs.transformControls?.detach();
+          refs.scene.remove(refs.transformControls);
+        }
+      });
+
+    // Transform Mode
+    const transformCtrl = gui.add(params, 'transformMode')
+      .name('Transform Mode')
+      .onChange((value) => {
+        if (value) {
+          // 변수만 false로 설정
+          params.memoMode = false;
+          // memo UI 수동 갱신
+          memoCtrl.updateDisplay();
+
+          if (refs.targetMesh) {
+            placeGizmoAtMeshCenter(refs.targetMesh);
+            refs.transformControls?.setMode(params.transformType);
+          }
+        } else {
+          refs.transformControls.detach();
+          refs.scene.remove(refs.transformControls.getHelper());
+        }
+      });
+    
+    // Transform Type
+    gui.add(params, 'transformType', [ 'translate', 'rotate', 'scale' ] )
+      .name('Transform Mode Type')
+      .onChange((mode) => {
+        if (refs.transformControls) {
+          refs.transformControls.setMode(mode);
+        }
+      });
+
+    // Hide Memo
+    gui.add(params, 'memoHide').name('Hide Memo').onChange((hideVal) => {
+      memos.forEach((m) => {
+        m.object.visible = !hideVal;
+      });
     });
-  });
 
-  // Buttons
- 
-  gui.add({ reset }, 'reset');
-  gui.add({ export: exportCurrentModel }, 'export');
-  gui.add({
-    rebuildBVH: () => {
-      if (refs.targetMesh) {
-        refs.targetMesh.geometry.computeBoundsTree({ setBoundingBox: false });
-        if (refs.bvhHelper) {
-          refs.bvhHelper.update();
+    // Buttons
+    gui.add({ reset }, 'reset');
+    gui.add({ export: exportCurrentModel }, 'export');
+    gui.add({
+      rebuildBVH: () => {
+        if (refs.targetMesh) {
+          refs.targetMesh.geometry.computeBoundsTree({ setBoundingBox: false });
+          if (refs.bvhHelper) {
+            refs.bvhHelper.update();
+          }
         }
       }
-    }
-  }, 'rebuildBVH');
-  gui.open();
+    }, 'rebuildBVH');
+    gui.open();
+  }
 
   // 커스텀 UI (브러시 버튼, 슬라이더 등)
   setupCustomSculptUI();
@@ -271,6 +282,6 @@ export function initScene() {
     renderer,
     scene,
     camera,
-    stats
+    stats // debug가 아닐 경우 undefined이 반환될 수 있음.
   };
 }
