@@ -32,7 +32,7 @@ THREE.BufferGeometry.prototype.disposeBoundsTree = disposeBoundsTree;
 // ---------------------- 전역 파라미터 ----------------------
 // 메모 모드와 트랜스폼 모드를 둘 다 갖고 있고, 둘 중 하나만 켜질 수 있도록.
 const params = {
-  matcap: 'White2',
+  matcap: 'Clay',
 
   // Sculpting
   size: 0.1,
