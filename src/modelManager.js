@@ -403,7 +403,7 @@ function removeFromList(index) {
 }
 
 /** 씬에 모델 추가 */
-function addModelToScene(geometry, fileName) {
+export function addModelToScene(geometry, fileName) {
   if (!initialGeometry) {
     initialGeometry = geometry.clone();
     initialFileName = fileName;
