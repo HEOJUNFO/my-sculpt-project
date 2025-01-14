@@ -35,13 +35,13 @@ const params = {
   matcap: 'Clay',
 
   // Sculpting
-  size: 0.1,
+  size: 0.05,
   brush: 'clay',
-  intensity: 25,
+  intensity: 10,
   maxSteps: 10,
   invert: false,
   symmetrical: false,
-  flatShading: false,
+
 
   // BVH Helper
   depth: 10,
@@ -75,6 +75,7 @@ export function initScene() {
 
   // 2) scene
   const scene = new THREE.Scene();
+  scene.fog = new THREE.Fog( 0x263238 / 2, 20, 60 );
 
   // 3) light
   const light = new THREE.DirectionalLight(0xffffff, 0.5);
@@ -94,7 +95,7 @@ export function initScene() {
 
   // 6) matcaps
   const matcaps = {};
-  matcaps['Clay']        = new THREE.TextureLoader().load('textures/B67F6B_4B2E2A_6C3A34_F3DBC6-256px.png');
+  matcaps['Clay']        = new THREE.TextureLoader().load('textures/clay.jpg');
   matcaps['Red Wax']     = new THREE.TextureLoader().load('textures/763C39_431510_210504_55241C-256px.png');
   matcaps['Shiny Green'] = new THREE.TextureLoader().load('textures/3B6E10_E3F2C3_88AC2E_99CE51-256px.png');
   matcaps['Normal']      = new THREE.TextureLoader().load('textures/7877EE_D87FC5_75D9C7_1C78C0-256px.png');
@@ -168,12 +169,7 @@ export function initScene() {
   const sculptFolder = gui.addFolder('Sculpting');
   sculptFolder.add(params, 'maxSteps',1,25,1);
   sculptFolder.add(params, 'invert');
-  sculptFolder.add(params, 'flatShading').onChange( val => {
-    if ( refs.targetMesh ) {
-      refs.targetMesh.material.flatShading = val;
-      refs.targetMesh.material.needsUpdate = true;
-    }
-  });
+
   sculptFolder.add(params, 'brushOpacity', 0.0, 1.0, 0.01).name('Brush Opacity')
     .onChange(val => {
       brush.material.opacity = val;
