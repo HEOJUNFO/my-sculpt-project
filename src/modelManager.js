@@ -189,6 +189,7 @@ function createActiveMaterial() {
     flatShading: refs.params.flatShading,
     transparent: true,
     opacity: refs.params.modelOpacity, 
+    side: THREE.DoubleSide,
   });
 }
 /** 비활성 재질 */
