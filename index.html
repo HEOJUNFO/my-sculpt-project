@@ -419,37 +419,6 @@
       container.classList.toggle('collapsed-horizontal');
     });
 
-    // ▼ 브러시 UI (임시)
-    const btnNormal   = document.getElementById('btn-normal');
-    const btnClay     = document.getElementById('btn-clay');
-    const btnFlatten  = document.getElementById('btn-flatten');
-
-    let currentBrush = 'normal'; // default
-    function setBrushMode(mode) {
-      currentBrush = mode;
-      btnNormal.classList.remove('active');
-      btnClay.classList.remove('active');
-      btnFlatten.classList.remove('active');
-      if (mode === 'normal')  btnNormal.classList.add('active');
-      if (mode === 'clay')    btnClay.classList.add('active');
-      if (mode === 'flatten') btnFlatten.classList.add('active');
-    }
-    btnNormal.addEventListener('click',   ()=> setBrushMode('normal'));
-    btnClay.addEventListener('click',     ()=> setBrushMode('clay'));
-    btnFlatten.addEventListener('click',  ()=> setBrushMode('flatten'));
-    setBrushMode('normal');
-
-    // ▼ 슬라이더
-    const sizeRange = document.getElementById('sizeRange');
-    const intensityRange = document.getElementById('intensityRange');
-    sizeRange.addEventListener('input', ()=>{
-      sizeValue = parseFloat(sizeRange.value);
-   
-    });
-    intensityRange.addEventListener('input', ()=>{
-      intensityValue = parseFloat(intensityRange.value);
-    });
-
     // ▼ OS 체크 → sizeLabel 문구 교체
     const isMac = navigator.userAgent.toLowerCase().includes('mac');
     const sizeLabel = document.getElementById('sizeLabel');
