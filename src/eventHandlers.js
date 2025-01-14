@@ -126,7 +126,7 @@ export function onWheel(e) {
   }
   else if ( e.ctrlKey ) {
     refs.params.intensity += delta * 0.1;
-    refs.params.intensity = Math.max(1, Math.min(refs.params.intensity, 100));
+    refs.params.intensity = Math.max(1, Math.min(refs.params.intensity, 50));
 
     const intensityRange = document.getElementById('intensityRange');
     if (intensityRange) {
