@@ -32,7 +32,7 @@ THREE.BufferGeometry.prototype.disposeBoundsTree = disposeBoundsTree;
 
 // ---------------------- 전역 파라미터 ----------------------
 const params = {
-  matcap: 'Clay',
+  matcap: 'Red Wax',
   size: 0.05,
   brush: 'clay',
   intensity: 25,
