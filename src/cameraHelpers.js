@@ -35,7 +35,7 @@ export function isObjectInCameraViewFrustum(camera, object) {
  * @param {THREE.OrbitControls | THREE.TrackballControls} controls
  * @param {number} offset 여유 공간 비율 (기본값 1.25)
  */
-export function fitCameraToObject(camera, object, controls, offset = 1.25) {
+export function fitCameraToObject(camera, object, controls, offset = 1.5) {
   console.log('fitCameraToObject');
 
   // 오브젝트 월드 변환 행렬 업데이트
