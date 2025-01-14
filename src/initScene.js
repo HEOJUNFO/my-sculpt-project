@@ -23,6 +23,7 @@ import {
   redo,
   addModelToScene,
 } from './modelManager.js';
+import { fitCameraToObject } from './cameraHelpers.js';
 
 // three-mesh-bvh 프로토타입 확장
 THREE.Mesh.prototype.raycast = acceleratedRaycast;
@@ -152,12 +153,11 @@ export function initScene() {
   const modelFolder = gui.addFolder('Model');
   modelFolder.add(params, 'matcap', Object.keys(matcaps)).name('Matcap');
 
-  // 여기서 "Add Sphere" 버튼 추가
-  // (button을 클릭하면 IcosahedronGeometry(1, 100)을 생성해 addModelToScene으로 넘김)
   modelFolder.add({
     addSphere: () => {
       // (아래 addModelToScene이 modelManager.js 등에 정의되어 있다고 가정)
-      addModelToScene(new THREE.IcosahedronGeometry(1, 100), 'Icosahedron');
+      addModelToScene(new THREE.IcosahedronGeometry(1, 200), 'Icosahedron');
+      fitCameraToObject(camera, refs.targetMesh, controls);
     }
   }, 'addSphere').name('Add Sphere');
 
@@ -166,7 +166,6 @@ export function initScene() {
   // Sculpt Folder
   const sculptFolder = gui.addFolder('Sculpting');
   sculptFolder.add(params, 'maxSteps',1,25,1);
-  sculptFolder.add(params, 'invert');
   sculptFolder.add(params, 'brushOpacity', 0.0, 1.0, 0.01).name('Brush Opacity')
     .onChange(val => {
       brush.material.opacity = val;
