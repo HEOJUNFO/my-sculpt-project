@@ -23,7 +23,8 @@ export function startRenderLoop(renderer, scene, camera, stats) {
   
   function animate() {
     requestAnimationFrame(animate);
-    stats.begin();
+    if(stats) stats.begin();
+
 
     refs.controls.update();
 
@@ -142,7 +143,8 @@ export function startRenderLoop(renderer, scene, camera, stats) {
 
     // 렌더링
     renderer.render(scene, camera);
-    stats.end();
+
+    if(stats) stats.end();
   }
 
   // 최초 호출
