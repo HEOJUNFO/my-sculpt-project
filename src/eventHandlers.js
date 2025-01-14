@@ -117,7 +117,7 @@ export function onWheel(e) {
 
   if ( sizeKeyPressed ) {
     refs.params.size += delta * 0.0001;
-    refs.params.size = Math.max(Math.min(refs.params.size, 0.25), 0.025);
+    refs.params.size = Math.max(Math.min(refs.params.size, 0.25), 0.01);
 
     const sizeRange = document.getElementById('sizeRange');
     if (sizeRange) {
