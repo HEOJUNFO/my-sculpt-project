@@ -1,5 +1,4 @@
-// src/initScene.js
-
+// initScene.js
 import * as THREE from 'three';
 import Stats from 'three/examples/jsm/libs/stats.module.js';
 import * as dat from 'three/examples/jsm/libs/lil-gui.module.min.js'; 
@@ -22,6 +21,7 @@ import {
   placeGizmoAtMeshCenter,
   undo,
   redo,
+  addModelToScene,
 } from './modelManager.js';
 
 // three-mesh-bvh 프로토타입 확장
@@ -30,34 +30,20 @@ THREE.BufferGeometry.prototype.computeBoundsTree = computeBoundsTree;
 THREE.BufferGeometry.prototype.disposeBoundsTree = disposeBoundsTree;
 
 // ---------------------- 전역 파라미터 ----------------------
-// 메모 모드와 트랜스폼 모드를 둘 다 갖고 있고, 둘 중 하나만 켜질 수 있도록.
 const params = {
   matcap: 'Clay',
-
-  // Sculpting
   size: 0.05,
   brush: 'clay',
-  intensity: 10,
+  intensity: 25,
   maxSteps: 10,
   invert: false,
   symmetrical: false,
-
-
-  // BVH Helper
   depth: 10,
   displayHelper: false,
-
-  // 투명도
   brushOpacity: 1.0,
   modelOpacity: 1.0,
-
-  // 메모 모드
   memoMode: false,
-
-  // Hide Memo
   memoHide: false,
-
-  // (새로 추가) Transform 모드
   transformMode: false,
   transformType: 'translate',
 };
@@ -84,7 +70,12 @@ export function initScene() {
   scene.add(new THREE.AmbientLight(0xffffff, 0.4));
 
   // 4) camera
-  const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 50);
+  const camera = new THREE.PerspectiveCamera(
+    75,
+    window.innerWidth / window.innerHeight,
+    0.1,
+    50
+  );
   camera.position.set(0, 0, 3);
   camera.far = 100;
   camera.updateProjectionMatrix();
@@ -104,8 +95,7 @@ export function initScene() {
   matcaps['White3']      = new THREE.TextureLoader().load('textures/BEE2E9_7E6A53_9AA09C_87837E-256px.png');
   matcaps['White4']      = new THREE.TextureLoader().load('textures/BFB5A4_DEDCCB_D7D4CC_DCD3C2-256px.png');
   
-
-  // 브러시(LineSegments) (원래 main.js에서 있던 로직)
+  // 브러시(LineSegments)
   const brushMat = new THREE.LineBasicMaterial({
     color: 'red',
     transparent: true,
@@ -141,9 +131,8 @@ export function initScene() {
     // 드래그 중이면 TrackballControls 비활성화
     controls.enabled = ! event.value;
   });
-  //기즈모사이즈 축소
+  // 기즈모 사이즈 축소
   transformControls.setSize(0.8);
-  
 
   // refs 연결
   refs.scene = scene;
@@ -154,7 +143,6 @@ export function initScene() {
   refs.params = params;
   refs.matcaps = matcaps;
   refs.brush = brush;
-  // (추가) TransformControls
   refs.transformControls = transformControls;
 
   // dat.GUI
@@ -163,13 +151,22 @@ export function initScene() {
   // Model Folder
   const modelFolder = gui.addFolder('Model');
   modelFolder.add(params, 'matcap', Object.keys(matcaps)).name('Matcap');
+
+  // 여기서 "Add Sphere" 버튼 추가
+  // (button을 클릭하면 IcosahedronGeometry(1, 100)을 생성해 addModelToScene으로 넘김)
+  modelFolder.add({
+    addSphere: () => {
+      // (아래 addModelToScene이 modelManager.js 등에 정의되어 있다고 가정)
+      addModelToScene(new THREE.IcosahedronGeometry(1, 100), 'Icosahedron');
+    }
+  }, 'addSphere').name('Add Sphere');
+
   modelFolder.open();
 
   // Sculpt Folder
   const sculptFolder = gui.addFolder('Sculpting');
   sculptFolder.add(params, 'maxSteps',1,25,1);
   sculptFolder.add(params, 'invert');
-
   sculptFolder.add(params, 'brushOpacity', 0.0, 1.0, 0.01).name('Brush Opacity')
     .onChange(val => {
       brush.material.opacity = val;
@@ -184,7 +181,7 @@ export function initScene() {
       refs.bvhHelper.update();
     }
   });
-  helperFolder.add(params, 'displayHelper').onChange( display => {
+  helperFolder.add(params, 'displayHelper').onChange(display => {
     if (!refs.bvhHelper) return;
     if ( display ) {
       scene.add(refs.bvhHelper);
@@ -195,50 +192,49 @@ export function initScene() {
   });
   helperFolder.open();
 
+  // Memo Mode
   const memoCtrl = gui.add(params, 'memoMode')
-  .name('Memo Mode')
-  .onChange((value) => {
-    if (value) {
-      // 변수만 false로 설정
-      params.transformMode = false;
-      // transform UI 수동 갱신
-      transformCtrl.updateDisplay();
-      // transformControls 제거
-      refs.transformControls?.detach();
-      refs.scene.remove(refs.transformControls);
-    }
-  });
-
-const transformCtrl = gui.add(params, 'transformMode')
-  .name('Transform Mode')
-  .onChange((value) => {
-    if (value) {
-      // 변수만 false로 설정
-      params.memoMode = false;
-      // memo UI 수동 갱신
-      memoCtrl.updateDisplay();
-
-      if (refs.targetMesh) {
-        placeGizmoAtMeshCenter(refs.targetMesh);
-        refs.transformControls?.setMode(params.transformType);
+    .name('Memo Mode')
+    .onChange((value) => {
+      if (value) {
+        // 변수만 false로 설정
+        params.transformMode = false;
+        // transform UI 수동 갱신
+        transformCtrl.updateDisplay();
+        // transformControls 제거
+        refs.transformControls?.detach();
+        refs.scene.remove(refs.transformControls);
       }
-    }
-    else {
-      refs.transformControls.detach();
-      refs.scene.remove(refs.transformControls.getHelper());
-    }
-  });
+    });
+
+  // Transform Mode
+  const transformCtrl = gui.add(params, 'transformMode')
+    .name('Transform Mode')
+    .onChange((value) => {
+      if (value) {
+        // 변수만 false로 설정
+        params.memoMode = false;
+        // memo UI 수동 갱신
+        memoCtrl.updateDisplay();
+
+        if (refs.targetMesh) {
+          placeGizmoAtMeshCenter(refs.targetMesh);
+          refs.transformControls?.setMode(params.transformType);
+        }
+      } else {
+        refs.transformControls.detach();
+        refs.scene.remove(refs.transformControls.getHelper());
+      }
+    });
   
-  // (2) Transform Type (translate / rotate / scale)
+  // Transform Type
   gui.add(params, 'transformType', [ 'translate', 'rotate', 'scale' ] )
      .name('Transform Mode Type')
-     .onChange( (mode) => {
-       // transformType 변경 시, transformControls 모드 갱신
+     .onChange((mode) => {
        if (refs.transformControls) {
          refs.transformControls.setMode(mode);
        }
      });
-  
 
   // Hide Memo
   gui.add(params, 'memoHide').name('Hide Memo').onChange((hideVal) => {
