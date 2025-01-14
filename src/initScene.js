@@ -88,13 +88,19 @@ export function initScene() {
   // 6) matcaps
   const matcaps = {};
   matcaps['Clay']        = new THREE.TextureLoader().load('textures/clay.jpg');
+  matcaps['Clay2']       = new THREE.TextureLoader().load('textures/B67F6B_4B2E2A_6C3A34_F3DBC6-256px.png');
+  matcaps['Red Clay']    = new THREE.TextureLoader().load('textures/redClay.jpg');
+  matcaps['Green']  = new THREE.TextureLoader().load('textures/green.jpg');
+  matcaps['White']       = new THREE.TextureLoader().load('textures/white.jpg');
+  matcaps['MatcapFV']    = new THREE.TextureLoader().load('textures/matcapFV.jpg');
+  matcaps['Pearl']       = new THREE.TextureLoader().load('textures/pearl.jpg');
+  matcaps['Skin']        = new THREE.TextureLoader().load('textures/skin.jpg');
+  matcaps['SkinHazardousarts'] = new THREE.TextureLoader().load('textures/skinhazardousarts.jpg');
+  matcaps['SkinHazardousarts2'] = new THREE.TextureLoader().load('textures/skinhazardousarts2.jpg');
   matcaps['Red Wax']     = new THREE.TextureLoader().load('textures/763C39_431510_210504_55241C-256px.png');
   matcaps['Shiny Green'] = new THREE.TextureLoader().load('textures/3B6E10_E3F2C3_88AC2E_99CE51-256px.png');
   matcaps['Normal']      = new THREE.TextureLoader().load('textures/7877EE_D87FC5_75D9C7_1C78C0-256px.png');
-  matcaps['White1']      = new THREE.TextureLoader().load('textures/B1A395_EFE6E1_635A47_786D5D-256px.png');
-  matcaps['White2']      = new THREE.TextureLoader().load('textures/B5987E_F8E4DC_6F5939_E9CCBA-256px.png');
-  matcaps['White3']      = new THREE.TextureLoader().load('textures/BEE2E9_7E6A53_9AA09C_87837E-256px.png');
-  matcaps['White4']      = new THREE.TextureLoader().load('textures/BFB5A4_DEDCCB_D7D4CC_DCD3C2-256px.png');
+ 
   
   // 브러시(LineSegments)
   const brushMat = new THREE.LineBasicMaterial({
@@ -243,8 +249,7 @@ export function initScene() {
   });
 
   // Buttons
-  gui.add ({ undo }, 'undo');
-  gui.add ({ redo }, 'redo');
+ 
   gui.add({ reset }, 'reset');
   gui.add({ export: exportCurrentModel }, 'export');
   gui.add({
