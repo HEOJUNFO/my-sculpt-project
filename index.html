@@ -193,7 +193,7 @@
       position: absolute;
       left: 10px;
       bottom: 10px;
-      width: 250px;          
+      width: 210px;          
       background:#d9d9d9;
       color: #fff;
       font: 14px sans-serif;
@@ -342,6 +342,29 @@
   pointer-events: none; /* 마우스 이벤트 무시 */
 }
 
+.btn-row-2 {
+  display: flex;
+  justify-content: space-between;  /* 양쪽 정렬 */
+  gap: 8px;        /* 버튼 간격 */
+  margin-bottom: 8px;
+}
+
+/* 반쪽짜리 버튼 (Undo / Redo) */
+.btn-half {
+  flex: 1;         /* 동일 폭으로 늘어나게 */
+  text-align: center;
+  /* 필요하다면 높이, 폰트, 등등 조정 */
+}
+
+/* (2) 전체 폭으로 늘어나는 긴 버튼 (Export / Invert) */
+.btn-full {
+  display: block;
+  width: 100%;     /* 부모 컨테이너 너비 꽉 채움 */
+  margin-bottom: 8px; /* 버튼 간격 */
+  text-align: center;
+  /* 필요하다면 높이, 폰트, 등등 조정 */
+}
+
   </style>
 </head>
 <body>
@@ -405,20 +428,30 @@
       <input type="range" id="sizeRange" min="0.01" max="0.25" step="0.005" value="0.05" />
     </div>
 
-    <button class="brush-btn" id="btn-invert">
-      <ion-icon name="swap-horizontal-outline" style="vertical-align: middle;"></ion-icon>
+     <!-- Invert (긴 버튼) -->
+     <button class="brush-btn btn-full" id="btn-invert">
+      <ion-icon name="swap-horizontal-outline"></ion-icon>
       Invert
     </button>
+   
 
-    <button class="brush-btn" id="btn-undo">
-      <ion-icon name="arrow-undo"></ion-icon>
-      Undo
+    <div class="btn-row-2">
+      <button class="brush-btn btn-half" id="btn-undo">
+        <ion-icon name="arrow-undo"></ion-icon>
+        Undo
+      </button>
+      <button class="brush-btn btn-half" id="btn-redo">
+        <ion-icon name="arrow-redo"></ion-icon>
+        Redo
+      </button>
+    </div>
+  
+    <!-- Export (긴 버튼) -->
+    <button class="brush-btn btn-full" id="btn-export">
+      <ion-icon name="download"></ion-icon>
+      Export
     </button>
-
-    <button class="brush-btn" id="btn-redo">
-      <ion-icon name="arrow-redo"></ion-icon>
-      Redo
-    </button>
+  
    
   </div>
 
