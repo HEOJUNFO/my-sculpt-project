@@ -35,7 +35,7 @@ THREE.BufferGeometry.prototype.disposeBoundsTree = disposeBoundsTree;
 // ---------------------- 전역 파라미터 ----------------------
 const params = {
   matcap: 'Red Wax',
-  size: 0.05,
+  size: 0.03,
   brush: 'clay',
   intensity: 25,
   maxSteps: 10,
@@ -91,7 +91,7 @@ export function initScene() {
 
   // Scene, Camera, Light
   const scene = new THREE.Scene();
-  scene.fog = new THREE.Fog(0x263238 / 2, 20, 60);
+  // scene.fog = new THREE.Fog(0x263238 / 2, 20, 60);
 
   const light = new THREE.DirectionalLight(0xffffff, 0.5);
   light.position.set(1, 1, 1);

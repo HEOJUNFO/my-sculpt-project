@@ -371,6 +371,7 @@ export function addModelToScene(geometry, fileName) {
   }
 
   centerAndScaleGeometry(geometry);
+
   geometry = BufferGeometryUtils.mergeVertices(geometry);
   geometry.computeVertexNormals();
   geometry.attributes.position.setUsage(THREE.DynamicDrawUsage);
@@ -400,8 +401,61 @@ export function addModelToScene(geometry, fileName) {
   setTargetMeshAsActive(newMesh);
 }
 
+/** 
+ * 폴더를 재귀적으로 읽어 STL 파일을 로드하는 Promise 반환 함수
+ */
+function readDirectoryPromise(dirEntry) {
+  return new Promise((resolve, reject) => {
+    const reader = dirEntry.createReader();
+    reader.readEntries(
+      (entries) => {
+        // 하위 파일/폴더 각각에 대해 Promise를 생성해 저장할 배열
+        const promises = [];
+
+        for (const entry of entries) {
+          if (entry.isFile) {
+            // 파일인 경우
+            const p = new Promise((res, rej) => {
+              entry.file((file) => {
+                if (file.name.toLowerCase().endsWith('.stl')) {
+                  loadStlFileAsGeometry(file)
+                    .then((geometry) => {
+                      addModelToScene(geometry, file.name);
+                      res();
+                    })
+                    .catch((err) => {
+                      console.error('STL load error:', err);
+                      rej(err);
+                    });
+                } else {
+                  // STL 파일이 아니면 그냥 통과
+                  res();
+                }
+              });
+            });
+            promises.push(p);
+          } else if (entry.isDirectory) {
+            // 폴더면 재귀
+            promises.push(readDirectoryPromise(entry));
+          }
+        }
+
+        // 현재 디렉토리의 모든 항목 로딩이 끝나면 resolve
+        Promise.all(promises)
+          .then(() => resolve())
+          .catch((err) => reject(err));
+      },
+      (error) => {
+        console.error(error);
+        reject(error);
+      }
+    );
+  });
+}
+
 /**
- * 폴더/파일 드래그&드롭
+ * onDropSTL(e) - 드래그앤드롭으로 STL 추가
+ * => 모든 모델 로딩이 끝나는 시점에 console.log 출력
  */
 export function onDropSTL(e) {
   e.preventDefault();
@@ -409,53 +463,52 @@ export function onDropSTL(e) {
   const items = e.dataTransfer.items;
   if (!items || items.length === 0) return;
 
+  // '로딩 완료'를 체크하기 위해 Promise를 담을 배열
+  const loadPromises = [];
+
   for (let i = 0; i < items.length; i++) {
     const item = items[i];
     if (item.kind === 'file') {
       const entry = item.webkitGetAsEntry();
       if (entry) {
+        // 파일이라면
         if (entry.isFile) {
-          entry.file((file) => {
-            if (file.name.toLowerCase().endsWith('.stl')) {
-              loadStlFileAsGeometry(file)
-                .then((geometry) => {
-                  addModelToScene(geometry, file.name);
-                })
-                .catch((err) => console.error('STL load error:', err));
-            }
+          // 폴더가 아닌 실제 파일
+          const p = new Promise((resolve, reject) => {
+            entry.file((file) => {
+              if (file.name.toLowerCase().endsWith('.stl')) {
+                loadStlFileAsGeometry(file)
+                  .then((geometry) => {
+                    addModelToScene(geometry, file.name);
+                    resolve();
+                  })
+                  .catch((err) => {
+                    console.error('STL load error:', err);
+                    reject(err);
+                  });
+              } else {
+                // STL이 아니면 그냥 성공 처리
+                resolve();
+              }
+            });
           });
+          loadPromises.push(p);
         } else if (entry.isDirectory) {
-          readDirectory(entry);
+          // 폴더라면 재귀적으로 처리
+          loadPromises.push(readDirectoryPromise(entry));
         }
       }
     }
   }
-}
 
-function readDirectory(dirEntry) {
-  const reader = dirEntry.createReader();
-  reader.readEntries(
-    (entries) => {
-      for (const entry of entries) {
-        if (entry.isFile) {
-          entry.file((file) => {
-            if (file.name.toLowerCase().endsWith('.stl')) {
-              loadStlFileAsGeometry(file)
-                .then((geometry) => {
-                  addModelToScene(geometry, file.name);
-                })
-                .catch((err) => console.error('STL load error:', err));
-            }
-          });
-        } else if (entry.isDirectory) {
-          readDirectory(entry);
-        }
-      }
-    },
-    (error) => {
-      console.error(error);
-    }
-  );
+  // 모든 로드/파싱이 끝나면 실행
+  Promise.all(loadPromises)
+    .then(() => {
+      console.log('모든 STL 파일 로딩이 완료되었습니다!');
+    })
+    .catch((error) => {
+      console.error('드롭한 파일들 중 로딩 실패가 있었습니다.', error);
+    });
 }
 
 export function onDragOver(e) {
