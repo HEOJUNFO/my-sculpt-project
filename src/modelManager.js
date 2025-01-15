@@ -19,6 +19,8 @@ export let initialFileName = null;
 export const undoStack = [];
 export const redoStack = [];
 
+const modelGroup = new THREE.Group();
+
 /**
  * refs: scene, camera, controls, etc.
  * (transformControls도 initScene에서 할당)
@@ -381,6 +383,7 @@ export function addModelToScene(geometry, fileName) {
   const mat = createActiveMaterial();
   const newMesh = new THREE.Mesh(geometry, mat);
   newMesh.frustumCulled = false;
+  modelGroup.add(newMesh);
   refs.scene.add(newMesh);
 
   const item = {
@@ -392,10 +395,6 @@ export function addModelToScene(geometry, fileName) {
   };
   modelList.push(item);
 
-  // 첫 모델이면 카메라 맞춤
-  if (modelList.length === 1) {
-    fitCameraToObject(refs.camera, newMesh, refs.controls);
-  }
 
   // 새로 추가된 메쉬를 활성화
   setTargetMeshAsActive(newMesh);
@@ -504,7 +503,7 @@ export function onDropSTL(e) {
   // 모든 로드/파싱이 끝나면 실행
   Promise.all(loadPromises)
     .then(() => {
-      console.log('모든 STL 파일 로딩이 완료되었습니다!');
+      fitCameraToObject(refs.camera, refs.targetMesh, refs.controls);
     })
     .catch((error) => {
       console.error('드롭한 파일들 중 로딩 실패가 있었습니다.', error);
