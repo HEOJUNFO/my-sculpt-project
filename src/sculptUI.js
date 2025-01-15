@@ -1,16 +1,18 @@
 // src/sculptUI.js
 
 import { refs } from './modelManager.js';
-// undo, redo 함수를 직접 import 해야 합니다.
-import { undo, redo } from './modelManager.js';
+// exportCurrentModel 함수 추가 import
+import { undo, redo, exportCurrentModel } from './modelManager.js';
 
 export function setupCustomSculptUI() {
   // (1) 브러시 모드 버튼들
   const btnNormal  = document.getElementById('btn-normal');
   const btnClay    = document.getElementById('btn-clay');
   const btnFlatten = document.getElementById('btn-flatten');
-  // (만약 Invert 버튼도 있다면)
-  const btnInvert  = document.getElementById('btn-invert');
+  const btnInvert  = document.getElementById('btn-invert');   // invert
+  const btnUndo    = document.getElementById('btn-undo');     // undo
+  const btnRedo    = document.getElementById('btn-redo');     // redo
+  const btnExport  = document.getElementById('btn-export');   // export
 
   function setBrushMode(mode) {
     refs.params.brush = mode;
@@ -28,16 +30,22 @@ export function setupCustomSculptUI() {
   btnClay?.addEventListener('click',    () => setBrushMode('clay'));
   btnFlatten?.addEventListener('click', () => setBrushMode('flatten'));
 
-  // (Invert 버튼이 있다면)
-  if (btnInvert) {
-    if (refs.params.invert) btnInvert.classList.add('active');
-    btnInvert.addEventListener('click', () => {
-      refs.params.invert = !refs.params.invert;
-      btnInvert.classList.toggle('active', refs.params.invert);
-    });
-  }
+  // Invert
+  btnInvert?.addEventListener('click', () => {
+    refs.params.invert = !refs.params.invert;
+    btnInvert.classList.toggle('active', refs.params.invert);
+  });
 
-  // (2) 슬라이더
+  // Undo / Redo
+  btnUndo?.addEventListener('click', () => undo());
+  btnRedo?.addEventListener('click', () => redo());
+
+  // (2) Export 버튼 → exportCurrentModel() 호출
+  btnExport?.addEventListener('click', () => {
+    exportCurrentModel();
+  });
+
+  // (3) 슬라이더
   const sizeRange      = document.getElementById('sizeRange');
   const intensityRange = document.getElementById('intensityRange');
 
@@ -53,18 +61,4 @@ export function setupCustomSculptUI() {
       refs.params.intensity = parseFloat(intensityRange.value);
     });
   }
-
-  // (3) Undo / Redo 버튼
-  const btnUndo = document.getElementById('btn-undo');
-  const btnRedo = document.getElementById('btn-redo');
-
-  // 'undo()' 함수를 호출
-  btnUndo?.addEventListener('click', () => {
-    undo();
-  });
-
-  // 'redo()' 함수를 호출
-  btnRedo?.addEventListener('click', () => {
-    redo();
-  });
 }
