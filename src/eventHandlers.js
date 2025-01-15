@@ -141,36 +141,34 @@ export function onWheel(e) {
   } else {
     const wasControlsDisabled = !refs.controls.enabled;
 
-if (wasControlsDisabled) {
-  // (1) deltaMode별로 증감량 결정
-  let factor;
-  switch (e.deltaMode) {
-    case 2:
-      factor = 0.025;
-      break;
-    case 1:
-      factor = 0.01;
-      break;
-    default:
-      factor = 0.00025;
-      break;
+    if (wasControlsDisabled) {
+      // (1) deltaMode별로 증감량 결정
+      let factor;
+      switch (e.deltaMode) {
+        case 2:
+          factor = 0.025;
+          break;
+        case 1:
+          factor = 0.01;
+          break;
+        default:
+          factor = 0.00025;
+          break;
+      }
+
+      // (2) 카메라가 바라보는 "전방(forward)" 방향 벡터 계산
+      const forward = new THREE.Vector3();
+      refs.camera.getWorldDirection(forward);
+      // forward 예: (0, 0, -1) 근처 (카메라가 -Z방향 보고 있다고 가정)
+
+      // (3) 전방 방향으로 카메라 이동 → 줌 효과
+      // 보통 '스크롤 위(양수 deltaY)'를 하면 앞으로(전방) 당겨서 줌인하고 싶다면
+      // deltaY가 양수일 때 forward로 이동시키면 '반대로' 움직이므로 - 기호를 붙여줌
+      refs.camera.position.addScaledVector(forward, -e.deltaY * factor);
+
+      // 필요하다면 최소/최대 거리, 혹은 회전 등을 고려해 추가 로직 작성
+    } 
   }
-
-  // (2) 카메라가 바라보는 "전방(forward)" 방향 벡터 계산
-  const forward = new THREE.Vector3();
-  refs.camera.getWorldDirection(forward);
-  // forward 예: (0, 0, -1) 근처 (카메라가 -Z방향 보고 있다고 가정)
-
-  // (3) 전방 방향으로 카메라 이동 → 줌 효과
-  // 보통 '스크롤 위(양수 deltaY)'를 하면 앞으로(전방) 당겨서 줌인하고 싶다면
-  // deltaY가 양수일 때 forward로 이동시키면 '반대로' 움직이므로 - 기호를 붙여줌
-  refs.camera.position.addScaledVector(forward, -e.deltaY * factor);
-
-  // 필요하다면 최소/최대 거리, 혹은 회전 등을 고려해 추가 로직 작성
-}
-  
-  }
- 
 }
 
 /** Window Resize */
