@@ -6,6 +6,9 @@ import { TrackballControls } from 'three/examples/jsm/controls/TrackballControls
 import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js';
 import WebGPURenderer from 'three/src/renderers/webgpu/WebGPURenderer.js';
 
+// three-subdivide 라이브러리 (npm 또는 CDN)
+import { LoopSubdivision } from 'three-subdivide';
+
 import { startRenderLoop } from './renderLoop.js';
 
 import {
@@ -16,7 +19,6 @@ import {
 
 import { setupCustomSculptUI } from './sculptUI.js'; 
 import { memos } from './memo.js'; 
-
 import {
   refs,
   reset,
@@ -48,40 +50,43 @@ const params = {
   transformMode: false,
   transformType: 'translate',
   wireframe: false,
-  
-  // 새로 추가: WebGPU 사용 여부
+
+  // WebGPU
   useWebGPU: false,
+};
+
+// --- Subdivide 설정을 위한 파라미터 객체 (GUI에서 노출) ---
+const subdivParams = {
+  iterations: 1,         // 몇 번 subdivision 할지
+  split: true,           // 평면(co-planar)인 면을 split할지
+  uvSmooth: false,       // UV도 스무딩 할지
+  preserveEdges: false,  // geometry의 edge 보존할지
+  flatOnly: false,       // flat subdiv만 적용할지 (스무딩X)
+  maxTriangles: Infinity // 삼각형 개수 제한
 };
 
 // ---------------------- initScene() ----------------------
 export function initScene() {
   const isDebugMode = window.location.href.includes('debug');
 
-  // (1) WebGLRenderer 생성
+  // (1) WebGLRenderer
   const webglRenderer = new THREE.WebGLRenderer({ antialias: true });
   webglRenderer.setPixelRatio(window.devicePixelRatio);
   webglRenderer.setSize(window.innerWidth, window.innerHeight);
   webglRenderer.setClearColor(0x060609, 1);
   webglRenderer.outputEncoding = THREE.sRGBEncoding;
   webglRenderer.domElement.style.touchAction = 'none';
-  // 초기엔 WebGL 캔버스만 화면에 표시
   document.body.appendChild(webglRenderer.domElement);
 
-  // (2) WebGPURenderer 생성
-
+  // (2) WebGPURenderer
   const webgpuRenderer = new WebGPURenderer({ antialias: true });
-
   webgpuRenderer.setSize(window.innerWidth, window.innerHeight);
   webgpuRenderer.setClearColor(0x060609, 1);
-  // outputEncoding 대신 outputColorSpace를 쓰는 버전도 있음 (three.js r152+)
   webgpuRenderer.outputEncoding = THREE.sRGBEncoding;
   webgpuRenderer.domElement.style.touchAction = 'none';
-
-  // 초기에 숨겨두기
   webgpuRenderer.domElement.style.display = 'none';
   document.body.appendChild(webgpuRenderer.domElement);
 
-  // 현재 사용하는 renderer를 저장할 변수
   let currentRenderer = webglRenderer;
 
   // Scene, Camera, Light
@@ -179,6 +184,7 @@ export function initScene() {
   if (isDebugMode) {
     gui = new dat.GUI();
 
+    // Model Folder
     const modelFolder = gui.addFolder('Model');
     modelFolder.add(params, 'matcap', Object.keys(matcaps)).name('Matcap');
     modelFolder
@@ -194,12 +200,50 @@ export function initScene() {
       });
     modelFolder.add({
       addSphere: () => {
-        addModelToScene(new THREE.IcosahedronGeometry(1,200), 'Icosahedron');
+        addModelToScene(new THREE.IcosahedronGeometry(1, 100), 'Icosahedron');
         fitCameraToObject(camera, refs.targetMesh, controls);
       }
     }, 'addSphere').name('Add Sphere');
+
+    // ---- Subdivision UI 추가 ----
+    const subdivFolder = modelFolder.addFolder('Subdivision');
+    subdivFolder.add(subdivParams, 'iterations', 1, 5, 1).name('Iterations');
+    subdivFolder.add(subdivParams, 'split').name('Split');
+    subdivFolder.add(subdivParams, 'uvSmooth').name('uvSmooth');
+    subdivFolder.add(subdivParams, 'preserveEdges').name('PreserveEdges');
+    subdivFolder.add(subdivParams, 'flatOnly').name('FlatOnly');
+
+    // Subdivide 적용 버튼
+    subdivFolder.add({
+      subdivideMesh: () => {
+        if (refs.targetMesh) {
+          // geometry를 subdivision
+          // (주의: 너무 많은 iterations나 큰 모델은 성능에 부담)
+          refs.targetMesh.geometry = LoopSubdivision.modify(
+            refs.targetMesh.geometry,
+            subdivParams.iterations,
+            {
+              split: subdivParams.split,
+              uvSmooth: subdivParams.uvSmooth,
+              preserveEdges: subdivParams.preserveEdges,
+              flatOnly: subdivParams.flatOnly,
+              maxTriangles: Infinity
+            }
+          );
+          // 혹시 BVH Helper 표시 중이면 다시 계산
+          refs.targetMesh.geometry.computeBoundsTree?.();
+          if (refs.bvhHelper) {
+            refs.bvhHelper.update();
+          }
+        }
+      }
+    }, 'subdivideMesh').name('Apply Subdivide');
+    // ---- Subdivision UI 끝 ----
+
     modelFolder.open();
 
+
+    // Sculpt Folder
     const sculptFolder = gui.addFolder('Sculpting');
     sculptFolder.add(params, 'maxSteps',1,25,1);
     sculptFolder
@@ -210,6 +254,7 @@ export function initScene() {
       });
     sculptFolder.open();
 
+    // BVH Helper
     const helperFolder = gui.addFolder('BVH Helper');
     helperFolder.add(params, 'depth', 1, 20, 1).onChange(val => {
       if ( refs.bvhHelper ) {
@@ -228,6 +273,7 @@ export function initScene() {
     });
     helperFolder.open();
 
+    // Memo Mode
     const memoCtrl = gui.add(params, 'memoMode')
       .name('Memo Mode')
       .onChange((value) => {
@@ -239,6 +285,7 @@ export function initScene() {
         }
       });
 
+    // Transform Mode
     const transformCtrl = gui.add(params, 'transformMode')
       .name('Transform Mode')
       .onChange((value) => {
@@ -269,7 +316,7 @@ export function initScene() {
       });
     });
 
-    // 여기서 WebGPU 활성화 체크박스 추가
+    // WebGPU 전환 체크
     gui.add(params, 'useWebGPU')
       .name('Use WebGPU')
       .onChange((useWebGPU) => {
@@ -279,8 +326,8 @@ export function initScene() {
           webgpuRenderer.domElement.style.display = '';
           currentRenderer = webgpuRenderer;
 
-          // TrackballControls, TransformControls도 새로운 canvas DOMElement로 재설정 필요
-          controls.dispose(); // 기존 이벤트 리스너 해제
+          // Controls 재설정
+          controls.dispose();
           const newControls = new TrackballControls(camera, webgpuRenderer.domElement);
           newControls.rotateSpeed = 3;
           newControls.addEventListener('start', ()=>{ newControls.active = true; });
@@ -297,7 +344,7 @@ export function initScene() {
 
           if(refs.targetMesh) {
             fitCameraToObject(camera, refs.targetMesh, newControls);
-            }
+          }
 
           startRenderLoop(webgpuRenderer, scene, camera, stats);
 
@@ -307,7 +354,6 @@ export function initScene() {
           webglRenderer.domElement.style.display = '';
           currentRenderer = webglRenderer;
 
-          // TrackballControls, TransformControls도 WebGL용으로 재설정
           controls.dispose();
           const newControls = new TrackballControls(camera, webglRenderer.domElement);
           newControls.rotateSpeed = 3;
@@ -324,7 +370,7 @@ export function initScene() {
           refs.transformControls = newTransformControls;
 
           if(refs.targetMesh) {
-          fitCameraToObject(camera, refs.targetMesh, newControls);
+            fitCameraToObject(camera, refs.targetMesh, newControls);
           }
 
           startRenderLoop(webglRenderer, scene, camera, stats);
@@ -347,13 +393,11 @@ export function initScene() {
     gui.open();
   }
 
-  // 커스텀 UI (브러시 버튼, 슬라이더 등)
+  // 커스텀 UI
   setupCustomSculptUI();
 
-
-
   return {
-    renderer: currentRenderer, // 초깃값
+    renderer: currentRenderer,
     webglRenderer,
     webgpuRenderer,
     scene,
