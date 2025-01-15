@@ -4,6 +4,9 @@ import Stats from 'three/examples/jsm/libs/stats.module.js';
 import * as dat from 'three/examples/jsm/libs/lil-gui.module.min.js'; 
 import { TrackballControls } from 'three/examples/jsm/controls/TrackballControls.js';
 import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js';
+import WebGPURenderer from 'three/src/renderers/webgpu/WebGPURenderer.js';
+
+import { startRenderLoop } from './renderLoop.js';
 
 import {
   acceleratedRaycast,
@@ -17,10 +20,7 @@ import { memos } from './memo.js';
 import {
   refs,
   reset,
-  exportCurrentModel,
   placeGizmoAtMeshCenter,
-  undo,
-  redo,
   addModelToScene,
 } from './modelManager.js';
 import { fitCameraToObject } from './cameraHelpers.js';
@@ -47,36 +47,52 @@ const params = {
   memoHide: false,
   transformMode: false,
   transformType: 'translate',
+  wireframe: false,
+  
+  // 새로 추가: WebGPU 사용 여부
+  useWebGPU: false,
 };
 
 // ---------------------- initScene() ----------------------
 export function initScene() {
-
-  // URL에 debug 라는 문자열이 포함되어 있는지 체크
   const isDebugMode = window.location.href.includes('debug');
-  // 또는 location.pathname, query string 등으로 구분 가능
-  // const isDebugMode = location.pathname.includes('debug');
 
-  // 1) renderer
-  const renderer = new THREE.WebGLRenderer({ antialias: true });
-  renderer.setPixelRatio(window.devicePixelRatio);
-  renderer.setSize(window.innerWidth, window.innerHeight);
-  renderer.setClearColor(0x060609, 1);
-  renderer.outputEncoding = THREE.sRGBEncoding;
-  document.body.appendChild(renderer.domElement);
-  renderer.domElement.style.touchAction = 'none';
+  // (1) WebGLRenderer 생성
+  const webglRenderer = new THREE.WebGLRenderer({ antialias: true });
+  webglRenderer.setPixelRatio(window.devicePixelRatio);
+  webglRenderer.setSize(window.innerWidth, window.innerHeight);
+  webglRenderer.setClearColor(0x060609, 1);
+  webglRenderer.outputEncoding = THREE.sRGBEncoding;
+  webglRenderer.domElement.style.touchAction = 'none';
+  // 초기엔 WebGL 캔버스만 화면에 표시
+  document.body.appendChild(webglRenderer.domElement);
 
-  // 2) scene
+  // (2) WebGPURenderer 생성
+
+  const webgpuRenderer = new WebGPURenderer({ antialias: true });
+
+  webgpuRenderer.setSize(window.innerWidth, window.innerHeight);
+  webgpuRenderer.setClearColor(0x060609, 1);
+  // outputEncoding 대신 outputColorSpace를 쓰는 버전도 있음 (three.js r152+)
+  webgpuRenderer.outputEncoding = THREE.sRGBEncoding;
+  webgpuRenderer.domElement.style.touchAction = 'none';
+
+  // 초기에 숨겨두기
+  webgpuRenderer.domElement.style.display = 'none';
+  document.body.appendChild(webgpuRenderer.domElement);
+
+  // 현재 사용하는 renderer를 저장할 변수
+  let currentRenderer = webglRenderer;
+
+  // Scene, Camera, Light
   const scene = new THREE.Scene();
-  scene.fog = new THREE.Fog( 0x263238 / 2, 20, 60 );
+  scene.fog = new THREE.Fog(0x263238 / 2, 20, 60);
 
-  // 3) light
   const light = new THREE.DirectionalLight(0xffffff, 0.5);
   light.position.set(1, 1, 1);
   scene.add(light);
   scene.add(new THREE.AmbientLight(0xffffff, 0.4));
 
-  // 4) camera
   const camera = new THREE.PerspectiveCamera(
     75,
     window.innerWidth / window.innerHeight,
@@ -87,14 +103,14 @@ export function initScene() {
   camera.far = 100;
   camera.updateProjectionMatrix();
 
-  // 5) stats (debug 페이지일 때만 생성/표시)
+  // Stats
   let stats;
   if (isDebugMode) {
     stats = new Stats();
     document.body.appendChild(stats.dom);
   }
 
-  // 6) matcaps
+  // Matcaps
   const matcaps = {};
   matcaps['Clay']        = new THREE.TextureLoader().load('textures/clay.jpg');
   matcaps['Clay2']       = new THREE.TextureLoader().load('textures/B67F6B_4B2E2A_6C3A34_F3DBC6-256px.png');
@@ -110,7 +126,7 @@ export function initScene() {
   matcaps['Shiny Green'] = new THREE.TextureLoader().load('textures/3B6E10_E3F2C3_88AC2E_99CE51-256px.png');
   matcaps['Normal']      = new THREE.TextureLoader().load('textures/7877EE_D87FC5_75D9C7_1C78C0-256px.png');
   
-  // 브러시(LineSegments)
+  // Brush
   const brushMat = new THREE.LineBasicMaterial({
     color: 'red',
     transparent: true,
@@ -134,22 +150,20 @@ export function initScene() {
   brush.renderOrder = 9999;
   scene.add(brush);
 
-  // TrackballControls
-  const controls = new TrackballControls(camera, renderer.domElement);
+  // Controls
+  const controls = new TrackballControls(camera, currentRenderer.domElement);
   controls.rotateSpeed = 3;
   controls.addEventListener('start', ()=>{ controls.active = true; });
   controls.addEventListener('end',   ()=>{ controls.active = false; });
 
   // TransformControls
-  const transformControls = new TransformControls(camera, renderer.domElement);
+  const transformControls = new TransformControls(camera, currentRenderer.domElement);
   transformControls.addEventListener('dragging-changed', (event) => {
-    // 드래그 중이면 TrackballControls 비활성화
     controls.enabled = ! event.value;
   });
-  // 기즈모 사이즈 축소
   transformControls.setSize(0.8);
 
-  // refs 연결
+  // refs
   refs.scene = scene;
   refs.camera = camera;
   refs.controls = controls;
@@ -160,25 +174,32 @@ export function initScene() {
   refs.brush = brush;
   refs.transformControls = transformControls;
 
-  // dat.GUI (debug 페이지일 때만 생성)
+  // dat.GUI
   let gui;
   if (isDebugMode) {
     gui = new dat.GUI();
 
-    // Model Folder
     const modelFolder = gui.addFolder('Model');
     modelFolder.add(params, 'matcap', Object.keys(matcaps)).name('Matcap');
-
+    modelFolder
+      .add(params, 'wireframe')
+      .name('Wireframe')
+      .onChange((value) => {
+        if (refs.targetMesh) {
+          const mats = Array.isArray(refs.targetMesh.material)
+            ? refs.targetMesh.material
+            : [refs.targetMesh.material];
+          mats.forEach(mat => mat.wireframe = value);
+        }
+      });
     modelFolder.add({
       addSphere: () => {
-        addModelToScene(new THREE.IcosahedronGeometry(1, 200), 'Icosahedron');
+        addModelToScene(new THREE.IcosahedronGeometry(1,200), 'Icosahedron');
         fitCameraToObject(camera, refs.targetMesh, controls);
       }
     }, 'addSphere').name('Add Sphere');
-
     modelFolder.open();
 
-    // Sculpt Folder
     const sculptFolder = gui.addFolder('Sculpting');
     sculptFolder.add(params, 'maxSteps',1,25,1);
     sculptFolder
@@ -189,7 +210,6 @@ export function initScene() {
       });
     sculptFolder.open();
 
-    // BVH Helper
     const helperFolder = gui.addFolder('BVH Helper');
     helperFolder.add(params, 'depth', 1, 20, 1).onChange(val => {
       if ( refs.bvhHelper ) {
@@ -208,31 +228,23 @@ export function initScene() {
     });
     helperFolder.open();
 
-    // Memo Mode
     const memoCtrl = gui.add(params, 'memoMode')
       .name('Memo Mode')
       .onChange((value) => {
         if (value) {
-          // 변수만 false로 설정
           params.transformMode = false;
-          // transform UI 수동 갱신
           transformCtrl.updateDisplay();
-          // transformControls 제거
           refs.transformControls?.detach();
           refs.scene.remove(refs.transformControls);
         }
       });
 
-    // Transform Mode
     const transformCtrl = gui.add(params, 'transformMode')
       .name('Transform Mode')
       .onChange((value) => {
         if (value) {
-          // 변수만 false로 설정
           params.memoMode = false;
-          // memo UI 수동 갱신
           memoCtrl.updateDisplay();
-
           if (refs.targetMesh) {
             placeGizmoAtMeshCenter(refs.targetMesh);
             refs.transformControls?.setMode(params.transformType);
@@ -243,7 +255,6 @@ export function initScene() {
         }
       });
     
-    // Transform Type
     gui.add(params, 'transformType', [ 'translate', 'rotate', 'scale' ] )
       .name('Transform Mode Type')
       .onChange((mode) => {
@@ -252,16 +263,76 @@ export function initScene() {
         }
       });
 
-    // Hide Memo
     gui.add(params, 'memoHide').name('Hide Memo').onChange((hideVal) => {
       memos.forEach((m) => {
         m.object.visible = !hideVal;
       });
     });
 
+    // 여기서 WebGPU 활성화 체크박스 추가
+    gui.add(params, 'useWebGPU')
+      .name('Use WebGPU')
+      .onChange((useWebGPU) => {
+        if (useWebGPU) {
+          // WebGPU로 전환
+          webglRenderer.domElement.style.display = 'none';
+          webgpuRenderer.domElement.style.display = '';
+          currentRenderer = webgpuRenderer;
+
+          // TrackballControls, TransformControls도 새로운 canvas DOMElement로 재설정 필요
+          controls.dispose(); // 기존 이벤트 리스너 해제
+          const newControls = new TrackballControls(camera, webgpuRenderer.domElement);
+          newControls.rotateSpeed = 3;
+          newControls.addEventListener('start', ()=>{ newControls.active = true; });
+          newControls.addEventListener('end',   ()=>{ newControls.active = false; });
+          refs.controls = newControls;
+
+          transformControls.dispose();
+          const newTransformControls = new TransformControls(camera, webgpuRenderer.domElement);
+          newTransformControls.addEventListener('dragging-changed', (event) => {
+            newControls.enabled = ! event.value;
+          });
+          newTransformControls.setSize(0.8);
+          refs.transformControls = newTransformControls;
+
+          if(refs.targetMesh) {
+            fitCameraToObject(camera, refs.targetMesh, newControls);
+            }
+
+          startRenderLoop(webgpuRenderer, scene, camera, stats);
+
+        } else {
+          // WebGL로 전환
+          webgpuRenderer.domElement.style.display = 'none';
+          webglRenderer.domElement.style.display = '';
+          currentRenderer = webglRenderer;
+
+          // TrackballControls, TransformControls도 WebGL용으로 재설정
+          controls.dispose();
+          const newControls = new TrackballControls(camera, webglRenderer.domElement);
+          newControls.rotateSpeed = 3;
+          newControls.addEventListener('start', ()=>{ newControls.active = true; });
+          newControls.addEventListener('end',   ()=>{ newControls.active = false; });
+          refs.controls = newControls;
+
+          transformControls.dispose();
+          const newTransformControls = new TransformControls(camera, webglRenderer.domElement);
+          newTransformControls.addEventListener('dragging-changed', (event) => {
+            newControls.enabled = ! event.value;
+          });
+          newTransformControls.setSize(0.8);
+          refs.transformControls = newTransformControls;
+
+          if(refs.targetMesh) {
+          fitCameraToObject(camera, refs.targetMesh, newControls);
+          }
+
+          startRenderLoop(webglRenderer, scene, camera, stats);
+        }
+      });
+
     // Buttons
     gui.add({ reset }, 'reset');
-    gui.add({ export: exportCurrentModel }, 'export');
     gui.add({
       rebuildBVH: () => {
         if (refs.targetMesh) {
@@ -272,16 +343,21 @@ export function initScene() {
         }
       }
     }, 'rebuildBVH');
+
     gui.open();
   }
 
   // 커스텀 UI (브러시 버튼, 슬라이더 등)
   setupCustomSculptUI();
 
+
+
   return {
-    renderer,
+    renderer: currentRenderer, // 초깃값
+    webglRenderer,
+    webgpuRenderer,
     scene,
     camera,
-    stats // debug가 아닐 경우 undefined이 반환될 수 있음.
+    stats
   };
 }
