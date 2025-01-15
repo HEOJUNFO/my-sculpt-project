@@ -14,17 +14,33 @@ import {
   someUpdateFunc,
 } from './eventHandlers.js';
 
+let animationId = null; // 현재 렌더 루프의 requestAnimationFrame ID를 저장할 변수
+
+/**
+ * 렌더 루프를 중단하는 함수
+ */
+export function stopRenderLoop() {
+  if (animationId) {
+    cancelAnimationFrame(animationId);
+    animationId = null;
+  }
+}
+
 /**
  * 렌더링 루프를 시작하는 함수
- *  - renderer, scene, camera, stats 등을 매개변수로 받아 처리
- *  - 내부에서 requestAnimationFrame(animate) 재귀 호출
  */
 export function startRenderLoop(renderer, scene, camera, stats) {
-  
-  function animate() {
-    requestAnimationFrame(animate);
-    if(stats) stats.begin();
 
+  // 혹시 이전에 실행중인 루프가 있다면 중지
+  stopRenderLoop();
+
+  // WebGPU인지 판별
+  const useRenderAsync = (typeof renderer.renderAsync === 'function');
+
+  function animate() {
+    animationId = requestAnimationFrame(animate); // 다음 프레임 예약
+
+    if (stats) stats.begin();
 
     refs.controls.update();
 
@@ -37,12 +53,11 @@ export function startRenderLoop(renderer, scene, camera, stats) {
     if (
       refs.params.memoMode ||
       refs.controls.active ||
-      ! brushActive ||
-      ! refs.targetMesh ||
+      !brushActive ||
+      !refs.targetMesh ||
       refs.params.transformMode
     ) {
       // 메모 모드이거나, 카메라 컨트롤 중이거나, 브러시 비활성시
-      // → 브러시 숨기기
       if ( refs.brush ) {
         refs.brush.visible = false;
       }
@@ -61,7 +76,6 @@ export function startRenderLoop(renderer, scene, camera, stats) {
           refs.brush.scale.set( refs.params.size, refs.params.size, 0.1 );
           refs.brush.position.copy( hit.point );
 
-          // 예: intensity를 z축 두께로 표현
           const zFactor = 0.01 + (refs.params.intensity * 0.01);
           refs.brush.scale.z = zFactor;
         }
@@ -72,15 +86,15 @@ export function startRenderLoop(renderer, scene, camera, stats) {
           lastCastPose.copy(hit.point);
         }
 
-        if ( ! (mouseState || lastMouseState) ) {
-          // 브러시를 갓 누른 상태
+        if ( !(mouseState || lastMouseState) ) {
+          // 브러시 첫 클릭
           performStroke(hit.point, refs.brush, true, {}, refs.targetMesh, refs.params, rightClick);
 
           lastMouse.copy(mouse);
           lastCastPose.copy(hit.point);
 
         } else {
-          // 드래그 중(브러시를 움직이는 중)
+          // 드래그 중
           const mdx = (mouse.x - lastMouse.x) * window.innerWidth * window.devicePixelRatio;
           const mdy = (mouse.y - lastMouse.y) * window.innerHeight * window.devicePixelRatio;
           let mdist = Math.sqrt(mdx*mdx + mdy*mdy);
@@ -107,7 +121,6 @@ export function startRenderLoop(renderer, scene, camera, stats) {
             mdist -= mstep;
 
             performStroke(lastCastPose, refs.brush, false, sets, refs.targetMesh, refs.params, rightClick);
-
             stepCount++;
             if ( stepCount > refs.params.maxSteps ) {
               break;
@@ -116,13 +129,12 @@ export function startRenderLoop(renderer, scene, camera, stats) {
 
           if ( stepCount > 0 ) {
             updateNormals(changedTriangles, changedIndices, refs.targetMesh);
-            // BVH 업데이트
             refs.targetMesh.geometry.boundsTree?.refit(traversedNodeIndices);
             if ( refs.bvhHelper && refs.bvhHelper.parent ) {
               refs.bvhHelper.update();
             }
           } else {
-            // 움직임 작으면 '단일' stroke만
+            // 움직임 작으면 단일 stroke만
             performStroke(hit.point, refs.brush, true, {}, refs.targetMesh, refs.params, rightClick);
           }
         }
@@ -138,15 +150,19 @@ export function startRenderLoop(renderer, scene, camera, stats) {
       }
     }
 
-    // 마지막 마우스 상태 갱신
     someUpdateFunc();
 
-    // 렌더링
-    renderer.render(scene, camera);
-
-    if(stats) stats.end();
+    // WebGPU -> renderAsync, WebGL -> render
+    if (useRenderAsync) {
+      renderer.renderAsync(scene, camera).then(() => {
+        if (stats) stats.end();
+      });
+    } else {
+      renderer.render(scene, camera);
+      if (stats) stats.end();
+    }
   }
 
-  // 최초 호출
+  // 루프 시작
   animate();
 }
