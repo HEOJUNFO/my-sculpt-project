@@ -109,30 +109,68 @@ export function onPointerMove(e) {
 
 /** Wheel */
 export function onWheel(e) {
+
+  // transformMode, memoMode 등 다른 모드는 건드리지 않는다고 가정
+  if (refs.params.memoMode || refs.params.transformMode) {
+    return;
+  }
+
+
   let delta = e.deltaY;
   if ( e.deltaMode === 1 ) delta *= 40;
   if ( e.deltaMode === 2 ) delta *= 40;
 
   const sizeKeyPressed = isMac ? e.metaKey : e.shiftKey;
 
-  if ( sizeKeyPressed ) {
+  if (sizeKeyPressed) {
+    // 사이즈 조절 로직 (기존 코드 그대로)
     refs.params.size += delta * 0.0001;
     refs.params.size = Math.max(Math.min(refs.params.size, 0.25), 0.01);
-
     const sizeRange = document.getElementById('sizeRange');
     if (sizeRange) {
       sizeRange.value = refs.params.size.toFixed(4);
     }
-  }
-  else if ( e.ctrlKey ) {
+  } else if ( e.ctrlKey ) {
+    // 강도 조절 로직 (기존 코드 그대로)
     refs.params.intensity += delta * 0.1;
     refs.params.intensity = Math.max(1, Math.min(refs.params.intensity, 50));
-
     const intensityRange = document.getElementById('intensityRange');
     if (intensityRange) {
       intensityRange.value = String(refs.params.intensity);
     }
+  } else {
+    const wasControlsDisabled = !refs.controls.enabled;
+
+if (wasControlsDisabled) {
+  // (1) deltaMode별로 증감량 결정
+  let factor;
+  switch (e.deltaMode) {
+    case 2:
+      factor = 0.025;
+      break;
+    case 1:
+      factor = 0.01;
+      break;
+    default:
+      factor = 0.00025;
+      break;
   }
+
+  // (2) 카메라가 바라보는 "전방(forward)" 방향 벡터 계산
+  const forward = new THREE.Vector3();
+  refs.camera.getWorldDirection(forward);
+  // forward 예: (0, 0, -1) 근처 (카메라가 -Z방향 보고 있다고 가정)
+
+  // (3) 전방 방향으로 카메라 이동 → 줌 효과
+  // 보통 '스크롤 위(양수 deltaY)'를 하면 앞으로(전방) 당겨서 줌인하고 싶다면
+  // deltaY가 양수일 때 forward로 이동시키면 '반대로' 움직이므로 - 기호를 붙여줌
+  refs.camera.position.addScaledVector(forward, -e.deltaY * factor);
+
+  // 필요하다면 최소/최대 거리, 혹은 회전 등을 고려해 추가 로직 작성
+}
+  
+  }
+ 
 }
 
 /** Window Resize */

@@ -28,11 +28,10 @@ export function isObjectInCameraViewFrustum(camera, object) {
 }
 
 /**
- * object(주로 mesh)가 화면에 꽉 차도록 카메라와 OrbitControls 위치/타겟을 조정
  * 단, 오브젝트가 시야 내에 없을 때만 동작
  * @param {THREE.Camera} camera 
  * @param {THREE.Object3D} object 
- * @param {THREE.OrbitControls | THREE.TrackballControls} controls
+ * @param {THREE.TrackballControls} controls
  * @param {number} offset 여유 공간 비율 (기본값 1.25)
  */
 export function fitCameraToObject(camera, object, controls, offset = 1.5) {
