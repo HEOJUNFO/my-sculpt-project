@@ -1,4 +1,4 @@
-// src/modelManager.js
+// modelManager.js
 
 import * as THREE from 'three';
 import { STLExporter } from 'three/examples/jsm/exporters/STLExporter.js';
@@ -6,9 +6,12 @@ import { loadStlFileAsGeometry } from './stlHelpers.js';
 import { centerAndScaleGeometry } from './geometryHelpers.js';
 import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { MeshBVHHelper } from 'three-mesh-bvh';
-import { fitCameraToObject,isObjectInCameraViewFrustum } from './cameraHelpers.js';
+import { fitCameraToObject } from './cameraHelpers.js';
 
-export let modelList = [];    // [{ fileName, geometry, mesh, customOpacity }, ...]
+// 새로 분리한 UI 모듈 (UI 관련 코드 대부분 modelListUI.js로 이동)
+import { updateModelListUI } from './modelListUI.js';
+
+export let modelList = []; // [{ fileName, geometry, mesh, customOpacity }, ...]
 export let activeItemIndex = -1;
 export let initialGeometry = null;
 export let initialFileName = null;
@@ -16,160 +19,9 @@ export let initialFileName = null;
 export const undoStack = [];
 export const redoStack = [];
 
-// ------------------------
-// ▼ Undo/Redo 핵심 함수들
-// ------------------------
-
-export function pushUndoState() {
-    if (activeItemIndex < 0) return;       // 모델이 없다면 패스
-    const item = modelList[activeItemIndex];
-    if (!item) return;
-  
-    const mesh = item.mesh;
-    const geo = mesh.geometry;
-  
-    const posAttr = geo.attributes.position;
-    const normalAttr = geo.attributes.normal;
-    if (!posAttr || !normalAttr) return;
-  
-    // 복사
-    const positionsCopy = new Float32Array(posAttr.array.length);
-    positionsCopy.set(posAttr.array);
-    const normalsCopy = new Float32Array(normalAttr.array.length);
-    normalsCopy.set(normalAttr.array);
-  
-    undoStack.push({
-      itemIndex: activeItemIndex, // 어느 모델에 대한 것인지
-      positions: positionsCopy,
-      normals: normalsCopy,
-    });
-  
-    console.log('pushUndoState - itemIndex:', activeItemIndex, 'undoStack size=', undoStack.length);
-  }
-  
-  /**
-   * Redo 데이터 푸시
-   */
-  export function pushRedoState() {
-    if (activeItemIndex < 0) return;
-    const item = modelList[activeItemIndex];
-    if (!item) return;
-  
-    const mesh = item.mesh;
-    const geo = mesh.geometry;
-  
-    const posAttr = geo.attributes.position;
-    const normalAttr = geo.attributes.normal;
-    if (!posAttr || !normalAttr) return;
-  
-    const positionsCopy = new Float32Array(posAttr.array.length);
-    positionsCopy.set(posAttr.array);
-    const normalsCopy = new Float32Array(normalAttr.array.length);
-    normalsCopy.set(normalAttr.array);
-  
-    redoStack.push({
-      itemIndex: activeItemIndex,
-      positions: positionsCopy,
-      normals: normalsCopy,
-    });
-  
-    console.log('pushRedoState - itemIndex:', activeItemIndex, 'redoStack size=', redoStack.length);
-  }
-  
-  /**
-   * Undo 실행
-   * - pop undoStack
-   * - 만약 lastState.itemIndex != activeItemIndex면, 모델 강제 교체
-   * - geometry 복원
-   * - 현재 상태는 redoStack에 push
-   */
-  export function undo() {
-    if (undoStack.length === 0) {
-      console.log('No more undo states.');
-      return;
-    }
-  
-    // Undo 스택에서 마지막 상태를 꺼냄
-    const lastState = undoStack.pop();
-  
-    // 현재 상태를 redo 스택에 저장
-    pushRedoState();
-  
-    // 만약 lastState.itemIndex와 현재 activeItemIndex가 다르면,
-    // 해당 모델로 강제 전환
-    if (lastState.itemIndex !== activeItemIndex) {
-      setTargetMeshAsActive(modelList[lastState.itemIndex].mesh);
-    }
-  
-    // 이제 refs.targetMesh는 lastState.itemIndex의 모델
-    const item = modelList[lastState.itemIndex];
-    const mesh = item.mesh;
-    const geo = mesh.geometry;
-  
-    const posAttr = geo.attributes.position;
-    const normalAttr = geo.attributes.normal;
-    if (!posAttr || !normalAttr) return;
-  
-    posAttr.array.set(lastState.positions);
-    normalAttr.array.set(lastState.normals);
-    posAttr.needsUpdate = true;
-    normalAttr.needsUpdate = true;
-  
-    geo.computeBoundsTree({ setBoundingBox: false });
-    if (refs.bvhHelper && refs.bvhHelper.parent !== null) {
-      refs.bvhHelper.update();
-    }
-  
-    console.log('Undo done for itemIndex=', lastState.itemIndex, 'undoStack size=', undoStack.length);
-  }
-  
-  /**
-   * Redo 실행
-   * - pop redoStack
-   * - 만약 lastState.itemIndex != activeItemIndex면, 모델 강제 전환
-   * - geometry 복원
-   * - 현재 상태는 undoStack에 push
-   */
-  export function redo() {
-    if (redoStack.length === 0) {
-      console.log('No more redo states in redoStack.');
-      return;
-    }
-  
-    const lastState = redoStack.pop();
-  
-    // 현재 상태를 undo 스택에 저장
-    pushUndoState();
-  
-    // 모델 강제 전환
-    if (lastState.itemIndex !== activeItemIndex) {
-      setTargetMeshAsActive(modelList[lastState.itemIndex].mesh);
-    }
-  
-    const item = modelList[lastState.itemIndex];
-    const mesh = item.mesh;
-    const geo = mesh.geometry;
-  
-    const posAttr = geo.attributes.position;
-    const normalAttr = geo.attributes.normal;
-    if (!posAttr || !normalAttr) return;
-  
-    posAttr.array.set(lastState.positions);
-    normalAttr.array.set(lastState.normals);
-    posAttr.needsUpdate = true;
-    normalAttr.needsUpdate = true;
-  
-    geo.computeBoundsTree({ setBoundingBox: false });
-    if (refs.bvhHelper && refs.bvhHelper.parent !== null) {
-      refs.bvhHelper.update();
-    }
-  
-    console.log('Redo done for itemIndex=', lastState.itemIndex, 'redoStack size=', redoStack.length);
-  }
-
-/** 
+/**
  * refs: scene, camera, controls, etc.
- * 여기서 transformControls도 initScene에서 할당
+ * (transformControls도 initScene에서 할당)
  */
 export const refs = {
   scene: null,
@@ -177,22 +29,195 @@ export const refs = {
   controls: null,
   targetMesh: null,
   bvhHelper: null,
-  params: null,      // (matcap, displayHelper, modelOpacity, transformMode, etc.)
+  params: null, // (matcap, displayHelper, modelOpacity, transformMode, etc.)
   matcaps: null,
-  transformControls: null, 
+  transformControls: null,
 };
+
+// ------------------------
+// ▼ Undo/Redo 핵심 함수들
+// ------------------------
+
+export function pushUndoState() {
+  if (activeItemIndex < 0) return; // 모델이 없다면 패스
+  const item = modelList[activeItemIndex];
+  if (!item) return;
+
+  const mesh = item.mesh;
+  const geo = mesh.geometry;
+
+  const posAttr = geo.attributes.position;
+  const normalAttr = geo.attributes.normal;
+  if (!posAttr || !normalAttr) return;
+
+  // 복사
+  const positionsCopy = new Float32Array(posAttr.array.length);
+  positionsCopy.set(posAttr.array);
+  const normalsCopy = new Float32Array(normalAttr.array.length);
+  normalsCopy.set(normalAttr.array);
+
+  undoStack.push({
+    itemIndex: activeItemIndex, // 어느 모델에 대한 것인지
+    positions: positionsCopy,
+    normals: normalsCopy,
+  });
+
+  console.log(
+    'pushUndoState - itemIndex:',
+    activeItemIndex,
+    'undoStack size=',
+    undoStack.length
+  );
+}
+
+/** Redo 데이터 푸시 */
+export function pushRedoState() {
+  if (activeItemIndex < 0) return;
+  const item = modelList[activeItemIndex];
+  if (!item) return;
+
+  const mesh = item.mesh;
+  const geo = mesh.geometry;
+
+  const posAttr = geo.attributes.position;
+  const normalAttr = geo.attributes.normal;
+  if (!posAttr || !normalAttr) return;
+
+  const positionsCopy = new Float32Array(posAttr.array.length);
+  positionsCopy.set(posAttr.array);
+  const normalsCopy = new Float32Array(normalAttr.array.length);
+  normalsCopy.set(normalAttr.array);
+
+  redoStack.push({
+    itemIndex: activeItemIndex,
+    positions: positionsCopy,
+    normals: normalsCopy,
+  });
+
+  console.log(
+    'pushRedoState - itemIndex:',
+    activeItemIndex,
+    'redoStack size=',
+    redoStack.length
+  );
+}
+
+/**
+ * Undo 실행
+ *  1. pop undoStack
+ *  2. 만약 lastState.itemIndex != activeItemIndex면, 모델 강제 교체
+ *  3. geometry 복원
+ *  4. 현재 상태는 redoStack에 push
+ */
+export function undo() {
+  if (undoStack.length === 0) {
+    console.log('No more undo states.');
+    return;
+  }
+
+  // Undo 스택에서 마지막 상태를 꺼냄
+  const lastState = undoStack.pop();
+
+  // 만약 lastState.itemIndex와 현재 activeItemIndex가 다르면,
+  // 해당 모델로 강제 전환
+  if (lastState.itemIndex !== activeItemIndex) {
+    setTargetMeshAsActive(modelList[lastState.itemIndex].mesh);
+  }
+  // 현재 상태를 redo 스택에 저장
+  pushRedoState();
+
+  
+
+  // 이제 refs.targetMesh는 lastState.itemIndex의 모델
+  const item = modelList[lastState.itemIndex];
+  const mesh = item.mesh;
+  const geo = mesh.geometry;
+
+  const posAttr = geo.attributes.position;
+  const normalAttr = geo.attributes.normal;
+  if (!posAttr || !normalAttr) return;
+
+  posAttr.array.set(lastState.positions);
+  normalAttr.array.set(lastState.normals);
+  posAttr.needsUpdate = true;
+  normalAttr.needsUpdate = true;
+
+  geo.computeBoundsTree({ setBoundingBox: false });
+  if (refs.bvhHelper && refs.bvhHelper.parent !== null) {
+    refs.bvhHelper.update();
+  }
+
+  console.log(
+    'Undo done for itemIndex=',
+    lastState.itemIndex,
+    'undoStack size=',
+    undoStack.length
+  );
+}
+
+/**
+ * Redo 실행
+ *  1. pop redoStack
+ *  2. 만약 lastState.itemIndex != activeItemIndex면, 모델 강제 전환
+ *  3. geometry 복원
+ *  4. 현재 상태는 undoStack에 push
+ */
+export function redo() {
+  if (redoStack.length === 0) {
+    console.log('No more redo states in redoStack.');
+    return;
+  }
+
+  // 1) redoStack에서 마지막 상태를 꺼냄
+  const lastState = redoStack.pop();
+
+  // 2) itemIndex가 다른 경우, 먼저 활성 모델 전환
+  if (lastState.itemIndex !== activeItemIndex) {
+    setTargetMeshAsActive(modelList[lastState.itemIndex].mesh);
+  }
+
+  // 3) 현재(=lastState.itemIndex) 모델의 상태를 undoStack에 저장
+  pushUndoState();
+
+  // 4) geometry 복원
+  const item = modelList[lastState.itemIndex];
+  const mesh = item.mesh;
+  const geo = mesh.geometry;
+
+  const posAttr = geo.attributes.position;
+  const normalAttr = geo.attributes.normal;
+  if (!posAttr || !normalAttr) return;
+
+  posAttr.array.set(lastState.positions);
+  normalAttr.array.set(lastState.normals);
+  posAttr.needsUpdate = true;
+  normalAttr.needsUpdate = true;
+
+  // BVH 갱신
+  geo.computeBoundsTree({ setBoundingBox: false });
+  if (refs.bvhHelper && refs.bvhHelper.parent !== null) {
+    refs.bvhHelper.update();
+  }
+
+  console.log(
+    'Redo done for itemIndex=',
+    lastState.itemIndex,
+    'redoStack size=',
+    redoStack.length
+  );
+}
 
 /** 활성 재질 */
 function createActiveMaterial() {
   return new THREE.MeshMatcapMaterial({
-    matcap: refs.matcaps[ refs.params.matcap ],
+    matcap: refs.matcaps[refs.params.matcap],
     transparent: true,
-    opacity: refs.params.modelOpacity, 
+    opacity: refs.params.modelOpacity,
     side: THREE.DoubleSide,
     flatShading: false,
-    
   });
 }
+
 /** 비활성 재질 */
 function createInactiveMaterial() {
   return new THREE.MeshStandardMaterial({
@@ -204,7 +229,7 @@ function createInactiveMaterial() {
   });
 }
 
-/** 
+/**
  * 바운딩박스 중심에 기즈모(TransformControls)
  */
 export function placeGizmoAtMeshCenter(mesh) {
@@ -250,95 +275,42 @@ export function placeGizmoAtMeshCenter(mesh) {
   }
 }
 
-/** 모델 리스트 UI 업데이트 */
-export function updateModelListUI() {
-    const ul = document.getElementById('model-list');
-    if (!ul) return;
-  
-    const dragHint = document.getElementById('drag-hint');
-    ul.innerHTML = '';
-  
-    // 배경색 4가지를 순환하기 위한 배열
-    const backgroundColors = ['#d1d1d1', '#E0bcbc', '#f3f4c5', '#a3a3a3'];
-  
-    if (modelList.length === 0) {
-      if (dragHint) {
-        dragHint.style.display = 'block';
-      }
-      return; 
-    } else {
-      if (dragHint) {
-        dragHint.style.display = 'none';
-      }
+/**
+ * 모델 삭제
+ * - UI 갱신도 함께 호출
+ */
+function removeFromList(index) {
+  const item = modelList[index];
+  if (item && item.mesh) {
+    refs.scene.remove(item.mesh);
+  }
+  modelList.splice(index, 1);
+
+  if (activeItemIndex === index) {
+    activeItemIndex = -1;
+    refs.targetMesh = null;
+    if (refs.bvhHelper) {
+      refs.scene.remove(refs.bvhHelper);
+      refs.bvhHelper = null;
     }
-  
-    modelList.forEach((item, idx) => {
-      const li = document.createElement('li');
-      li.classList.add('model-list-item');
-  
-      // 색상 순환 적용
-      li.style.backgroundColor = backgroundColors[idx % 4];
-  
-      const filenameDiv = document.createElement('div');
-      filenameDiv.classList.add('model-filename');
-      let text = `${idx + 1}. ${item.fileName}`;
-      if (idx === activeItemIndex) {
-        filenameDiv.classList.add('model-filename--active');
-      } else {
-        filenameDiv.classList.add('model-filename--inactive');
-      }
-      filenameDiv.textContent = text;
-  
-      const opacitySlider = document.createElement('input');
-      opacitySlider.type = 'range';
-      opacitySlider.min = '0';
-      opacitySlider.max = '1';
-      opacitySlider.step = '0.01';
-      opacitySlider.style.width = '80px';
-      opacitySlider.classList.add('custom-slider');
-  
-      const currentOpacity = (item.customOpacity !== undefined)
-        ? item.customOpacity
-        : (item.mesh.material.opacity ?? 1.0);
-      opacitySlider.value = String(currentOpacity);
-  
-      opacitySlider.addEventListener('input', e => {
-        e.stopPropagation();
-        const val = parseFloat(opacitySlider.value);
-        item.customOpacity = val;
-        item.mesh.material.opacity = val;
-      });
-  
-      const deleteBtn = document.createElement('span');
-      deleteBtn.textContent = ' ❌';
-      deleteBtn.style.color = '#f66';
-      deleteBtn.style.cursor = 'pointer';
-      deleteBtn.addEventListener('click', e => {
-        e.stopPropagation();
-        removeFromList(idx);
-      });
-  
-      li.addEventListener('click', (e) => {
-        if (e.target === opacitySlider) return;
-        activeItemIndex = idx;
-        setTargetMeshAsActive(item.mesh);
-          // 오브젝트가 이미 카메라 시야 안에 있으면, 카메라 맞춤 스킵
-        if (isObjectInCameraViewFrustum(refs.camera, item.mesh)) {
-            console.log('Object is already visible, skipping camera fitting.');
-         
-        }else{
-        fitCameraToObject(refs.camera, item.mesh, refs.controls);
-        }
-      });
-  
-      li.appendChild(filenameDiv);
-      li.appendChild(opacitySlider);
-      li.appendChild(deleteBtn);
-      ul.appendChild(li);
-    });
+  } else if (activeItemIndex > index) {
+    activeItemIndex--;
   }
 
-/** 활성 메쉬 교체 */
+  // UI 갱신 (modelListUI.js)
+  updateModelListUI(
+    modelList,
+    activeItemIndex,
+    refs,
+    removeFromList,
+    setTargetMeshAsActive
+  );
+}
+
+/**
+ * 활성 메쉬 교체
+ * - BVH Helper / 재질 / UI 갱신
+ */
 function setTargetMeshAsActive(mesh) {
   if (refs.bvhHelper) {
     refs.scene.remove(refs.bvhHelper);
@@ -346,13 +318,14 @@ function setTargetMeshAsActive(mesh) {
   }
   refs.targetMesh = mesh;
 
-  const idx = modelList.findIndex(it => it.mesh === mesh);
+  const idx = modelList.findIndex((it) => it.mesh === mesh);
   activeItemIndex = idx;
 
   modelList.forEach((item, i) => {
-    const userOp = (item.customOpacity !== undefined)
-      ? item.customOpacity
-      : (refs.params.modelOpacity ?? 1.0);
+    const userOp =
+      item.customOpacity !== undefined
+        ? item.customOpacity
+        : refs.params.modelOpacity ?? 1.0;
 
     if (i === idx) {
       item.mesh.material = createActiveMaterial();
@@ -373,37 +346,24 @@ function setTargetMeshAsActive(mesh) {
     refs.bvhHelper = newHelper;
   }
 
-  updateModelListUI();
+  // UI 갱신 (modelListUI.js)
+  updateModelListUI(
+    modelList,
+    activeItemIndex,
+    refs,
+    removeFromList,
+    setTargetMeshAsActive
+  );
 
-  // transformMode가 true → 바운딩박스 중심에 기즈모
+  // transformMode가 true라면 바운딩박스 중심에 기즈모
   if (refs.params.transformMode && mesh) {
     placeGizmoAtMeshCenter(mesh);
   }
 }
 
-/** 모델 제거 */
-function removeFromList(index) {
-  const item = modelList[index];
-  if (item && item.mesh) {
-    refs.scene.remove(item.mesh);
-  }
-  modelList.splice(index, 1);
-
-  if (activeItemIndex === index) {
-    activeItemIndex = -1;
-    refs.targetMesh = null;
-    if (refs.bvhHelper) {
-      refs.scene.remove(refs.bvhHelper);
-      refs.bvhHelper = null;
-    }
-  } else if (activeItemIndex > index) {
-    activeItemIndex--;
-  }
-
-  updateModelListUI();
-}
-
-/** 씬에 모델 추가 */
+/**
+ * 씬에 모델 추가
+ */
 export function addModelToScene(geometry, fileName) {
   if (!initialGeometry) {
     initialGeometry = geometry.clone();
@@ -427,21 +387,25 @@ export function addModelToScene(geometry, fileName) {
     geometry: geometry.clone(),
     mesh: newMesh,
     customOpacity: mat.opacity,
-    originalGeometry: geometry.clone()
+    originalGeometry: geometry.clone(),
   };
   modelList.push(item);
 
+  // 첫 모델이면 카메라 맞춤
   if (modelList.length === 1) {
     fitCameraToObject(refs.camera, newMesh, refs.controls);
   }
 
+  // 새로 추가된 메쉬를 활성화
   setTargetMeshAsActive(newMesh);
 }
 
-/** 폴더/파일 드래그&드롭 */
+/**
+ * 폴더/파일 드래그&드롭
+ */
 export function onDropSTL(e) {
   e.preventDefault();
-  
+
   const items = e.dataTransfer.items;
   if (!items || items.length === 0) return;
 
@@ -470,32 +434,37 @@ export function onDropSTL(e) {
 
 function readDirectory(dirEntry) {
   const reader = dirEntry.createReader();
-  reader.readEntries((entries) => {
-    for (const entry of entries) {
-      if (entry.isFile) {
-        entry.file((file) => {
-          if (file.name.toLowerCase().endsWith('.stl')) {
-            loadStlFileAsGeometry(file)
-              .then((geometry) => {
-                addModelToScene(geometry, file.name);
-              })
-              .catch((err) => console.error('STL load error:', err));
-          }
-        });
-      } else if (entry.isDirectory) {
-        readDirectory(entry);
+  reader.readEntries(
+    (entries) => {
+      for (const entry of entries) {
+        if (entry.isFile) {
+          entry.file((file) => {
+            if (file.name.toLowerCase().endsWith('.stl')) {
+              loadStlFileAsGeometry(file)
+                .then((geometry) => {
+                  addModelToScene(geometry, file.name);
+                })
+                .catch((err) => console.error('STL load error:', err));
+            }
+          });
+        } else if (entry.isDirectory) {
+          readDirectory(entry);
+        }
       }
+    },
+    (error) => {
+      console.error(error);
     }
-  }, (error) => {
-    console.error(error);
-  });
+  );
 }
 
 export function onDragOver(e) {
   e.preventDefault();
 }
 
-/** reset() */
+/**
+ * reset()
+ */
 export function reset() {
   if (activeItemIndex < 0) {
     console.log('No active item to reset.');
@@ -527,7 +496,9 @@ export function reset() {
   console.log(`Reset model: ${activeItem.fileName}`);
 }
 
-/** saveChanges() */
+/**
+ * saveChanges()
+ */
 export function saveChanges() {
   if (activeItemIndex < 0) {
     console.log('No item selected.');
@@ -541,7 +512,9 @@ export function saveChanges() {
   console.log(`Saved changes for: ${modelList[activeItemIndex].fileName}`);
 }
 
-/** exportCurrentModel() */
+/**
+ * exportCurrentModel()
+ */
 export function exportCurrentModel() {
   if (!refs.targetMesh) {
     console.log('No model to export.');
