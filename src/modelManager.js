@@ -219,6 +219,7 @@ function createActiveMaterial() {
     side: THREE.DoubleSide,
     flatShading: false,
   });
+  
 }
 
 /** 비활성 재질 */
@@ -593,79 +594,40 @@ export function exportCurrentModel() {
 export function importModel(file) {
   const fileName = file.name;
   const fileExtension = fileName.split('.').pop().toLowerCase();
-  let loader;
 
-  switch (fileExtension) {
-    case 'stl':
-      loader = new STLLoader();
-      break;
-    default:
-      alert(`Unsupported file format: .${fileExtension}`);
-      return;
+  // Check if the file extension is 'stl'
+  if (fileExtension !== 'stl') {
+    alert(`Unsupported file format: .${fileExtension}. Please upload an STL file.`);
+    return;
   }
 
-  // Depending on the loader, handle the file accordingly
-  if (loader instanceof STLLoader || loader instanceof OBJLoader) {
-    // For STL and OBJ, use FileReader to read as text or array buffer
-    const reader = new FileReader();
+  const loader = new STLLoader();
 
-    reader.addEventListener('load', () => {
-      let object;
+  // Initialize FileReader to read the STL file as an ArrayBuffer
+  const reader = new FileReader();
 
-      try {
-        if (fileExtension === 'stl') {
-          const geometry = loader.parse(reader.result);
-          object = new THREE.Mesh(geometry, createActiveMaterial());
-        } else if (fileExtension === 'obj') {
-          object = loader.parse(reader.result);
-          // If the OBJ contains multiple meshes, merge them into a single mesh
-          if (object.children.length > 1) {
-            const mergedGeometry = BufferGeometryUtils.mergeBufferGeometries(
-              object.children.map(child => child.geometry),
-              false
-            );
-            object = new THREE.Mesh(mergedGeometry, createActiveMaterial());
-          } else {
-            object = object.children[0];
-            object.material = createActiveMaterial();
-          }
-        }
+  reader.addEventListener('load', () => {
+    try {
+      // Parse the STL geometry from the ArrayBuffer
+      const geometry = loader.parse(reader.result);
+      
+      // Create a mesh with the parsed geometry and a material
+      const mesh = new THREE.Mesh(geometry, createActiveMaterial());
+      
+      // Optionally, compute the geometry's bounding box for better camera fitting
+      geometry.computeBoundingBox();
 
-        addModelToScene(object.geometry, fileName);
-        fitCameraToObject(refs.camera, object, refs.controls);
-      } catch (error) {
-        console.error(`Error loading .${fileExtension} model:`, error);
-        alert(`Failed to load model: ${fileName}`);
-      }
-    }, false);
-
-    if (fileExtension === 'stl') {
-      reader.readAsArrayBuffer(file);
-    } else if (fileExtension === 'obj') {
-      reader.readAsText(file);
+      // Add the mesh to the scene
+      addModelToScene(mesh.geometry, fileName);
+      
+      // Adjust the camera and controls to fit the new object
+      fitCameraToObject(refs.camera, mesh, refs.controls);
+    } catch (error) {
+      console.error(`Error loading .${fileExtension} model:`, error);
+      alert(`Failed to load model: ${fileName}`);
     }
-  } else if (loader instanceof GLTFLoader) {
-    // For GLTF/GLB, use the loader's asynchronous parsing
-    loader.parse(
-      file,
-      '', // path, not needed here
-      (gltf) => {
-        const scene = gltf.scene;
-        // Optionally, merge all meshes into one
-        const mergedGeometry = BufferGeometryUtils.mergeBufferGeometries(
-          scene.children
-            .filter(child => child.isMesh)
-            .map(child => child.geometry),
-          false
-        );
-        const mesh = new THREE.Mesh(mergedGeometry, createActiveMaterial());
-        addModelToScene(mesh.geometry, fileName);
- 
-      },
-      (error) => {
-        console.error('Error parsing GLTF:', error);
-        alert(`Failed to load model: ${fileName}`);
-      }
-    );
-  }
+  }, false);
+
+  // Read the STL file as an ArrayBuffer
+  reader.readAsArrayBuffer(file);
 }
