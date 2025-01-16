@@ -104,6 +104,7 @@ export function initScene() {
     0.1,
     50
   );
+
   camera.position.set(0, 0, 3);
   camera.far = 100;
   camera.updateProjectionMatrix();
@@ -158,6 +159,9 @@ export function initScene() {
   // Controls
   const controls = new TrackballControls(camera, currentRenderer.domElement);
   controls.rotateSpeed = 3;
+  controls.panSpeed = 1;
+
+  
   controls.addEventListener('start', ()=>{ controls.active = true; });
   controls.addEventListener('end',   ()=>{ controls.active = false; });
 
