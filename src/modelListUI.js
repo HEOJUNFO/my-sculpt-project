@@ -80,6 +80,8 @@ export function updateModelListUI(
       const val = parseFloat(opacitySlider.value);
       item.customOpacity = val;
       item.mesh.material.opacity = val;
+      // ▼ 여기에서 투명도가 0이면 mesh.visible = false, 아니면 true
+      item.mesh.visible = val > 0;
     });
 
     // 삭제 버튼
