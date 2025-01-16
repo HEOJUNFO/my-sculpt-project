@@ -222,8 +222,8 @@ function createActiveMaterial() {
 
 /** 비활성 재질 */
 function createInactiveMaterial() {
-  return new THREE.MeshStandardMaterial({
-    color: 0xaaaaaa,
+  return new THREE.MeshMatcapMaterial({
+    matcap: refs.matcaps['MatcapFV'],
     transparent: true,
     opacity: refs.params.modelOpacity,
     side: THREE.DoubleSide,
