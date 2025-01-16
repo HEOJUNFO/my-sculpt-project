@@ -2,6 +2,7 @@
 
 import * as THREE from 'three';
 import { STLExporter } from 'three/examples/jsm/exporters/STLExporter.js';
+import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
 import { loadStlFileAsGeometry } from './stlHelpers.js';
 import { centerAndScaleGeometry } from './geometryHelpers.js';
 import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUtils.js';
@@ -587,4 +588,84 @@ export function exportCurrentModel() {
   document.body.removeChild(link);
 
   console.log('Exported current model as STL.');
+}
+
+export function importModel(file) {
+  const fileName = file.name;
+  const fileExtension = fileName.split('.').pop().toLowerCase();
+  let loader;
+
+  switch (fileExtension) {
+    case 'stl':
+      loader = new STLLoader();
+      break;
+    default:
+      alert(`Unsupported file format: .${fileExtension}`);
+      return;
+  }
+
+  // Depending on the loader, handle the file accordingly
+  if (loader instanceof STLLoader || loader instanceof OBJLoader) {
+    // For STL and OBJ, use FileReader to read as text or array buffer
+    const reader = new FileReader();
+
+    reader.addEventListener('load', () => {
+      let object;
+
+      try {
+        if (fileExtension === 'stl') {
+          const geometry = loader.parse(reader.result);
+          object = new THREE.Mesh(geometry, createActiveMaterial());
+        } else if (fileExtension === 'obj') {
+          object = loader.parse(reader.result);
+          // If the OBJ contains multiple meshes, merge them into a single mesh
+          if (object.children.length > 1) {
+            const mergedGeometry = BufferGeometryUtils.mergeBufferGeometries(
+              object.children.map(child => child.geometry),
+              false
+            );
+            object = new THREE.Mesh(mergedGeometry, createActiveMaterial());
+          } else {
+            object = object.children[0];
+            object.material = createActiveMaterial();
+          }
+        }
+
+        addModelToScene(object.geometry, fileName);
+        fitCameraToObject(refs.camera, object, refs.controls);
+      } catch (error) {
+        console.error(`Error loading .${fileExtension} model:`, error);
+        alert(`Failed to load model: ${fileName}`);
+      }
+    }, false);
+
+    if (fileExtension === 'stl') {
+      reader.readAsArrayBuffer(file);
+    } else if (fileExtension === 'obj') {
+      reader.readAsText(file);
+    }
+  } else if (loader instanceof GLTFLoader) {
+    // For GLTF/GLB, use the loader's asynchronous parsing
+    loader.parse(
+      file,
+      '', // path, not needed here
+      (gltf) => {
+        const scene = gltf.scene;
+        // Optionally, merge all meshes into one
+        const mergedGeometry = BufferGeometryUtils.mergeBufferGeometries(
+          scene.children
+            .filter(child => child.isMesh)
+            .map(child => child.geometry),
+          false
+        );
+        const mesh = new THREE.Mesh(mergedGeometry, createActiveMaterial());
+        addModelToScene(mesh.geometry, fileName);
+ 
+      },
+      (error) => {
+        console.error('Error parsing GLTF:', error);
+        alert(`Failed to load model: ${fileName}`);
+      }
+    );
+  }
 }
