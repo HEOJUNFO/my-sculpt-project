@@ -376,6 +376,7 @@ export function addModelToScene(geometry, fileName) {
 
   centerAndScaleGeometry(geometry);
 
+  geometry.deleteAttribute( 'uv' );
   geometry = BufferGeometryUtils.mergeVertices(geometry);
   geometry.computeVertexNormals();
   geometry.attributes.position.setUsage(THREE.DynamicDrawUsage);
