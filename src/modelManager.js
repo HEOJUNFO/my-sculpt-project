@@ -602,33 +602,17 @@ export function importModel(file) {
     return;
   }
 
-  const loader = new STLLoader();
+  loadStlFileAsGeometry(file)
+    .then((geometry) => {
+      addModelToScene(geometry, fileName);
+      fitCameraToObject(refs.camera, refs.targetMesh, refs.controls);
+    })
+    .catch((err) => {
+      console.error('STL load error:', err);
+    });
 
-  // Initialize FileReader to read the STL file as an ArrayBuffer
-  const reader = new FileReader();
+    
 
-  reader.addEventListener('load', () => {
-    try {
-      // Parse the STL geometry from the ArrayBuffer
-      const geometry = loader.parse(reader.result);
-      
-      // Create a mesh with the parsed geometry and a material
-      const mesh = new THREE.Mesh(geometry, createActiveMaterial());
-      
-      // Optionally, compute the geometry's bounding box for better camera fitting
-      geometry.computeBoundingBox();
 
-      // Add the mesh to the scene
-      addModelToScene(mesh.geometry, fileName);
-      
-      // Adjust the camera and controls to fit the new object
-      fitCameraToObject(refs.camera, mesh, refs.controls);
-    } catch (error) {
-      console.error(`Error loading .${fileExtension} model:`, error);
-      alert(`Failed to load model: ${fileName}`);
-    }
-  }, false);
 
-  // Read the STL file as an ArrayBuffer
-  reader.readAsArrayBuffer(file);
 }
