@@ -217,7 +217,7 @@ function createActiveMaterial() {
     transparent: true,
     opacity: refs.params.modelOpacity,
     side: THREE.DoubleSide,
-    flatShading: false,
+    flatShading: refs.params.flatShading,
   });
   
 }
@@ -229,7 +229,7 @@ function createInactiveMaterial() {
     transparent: true,
     opacity: refs.params.modelOpacity,
     side: THREE.DoubleSide,
-    flatShading: false,
+    flatShading: refs.params.flatShading,
   });
 }
 
