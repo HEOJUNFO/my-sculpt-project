@@ -50,6 +50,7 @@ const params = {
   transformMode: false,
   transformType: 'translate',
   wireframe: false,
+  flatShading: false,
 
   // WebGPU
   useWebGPU: false,
@@ -202,6 +203,20 @@ export function initScene() {
           mats.forEach(mat => mat.wireframe = value);
         }
       });
+
+    modelFolder
+      .add(params, 'flatShading')
+      .name('Flat Shading')
+      .onChange((value) => {
+        if (refs.targetMesh) {
+          const mats = Array.isArray(refs.targetMesh.material)
+            ? refs.targetMesh.material
+            : [refs.targetMesh.material];
+          mats.forEach(mat => mat.flatShading = value);
+          refs.targetMesh.material.needsUpdate = true;
+        }
+      });
+
     modelFolder.add({
       addSphere: () => {
         addModelToScene(new THREE.IcosahedronGeometry(1, 100), 'Icosahedron');
