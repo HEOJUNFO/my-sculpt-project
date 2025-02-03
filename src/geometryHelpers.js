@@ -2,6 +2,7 @@
  * 중심 정렬 + 바운딩 스피어 기반으로 반지름 = 1이 되도록 스케일링
  */
 export function centerAndScaleGeometry( geometry ) {
+  
   // (필요시) 지오메트리 중심을 (0,0,0)에 맞추고 싶다면 주석 해제
   // geometry.center();
 
@@ -27,4 +28,5 @@ export function centerAndScaleGeometry( geometry ) {
 
   // 계산된 스케일 팩터를 적용
   geometry.scale(scaleFactor, scaleFactor, scaleFactor);
+
 }
