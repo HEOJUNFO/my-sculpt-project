@@ -28,5 +28,6 @@ export function centerAndScaleGeometry( geometry ) {
 
   // 계산된 스케일 팩터를 적용
   geometry.scale(scaleFactor, scaleFactor, scaleFactor);
+  geometry.userData.scaleFactor = scaleFactor;
 
 }

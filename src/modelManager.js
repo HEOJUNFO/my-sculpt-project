@@ -580,27 +580,22 @@ export function exportCurrentModel() {
   const meshClone = refs.targetMesh.clone();
   meshClone.geometry = refs.targetMesh.geometry.clone();
   
-  // boundingSphere가 계산되어 있지 않다면 계산합니다.
+  // 클론의 boundingSphere 갱신 (이미 스케일이 적용된 상태)
   meshClone.geometry.computeBoundingSphere();
-  const radius = meshClone.geometry.boundingSphere.radius;
-  console.log("현재 지오메트리 반지름:", radius);
-  
-  let inverseFactor = 1;
-  if (radius > 50) {
-    inverseFactor = 250;
-  } else if (radius > 5) {
-    inverseFactor = 25;
-  } else if (radius > 0.5) {
-    inverseFactor = 2.5;
-  } else if (radius > 0.05) {
-    inverseFactor = 0.25;
+
+  // 저장해둔 scaleFactor가 있다면 이를 이용해 inverseFactor를 계산합니다.
+  const appliedScale = meshClone.geometry.userData.scaleFactor;
+  if (!appliedScale) {
+    console.error('원본 scaleFactor 정보를 찾을 수 없습니다.');
+    return;
   }
-  
-  // 역보정 스케일 적용: centerAndScaleGeometry에서 적용한 스케일을 되돌려 원본 크기로 복원합니다.
+  const inverseFactor = 1 / appliedScale;
+  console.log("역보정 스케일 팩터:", inverseFactor);
+
+  // 역보정 스케일을 적용하여 원본 크기로 복원합니다.
   meshClone.geometry.scale(inverseFactor, inverseFactor, inverseFactor);
   meshClone.updateMatrixWorld(true);
   
-  // STLExporter를 이용하여 내보내기
   const exporter = new STLExporter();
   const stlString = exporter.parse(meshClone);
   
