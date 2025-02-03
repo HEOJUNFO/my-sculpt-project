@@ -575,9 +575,35 @@ export function exportCurrentModel() {
     console.log('No model to export.');
     return;
   }
+  
+  // on-screen 모델에 영향을 주지 않도록 메쉬와 geometry를 클론합니다.
+  const meshClone = refs.targetMesh.clone();
+  meshClone.geometry = refs.targetMesh.geometry.clone();
+  
+  // boundingSphere가 계산되어 있지 않다면 계산합니다.
+  meshClone.geometry.computeBoundingSphere();
+  const radius = meshClone.geometry.boundingSphere.radius;
+  console.log("현재 지오메트리 반지름:", radius);
+  
+  let inverseFactor = 1;
+  if (radius > 50) {
+    inverseFactor = 250;
+  } else if (radius > 5) {
+    inverseFactor = 25;
+  } else if (radius > 0.5) {
+    inverseFactor = 2.5;
+  } else if (radius > 0.05) {
+    inverseFactor = 0.25;
+  }
+  
+  // 역보정 스케일 적용: centerAndScaleGeometry에서 적용한 스케일을 되돌려 원본 크기로 복원합니다.
+  meshClone.geometry.scale(inverseFactor, inverseFactor, inverseFactor);
+  meshClone.updateMatrixWorld(true);
+  
+  // STLExporter를 이용하여 내보내기
   const exporter = new STLExporter();
-  const stlString = exporter.parse(refs.targetMesh);
-
+  const stlString = exporter.parse(meshClone);
+  
   const blob = new Blob([stlString], { type: 'text/plain' });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
@@ -588,7 +614,7 @@ export function exportCurrentModel() {
   link.click();
   URL.revokeObjectURL(url);
   document.body.removeChild(link);
-
+  
   console.log('Exported current model as STL.');
 }
 
