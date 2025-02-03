@@ -16,22 +16,6 @@ import {
 
 let animationId = null; // 현재 렌더 루프의 requestAnimationFrame ID를 저장할 변수
 
-function countTrianglesInScene(scene) {
-  let triangleCount = 0;
-  scene.traverse((obj) => {
-    if (obj.isMesh && obj.geometry) {
-      const geo = obj.geometry;
-      if (geo.index) {
-        // 인덱스가 있다면 인덱스 길이 / 3
-        triangleCount += geo.index.count / 3;
-      } else if (geo.attributes?.position) {
-        // 인덱스가 없는 지오메트리라면, position 갯수 / 3
-        triangleCount += geo.attributes.position.count / 3;
-      }
-    }
-  });
-  return triangleCount;
-}
 /**
  * 렌더 루프를 중단하는 함수
  */
