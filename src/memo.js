@@ -43,7 +43,7 @@ export function closeEditMemoModal() {
 
 // 메모 구체 생성 함수
 export function createMemoSphere( position ) {
-  const sphereGeo = new THREE.SphereGeometry( 0.02, 16, 16 );
+  const sphereGeo = new THREE.SphereGeometry( 0.01, 16, 16 );
   const sphereMat = new THREE.MeshBasicMaterial({ color: 0xFF0000 });
   const sphere = new THREE.Mesh( sphereGeo, sphereMat );
   sphere.position.copy( position );
