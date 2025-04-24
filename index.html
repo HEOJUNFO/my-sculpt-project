@@ -392,7 +392,7 @@
     <button id="memo-edit-delete-btn">Delete</button>
   </div>
 
-  <!-- (새로 추가) Sculpt UI (왼쪽 하단) -->
+  <!-- Sculpt UI (왼쪽 하단) -->
   <div id="sculpt-ui">
     <h2>자유 수정</h2>
     <hr />
@@ -431,7 +431,6 @@
       Invert
     </button>
    
-
     <div class="btn-row-2">
       <button class="brush-btn btn-half" id="btn-undo">
         <ion-icon name="arrow-undo"></ion-icon>
@@ -455,8 +454,44 @@
       <ion-icon name="download"></ion-icon>
       Export
     </button>
-  
-   
+    
+    <!-- Complete Sculpting Button -->
+    <button class="brush-btn btn-full" id="btn-complete-sculpt">
+      <ion-icon name="checkmark-done-outline"></ion-icon>
+      Complete Sculpting
+    </button>
+  </div>
+
+  <!-- Blockout UI (initially hidden, shown after sculpt completion) -->
+  <div id="blockout-ui" style="display: none; position: absolute; left: 10px; bottom: 10px; width: 210px; background:#d9d9d9; color: #fff; font: 14px sans-serif; padding: 10px; border: 1px solid #444; border-radius: 4px;">
+    <h2>Blockout Tool</h2>
+    <hr />
+    <p id="undercut-count" style="color: #000; margin-bottom: 10px;">No undercuts detected</p>
+    
+    <button class="brush-btn btn-full" id="btn-detect-undercuts">
+      <ion-icon name="eye-outline"></ion-icon>
+      Detect Undercuts
+    </button>
+    
+    <button class="brush-btn btn-full" id="btn-apply-blockout">
+      <ion-icon name="construct-outline"></ion-icon>
+      Apply Blockout
+    </button>
+    
+    <button class="brush-btn btn-full" id="btn-restore-camera">
+      <ion-icon name="refresh-outline"></ion-icon>
+      Restore Camera
+    </button>
+    
+    <div class="slider-row">
+      <label for="blockoutDistanceRange">Blockout Distance</label>
+      <input type="range" id="blockoutDistanceRange" min="0.01" max="0.5" step="0.01" value="0.1" class="custom-slider" />
+    </div>
+    
+    <button class="brush-btn btn-full" id="btn-blockout-complete">
+      <ion-icon name="checkmark-circle-outline"></ion-icon>
+      Complete Blockout
+    </button>
   </div>
 
   <!-- Vite import -->
