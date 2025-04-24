@@ -17,7 +17,10 @@ import {
 import { onDropSTL, onDragOver } from './modelManager.js';
 
 // 예: 메모 모달 버튼 (필요시)
-import { onMemoNewOkBtn, onMemoEditUpdateBtn, onMemoEditDeleteBtn,makeDraggable } from './memo.js';
+import { onMemoNewOkBtn, onMemoEditUpdateBtn, onMemoEditDeleteBtn, makeDraggable } from './memo.js';
+
+// Import the setupBlockoutUI function
+import { setupBlockoutUI } from './blockoutUI.js';
 
 /**
  * 프로그램 진입점
@@ -66,6 +69,9 @@ function main() {
       onMemoEditDeleteBtn(scene);
     });
   }
+
+  // Setup the blockout UI
+  setupBlockoutUI();
 
   // 3) 렌더 루프 시작
   startRenderLoop(renderer, scene, camera, stats);

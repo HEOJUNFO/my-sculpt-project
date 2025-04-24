@@ -1,6 +1,6 @@
 // src/sculptUI.js
 
-import { refs,importModel} from './modelManager.js'; // Ensure importModel is exported from modelManager.js
+import { refs, importModel } from './modelManager.js'; // Ensure importModel is exported from modelManager.js
 import { undo, redo, exportCurrentModel } from './modelManager.js';
 
 export function setupCustomSculptUI() {
@@ -14,6 +14,7 @@ export function setupCustomSculptUI() {
   const btnExport  = document.getElementById('btn-export');   // export
   const btnImport  = document.getElementById('btn-import');   // Import Button
   const fileInput  = document.getElementById('file-input');   // Hidden File Input
+  const btnCompleteSculpt = document.getElementById('btn-complete-sculpt'); // Complete sculpting button
 
   function setBrushMode(mode) {
     refs.params.brush = mode;
@@ -46,6 +47,7 @@ export function setupCustomSculptUI() {
     exportCurrentModel();
   });
 
+  // Import Button Event
   btnImport?.addEventListener('click', () => {
     if (fileInput) {
       fileInput.click(); // 숨겨진 파일 입력 트리거
@@ -65,6 +67,16 @@ export function setupCustomSculptUI() {
     }
   });
 
+  // Complete Sculpt Button - Switch to Blockout UI
+  btnCompleteSculpt?.addEventListener('click', () => {
+    const sculptUI = document.getElementById('sculpt-ui');
+    const blockoutUI = document.getElementById('blockout-ui');
+    
+    if (sculptUI && blockoutUI) {
+      sculptUI.style.display = 'none';
+      blockoutUI.style.display = 'block';
+    }
+  });
 
   // (Existing) Sliders
   const sizeRange      = document.getElementById('sizeRange');
