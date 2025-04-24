@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { refs } from './modelManager.js';
 import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { completeBlockout } from './processSteps.js'; // 프로세스 단계 관리 임포트
 
 // Saved camera state for blockout operations
 let savedCameraState = null;
@@ -20,15 +21,6 @@ export function setupBlockoutUI() {
   btnApplyBlockout?.addEventListener('click', applyBlockout);
   btnRestoreCamera?.addEventListener('click', restoreCamera);
   btnComplete?.addEventListener('click', () => {
-    // Switch back to sculpt UI
-    const blockoutUI = document.getElementById('blockout-ui');
-    const sculptUI = document.getElementById('sculpt-ui');
-    
-    if (blockoutUI && sculptUI) {
-      blockoutUI.style.display = 'none';
-      sculptUI.style.display = 'block';
-    }
-    
     // Clean up any undercut visualization
     if (undercutMesh && undercutMesh.parent) {
       refs.scene.remove(undercutMesh);
@@ -36,6 +28,9 @@ export function setupBlockoutUI() {
       undercutMesh.material.dispose();
       undercutMesh = null;
     }
+    
+    // 블록아웃 완료 처리
+    completeBlockout();
   });
   
   // Blockout distance slider

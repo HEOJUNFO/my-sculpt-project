@@ -1,10 +1,11 @@
 // src/sculptUI.js
 
-import { refs, importModel } from './modelManager.js'; // Ensure importModel is exported from modelManager.js
+import { refs, importModel } from './modelManager.js'; 
 import { undo, redo, exportCurrentModel } from './modelManager.js';
+import { completeSculpting, completeUpload } from './processSteps.js'; // 프로세스 단계 관리 임포트
 
 export function setupCustomSculptUI() {
-  // (Existing Code) Brush Mode Buttons
+  // 브러시 모드 버튼
   const btnNormal  = document.getElementById('btn-normal');
   const btnClay    = document.getElementById('btn-clay');
   const btnFlatten = document.getElementById('btn-flatten');
@@ -64,21 +65,17 @@ export function setupCustomSculptUI() {
       }
       // 파일 입력 초기화
       fileInput.value = '';
+      // 파일 업로드 후 스컬프 모드로 전환
+      completeUpload();
     }
   });
 
-  // Complete Sculpt Button - Switch to Blockout UI
+  // Complete Sculpt Button
   btnCompleteSculpt?.addEventListener('click', () => {
-    const sculptUI = document.getElementById('sculpt-ui');
-    const blockoutUI = document.getElementById('blockout-ui');
-    
-    if (sculptUI && blockoutUI) {
-      sculptUI.style.display = 'none';
-      blockoutUI.style.display = 'block';
-    }
+    completeSculpting(); // 스컬프 완료 처리 함수 호출
   });
 
-  // (Existing) Sliders
+  // 슬라이더
   const sizeRange      = document.getElementById('sizeRange');
   const intensityRange = document.getElementById('intensityRange');
 
