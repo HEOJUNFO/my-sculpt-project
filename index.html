@@ -64,6 +64,31 @@
     <button id="memo-edit-delete-btn">Delete</button>
   </div>
 
+  <!-- Upload UI (초기 업로드 화면) -->
+  <div id="upload-ui">
+    <h2>Upload Model</h2>
+    <hr />
+    <div class="upload-area">
+      <ion-icon name="cloud-upload-outline" class="upload-icon"></ion-icon>
+      <p>Drag STL file or folder here</p>
+      <p class="upload-subtext">or click below to select files</p>
+    </div>
+    
+    <button class="brush-btn btn-full" id="btn-browse-files">
+      <ion-icon name="folder-open-outline"></ion-icon>
+      Browse Files
+    </button>
+    
+    <div class="upload-tips">
+      <h3>Tips:</h3>
+      <ul>
+        <li>Accepts .STL files</li>
+        <li>You can drag multiple files</li>
+        <li>File size limit: 50MB</li>
+      </ul>
+    </div>
+  </div>
+
   <!-- Sculpt UI (왼쪽 하단) -->
   <div id="sculpt-ui">
     <h2>자유 수정</h2>

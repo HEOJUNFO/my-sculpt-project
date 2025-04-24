@@ -13,7 +13,7 @@ import {
 } from './eventHandlers.js';
 
 // 모델 드래그&드롭 이벤트
-import { onDropSTL, onDragOver } from './modelManager.js';
+import { onDropSTL, onDragOver, importModel } from './modelManager.js';
 
 // 메모 모달 관련
 import { onMemoNewOkBtn, onMemoEditUpdateBtn, onMemoEditDeleteBtn, makeDraggable } from './memo.js';
@@ -48,11 +48,15 @@ function main() {
   window.addEventListener('keydown', onKeyDown);
 
   //    - 드래그/드롭으로 STL 로드
+  // 메인 윈도우의 드래그 드롭은 업로드 UI가 아닐 때만 사용
   window.addEventListener('dragover', onDragOver, false);
   window.addEventListener('drop', (e) => {
-    onDropSTL(e);
-    // STL 파일이 로드되면 스컬프 모드로 자동 전환
-    completeUpload(); // 업로드 후 스컬프 모드로 전환
+    // 업로드 UI 영역이 아닌 경우에만 처리
+    if (!e.target.closest('#upload-ui')) {
+      onDropSTL(e);
+      // STL 파일이 로드되면 스컬프 모드로 자동 전환
+      completeUpload(); // 업로드 후 스컬프 모드로 전환
+    }
   }, false);
 
   //    - 메모 모달 버튼
@@ -85,6 +89,9 @@ function main() {
   // Setup the blockout UI
   setupBlockoutUI();
   
+  // 업로드 UI 이벤트 설정
+  setupUploadUI();
+  
   // 프로세스 단계 UI 초기화
   initProcessSteps();
 
@@ -92,6 +99,7 @@ function main() {
   const btnCompleteSculpt = document.getElementById('btn-complete-sculpt');
   if (btnCompleteSculpt) {
     btnCompleteSculpt.addEventListener('click', () => {
+      console.log("Complete Sculpting 버튼 클릭됨");
       completeSculpting(); // 스컬프 완료 시 다음 단계로 진행
     });
   }
@@ -100,6 +108,7 @@ function main() {
   const btnBlockoutComplete = document.getElementById('btn-blockout-complete');
   if (btnBlockoutComplete) {
     btnBlockoutComplete.addEventListener('click', () => {
+      console.log("Complete Blockout 버튼 클릭됨");
       completeBlockout(); // 블록아웃 완료 후 스컬프 모드로 전환
     });
   }
@@ -109,6 +118,84 @@ function main() {
   
   // 전역 접근을 위해 window 객체에 추가 (디버깅용)
   window.appSteps = { completeSculpting, completeBlockout, STEPS };
+}
+
+/**
+ * 업로드 UI 이벤트 설정
+ */
+function setupUploadUI() {
+  const uploadArea = document.querySelector('.upload-area');
+  const btnBrowseFiles = document.getElementById('btn-browse-files');
+  const fileInput = document.getElementById('file-input');
+  
+  // 업로드 영역 클릭 시 파일 선택 다이얼로그 표시
+  if (uploadArea) {
+    uploadArea.addEventListener('click', () => {
+      if (fileInput) {
+        fileInput.click();
+      }
+    });
+  }
+  
+  // 파일 찾아보기 버튼 클릭 시 파일 선택 다이얼로그 표시
+  if (btnBrowseFiles) {
+    btnBrowseFiles.addEventListener('click', () => {
+      if (fileInput) {
+        fileInput.click();
+      }
+    });
+  }
+  
+  // 드래그 오버 효과 추가
+  if (uploadArea) {
+    uploadArea.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      e.stopPropagation(); // 이벤트 버블링 방지
+      uploadArea.style.backgroundColor = '#e0e0e0';
+      uploadArea.style.borderColor = '#7066FF';
+    });
+    
+    uploadArea.addEventListener('dragleave', () => {
+      uploadArea.style.backgroundColor = '#f5f5f5';
+      uploadArea.style.borderColor = '#aaa';
+    });
+    
+    uploadArea.addEventListener('drop', (e) => {
+      e.preventDefault();
+      e.stopPropagation(); // 이벤트 버블링 방지
+      uploadArea.style.backgroundColor = '#f5f5f5';
+      uploadArea.style.borderColor = '#aaa';
+      
+      const files = e.dataTransfer.files;
+      if (files.length > 0) {
+        for (const file of files) {
+          if (file.name.toLowerCase().endsWith('.stl')) {
+            importModel(file);
+          }
+        }
+        // 파일 업로드 후 스컬프 모드로 전환
+        completeUpload();
+      }
+    });
+  }
+  
+  // 파일 입력 변경 이벤트
+  if (fileInput) {
+    fileInput.addEventListener('change', (event) => {
+      const files = event.target.files;
+      if (files.length > 0) {
+        for (const file of files) {
+          if (file.name.toLowerCase().endsWith('.stl')) {
+            importModel(file);
+          }
+        }
+        // 파일 입력 초기화
+        fileInput.value = '';
+        // 파일 업로드 후 스컬프 모드로 전환
+        completeUpload();
+      }
+    });
+  }
 }
 
 // 실행

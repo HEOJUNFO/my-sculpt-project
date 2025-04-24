@@ -1,31 +1,31 @@
 // src/processSteps.js
-// 프로세스 단계를 관리하는 모듈
+// 프로세스 단계를 숫자로 관리하는 모듈
 
+// 단계 정의 (상수)
 export const STEPS = {
   UPLOAD: 'upload',
-  SCULPT: 'sculpt',        // 백엔드에서만 사용되는 스컬프 단계 (UI에 표시되지 않음)
   BLOCKOUT: 'blockout',
   LIBRARY: 'library',
   FLIPPER: 'flipper',
   EXPORT: 'export'
 };
 
-// 현재 UI 표시 단계와 내부 워크플로우 단계
-let currentDisplayStep = STEPS.UPLOAD;  // UI에 표시되는 단계
-let currentWorkflowState = {
-  inSculptMode: false,     // 현재 스컬프 모드인지 여부
-  completedUpload: false,  // 업로드 완료 여부
-  completedBlockout: false, // 블록아웃 완료 여부
-  completedLibrary: false,  // 라이브러리 완료 여부
-  completedFlipper: false   // 플리퍼 완료 여부
-};
+// 단계 숫자 정의
+// 1 = 업로드 UI (초기 단계)
+// 2 = 업로드 단계 + 스컬프 UI
+// 3 = 블록아웃 단계 + 블록아웃 UI
+// 4 = 블록아웃 단계 + 스컬프 UI
+// 5 = 라이브러리 단계 + 라이브러리 UI
+// 6 = 라이브러리 단계 + 스컬프 UI
+// ...
 
-const completedSteps = new Set();
+// 현재 단계 숫자 (처음에는 1: 업로드 UI)
+let currentStep = 1;
 
 /**
- * UI 업데이트 - 현재 단계와 완료된 단계를 시각적으로 표시
+ * 현재 단계에 따라 상단 진행 바 업데이트
  */
-export function updateStepsUI() {
+function updateTopBar() {
   const steps = document.querySelectorAll('.process-step');
   steps.forEach(step => {
     const stepName = step.getAttribute('data-step');
@@ -33,129 +33,172 @@ export function updateStepsUI() {
     // 클래스 초기화
     step.classList.remove('active', 'completed');
     
-    // 현재 단계 표시
-    if (stepName === currentDisplayStep) {
+    // 현재 단계에 따른 활성화 단계 결정
+    let activeStep = '';
+    let completedSteps = [];
+    
+    if (currentStep >= 1 && currentStep <= 2) {
+      // 단계 1-2: 업로드 단계 활성화
+      activeStep = STEPS.UPLOAD;
+    } 
+    else if (currentStep >= 3 && currentStep <= 4) {
+      // 단계 3-4: 블록아웃 단계 활성화, 업로드 단계 완료 
+      activeStep = STEPS.BLOCKOUT;
+      completedSteps = [STEPS.UPLOAD];
+    }
+    else if (currentStep >= 5 && currentStep <= 6) {
+      // 단계 5-6: 라이브러리 단계 활성화, 업로드와 블록아웃 단계 완료
+      activeStep = STEPS.LIBRARY;
+      completedSteps = [STEPS.UPLOAD, STEPS.BLOCKOUT];
+    }
+    else if (currentStep >= 7 && currentStep <= 8) {
+      // 단계 7-8: 플리퍼 단계 활성화, 이전 단계들 완료
+      activeStep = STEPS.FLIPPER;
+      completedSteps = [STEPS.UPLOAD, STEPS.BLOCKOUT, STEPS.LIBRARY];
+    }
+    else if (currentStep >= 9) {
+      // 단계 9: 익스포트 단계 활성화, 이전 단계들 완료
+      activeStep = STEPS.EXPORT;
+      completedSteps = [STEPS.UPLOAD, STEPS.BLOCKOUT, STEPS.LIBRARY, STEPS.FLIPPER];
+    }
+    
+    // 현재 활성화 단계 표시
+    if (stepName === activeStep) {
       step.classList.add('active');
     }
     
     // 완료된 단계 표시
-    if (completedSteps.has(stepName)) {
+    if (completedSteps.includes(stepName)) {
       step.classList.add('completed');
     }
   });
 }
 
 /**
- * 스컬프 모드 전환
- * @param {boolean} enabled - 스컬프 모드 활성화 여부
+ * 현재 단계에 따라 UI 컴포넌트 표시/숨김
  */
-export function setSculptMode(enabled) {
-  currentWorkflowState.inSculptMode = enabled;
-  
-  // 스컬프 UI와 블록아웃 UI 전환
+function updateUIVisibility() {
+  // 모든 UI 컴포넌트
+  const uploadUI = document.getElementById('upload-ui');
   const sculptUI = document.getElementById('sculpt-ui');
   const blockoutUI = document.getElementById('blockout-ui');
+  const dragHint = document.getElementById('drag-hint');
   
-  if (sculptUI && blockoutUI) {
-    if (enabled) {
-      sculptUI.style.display = 'block';
-      blockoutUI.style.display = 'none';
-    } else {
-      // 현재 표시 단계가 블록아웃일 때만 블록아웃 UI 표시
-      if (currentDisplayStep === STEPS.BLOCKOUT) {
-        sculptUI.style.display = 'none';
-        blockoutUI.style.display = 'block';
-      }
-    }
+  // 디버그 로그
+  console.log('현재 단계:', currentStep);
+  
+  // 모든 UI 숨기기
+  if (uploadUI) uploadUI.style.display = 'none';
+  if (sculptUI) sculptUI.style.display = 'none';
+  if (blockoutUI) blockoutUI.style.display = 'none';
+  if (dragHint) dragHint.style.display = 'none';
+  
+  // 현재 단계 숫자에 따라 적절한 UI 표시
+  switch (currentStep) {
+    case 1: // 업로드 UI 표시
+      if (uploadUI) uploadUI.style.display = 'block';
+      if (dragHint) dragHint.style.display = 'block';
+      break;
+      
+    case 2: // 스컬프 UI 표시 (업로드 단계)
+      if (sculptUI) sculptUI.style.display = 'block';
+      break;
+      
+    case 3: // 블록아웃 UI 표시 (블록아웃 단계)
+      if (blockoutUI) blockoutUI.style.display = 'block';
+      break;
+      
+    case 4: // 스컬프 UI 표시 (블록아웃 단계)
+      if (sculptUI) sculptUI.style.display = 'block';
+      break;
+      
+    case 5: // 라이브러리 UI (미구현 - 임시로 스컬프 UI 표시)
+      if (sculptUI) sculptUI.style.display = 'block';
+      break;
+    
+    default: // 기타 단계 (미구현 - 임시로 스컬프 UI 표시)
+      if (sculptUI) sculptUI.style.display = 'block';
+      break;
   }
 }
 
 /**
- * 스컬프 완료 처리
- * 각 메인 단계 사이에 스컬프 작업이 있으므로, 현재 어느 단계에서 완료되었는지 확인하고 다음 단계로 진행
+ * 단계 설정 함수 - 특정 단계로 직접 이동
  */
-export function completeSculpting() {
-  // 현재 어느 단계에서 스컬프 완료가 호출되었는지에 따라 다음 단계 결정
-  if (!currentWorkflowState.completedUpload) {
-    // 업로드 후 첫 스컬프 완료 시
-    currentWorkflowState.completedUpload = true;
-    completedSteps.add(STEPS.UPLOAD);
-    currentDisplayStep = STEPS.BLOCKOUT;
-    setSculptMode(false); // 스컬프 모드 비활성화
-  } 
-  else if (!currentWorkflowState.completedBlockout) {
-    // 블록아웃 후 스컬프 완료 시
-    currentWorkflowState.completedBlockout = true;
-    completedSteps.add(STEPS.BLOCKOUT);
-    currentDisplayStep = STEPS.LIBRARY;
-    setSculptMode(false);
+export function setStep(step) {
+  if (step >= 1) {
+    currentStep = step;
+    updateTopBar();
+    updateUIVisibility();
+    console.log('단계 변경됨:', currentStep);
+  } else {
+    console.error('잘못된 단계 번호:', step);
   }
-  else if (!currentWorkflowState.completedLibrary) {
-    // 라이브러리 후 스컬프 완료 시
-    currentWorkflowState.completedLibrary = true;
-    completedSteps.add(STEPS.LIBRARY);
-    currentDisplayStep = STEPS.FLIPPER;
-    setSculptMode(false);
-  }
-  else if (!currentWorkflowState.completedFlipper) {
-    // 플리퍼 후 스컬프 완료 시
-    currentWorkflowState.completedFlipper = true;
-    completedSteps.add(STEPS.FLIPPER);
-    currentDisplayStep = STEPS.EXPORT;
-    setSculptMode(false);
-  }
-  
-  updateStepsUI();
 }
 
 /**
- * 블록아웃 완료 처리
- * 블록아웃 완료 후 다시 스컬프 모드로 전환
- */
-export function completeBlockout() {
-  // 블록아웃 UI는 숨기고, 스컬프 UI 표시
-  const blockoutUI = document.getElementById('blockout-ui');
-  const sculptUI = document.getElementById('sculpt-ui');
-  
-  if (blockoutUI && sculptUI) {
-    blockoutUI.style.display = 'none';
-    sculptUI.style.display = 'block';
-  }
-  
-  // 스컬프 모드 활성화 (블록아웃 완료 후 스컬프 작업이 필요함)
-  setSculptMode(true);
-}
-
-/**
- * 파일 업로드 완료 처리
- * 업로드 후 바로 스컬프 모드로 전환
+ * 업로드 완료 시 - 단계 2로 변경
  */
 export function completeUpload() {
-  // 스컬프 모드 활성화
-  setSculptMode(true);
+  setStep(2); // 단계 2: 업로드 단계 + 스컬프 UI
+  console.log('업로드 완료 - 스컬프 UI 표시');
 }
 
 /**
- * 특정 단계로 이동 (UI 상에서만)
- * @param {string} step - 이동할 단계 이름
+ * 스컬프 완료 시 - 현재 단계에 따라 다음 단계로 진행
  */
-export function goToStep(step) {
-  if (Object.values(STEPS).includes(step)) {
-    currentDisplayStep = step;
-    updateStepsUI();
-    
-    // 스컬프 <-> 블록아웃 UI 전환
-    if (step === STEPS.BLOCKOUT && !currentWorkflowState.inSculptMode) {
-      const sculptUI = document.getElementById('sculpt-ui');
-      const blockoutUI = document.getElementById('blockout-ui');
-      
-      if (sculptUI && blockoutUI) {
-        sculptUI.style.display = 'none';
-        blockoutUI.style.display = 'block';
-      }
-    }
-  } else {
-    console.error('잘못된 단계 이름:', step);
+export function completeSculpting() {
+  if (currentStep === 2) {
+    // 업로드 후 첫 스컬프 완료: 단계 3으로 (블록아웃 UI)
+    setStep(3);
+  } 
+  else if (currentStep === 4) {
+    // 블록아웃 후 스컬프 완료: 단계 5로 (라이브러리 UI)
+    setStep(5);
+  }
+  else if (currentStep === 6) {
+    // 라이브러리 후 스컬프 완료: 단계 7로 (플리퍼 UI)
+    setStep(7);
+  }
+  else if (currentStep === 8) {
+    // 플리퍼 후 스컬프 완료: 단계 9로 (익스포트 UI)
+    setStep(9);
+  }
+  console.log('스컬프 완료 - 다음 단계로 진행:', currentStep);
+}
+
+/**
+ * 블록아웃 완료 시 - 단계 4로 변경 (블록아웃 단계 + 스컬프 UI)
+ */
+export function completeBlockout() {
+  setStep(4); // 단계 4: 블록아웃 단계 + 스컬프 UI
+  console.log('블록아웃 완료 - 스컬프 UI로 돌아감');
+}
+
+/**
+ * 특정 단계 이름으로 이동 (단계명 기반)
+ * 주로 상단바 클릭을 위한 함수
+ */
+export function goToStep(stepName) {
+  // 단계명에 따라 적절한 숫자 단계로 이동
+  switch (stepName) {
+    case STEPS.UPLOAD:
+      setStep(1); // 업로드 단계의 시작점
+      break;
+    case STEPS.BLOCKOUT:
+      setStep(3); // 블록아웃 단계의 시작점
+      break;
+    case STEPS.LIBRARY:
+      setStep(5); // 라이브러리 단계의 시작점
+      break;
+    case STEPS.FLIPPER:
+      setStep(7); // 플리퍼 단계의 시작점
+      break;
+    case STEPS.EXPORT:
+      setStep(9); // 익스포트 단계
+      break;
+    default:
+      console.error('알 수 없는 단계 이름:', stepName);
   }
 }
 
@@ -164,7 +207,8 @@ export function goToStep(step) {
  */
 export function initProcessSteps() {
   // 초기 UI 업데이트
-  updateStepsUI();
+  updateTopBar();
+  updateUIVisibility();
   
   // 단계 클릭 이벤트 - 사용자가 단계를 직접 클릭하여 이동할 수 있도록 설정
   const steps = document.querySelectorAll('.process-step');
