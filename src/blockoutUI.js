@@ -151,10 +151,24 @@ function detectUndercuts() {
     color: 0xff0000,
     side: THREE.DoubleSide,
     transparent: true,
-    opacity: 0.5
+    opacity: 0.5,
+    depthTest: true,      // 깊이 테스트 비활성화
+    depthWrite: false      // 깊이 버퍼에 쓰지 않음
   });
   
   undercutMesh = new THREE.Mesh(undercutGeometry, redMaterial);
+  undercutMesh.renderOrder = 9999;  // 높은 렌더링 순서 설정
+  
+  // 미세하게 오프셋을 주어 Z-fighting 방지
+  const offsetDirection = new THREE.Vector3();
+  if (savedCameraState && savedCameraState.direction) {
+    offsetDirection.copy(savedCameraState.direction);
+  } else {
+    refs.camera.getWorldDirection(offsetDirection);
+  }
+  offsetDirection.negate();  // 카메라 방향의 반대 방향으로 오프셋
+  undercutMesh.position.addScaledVector(offsetDirection, 0.001);
+  
   refs.scene.add(undercutMesh);
   
   const undercutCount = undercutPositions.length / 9; // Each triangle has 3 vertices, each vertex has 3 coordinates
