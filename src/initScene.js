@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import Stats from 'three/examples/jsm/libs/stats.module.js';
 import * as dat from 'three/examples/jsm/libs/lil-gui.module.min.js'; 
-import { TrackballControls } from 'three/examples/jsm/controls/TrackballControls.js';
+import { TrackballControls } from './TrackballControls.js';
 import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js';
 import WebGPURenderer from 'three/src/renderers/webgpu/WebGPURenderer.js';
 
