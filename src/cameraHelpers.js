@@ -47,14 +47,33 @@ export function fitCameraToObject(camera, object, controls, offset = 1.5) {
   const maxDim = Math.max(size.x, size.y, size.z);
 
   const fov = camera.fov * (Math.PI / 180);
-  let cameraZ = (maxDim / 2) / Math.tan(fov / 2);
-  cameraZ *= offset;
 
-  camera.position.set(center.x, center.y, center.z + cameraZ);
+  let distance = Math.abs(maxDim / Math.sin(fov / 2));
+  const direction = new THREE.Vector3(0, 1, 0).normalize();
+
+  camera.position.copy(center).add(direction.multiplyScalar(distance));
   camera.lookAt(center);
 
-  if (controls) {
-    controls.target.copy(center);
-    controls.update();
+  camera.up.set(0, 0, 1);
+  
+  camera.near = distance / 100;
+  camera.far = distance * 100;
+  camera.updateProjectionMatrix();
+  
+  controls.target.copy(center);
+  
+  controls.rotateSpeed = 3.0;
+  controls.zoomSpeed = 1.2;
+  controls.panSpeed = 0.8;
+  controls.noPan = false;
+  controls.noZoom = false;
+  controls.noRotate = false;
+  controls.staticMoving = true;
+  controls.dynamicDampingFactor = 0.3;
+  
+  if (controls.up) {
+    controls.up.copy(camera.up);
   }
+  
+  controls.update();
 }
