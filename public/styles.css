@@ -401,7 +401,7 @@ color: #333;
 .process-step-line {
 width: 30px;
 height: 3px;
-background-color: #ccc;
+background-color: #eee;
 margin: 0 5px;
 margin-bottom: 25px;
 }
@@ -431,7 +431,7 @@ background-color: #4CAF50;
   bottom: 10px;
   width: 210px;
   background: #d9d9d9;
-  color: #000;
+  color: #fff;
   font: 14px sans-serif;
   padding: 10px;
   border: 1px solid #444;
