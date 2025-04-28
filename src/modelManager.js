@@ -2,7 +2,6 @@
 
 import * as THREE from 'three';
 import { STLExporter } from 'three/examples/jsm/exporters/STLExporter.js';
-import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
 import { loadStlFileAsGeometry } from './stlHelpers.js';
 import { centerAndScaleGeometry } from './geometryHelpers.js';
 import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUtils.js';
@@ -35,6 +34,7 @@ export const refs = {
   params: null, // (matcap, displayHelper, modelOpacity, transformMode, etc.)
   matcaps: null,
   transformControls: null,
+  renderer:null,
 };
 
 // ------------------------
