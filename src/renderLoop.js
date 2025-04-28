@@ -13,6 +13,7 @@ import {
   rightClick,
   someUpdateFunc,
 } from './eventHandlers.js';
+import { isLibraryStep, isFlipperStep, canSculpt } from './processSteps.js';
 
 let animationId = null; // 현재 렌더 루프의 requestAnimationFrame ID를 저장할 변수
 
@@ -49,15 +50,18 @@ export function startRenderLoop(renderer, scene, camera, stats) {
       refs.targetMesh.material.matcap = refs.matcaps[ refs.params.matcap ];
     }
 
-    // 브러시 표시 여부
+    // 브러시 표시 여부 - 라이브러리/플리퍼 모드에서는 스컬프 비활성화
     if (
+      isLibraryStep() || 
+      isFlipperStep() || 
+      !canSculpt() ||
       refs.params.memoMode ||
       refs.controls.active ||
       !brushActive ||
       !refs.targetMesh ||
       refs.params.transformMode
     ) {
-      // 메모 모드이거나, 카메라 컨트롤 중이거나, 브러시 비활성시
+      // 메모 모드이거나, 카메라 컨트롤 중이거나, 브러시 비활성시, 라이브러리/플리퍼 모드
       if ( refs.brush ) {
         refs.brush.visible = false;
       }
@@ -84,6 +88,13 @@ export function startRenderLoop(renderer, scene, camera, stats) {
 
         if ( lastCastPose.x === Infinity ) {
           lastCastPose.copy(hit.point);
+        }
+
+        // 스컬프 비활성화 모드에서는 브러시만 표시하고 스컬프 동작은 하지 않음
+        if (isLibraryStep() || isFlipperStep() || !canSculpt()) {
+          lastMouse.copy(mouse);
+          lastCastPose.copy(hit.point);
+          return;
         }
 
         if ( !(mouseState || lastMouseState) ) {
@@ -151,11 +162,6 @@ export function startRenderLoop(renderer, scene, camera, stats) {
     }
 
     someUpdateFunc();
-
- 
-      // const triCount = countTrianglesInScene(scene);
-      // console.log('Triangle Count:', triCount);
-    
 
     // WebGPU -> renderAsync, WebGL -> render
     if (useRenderAsync) {
