@@ -2,6 +2,7 @@
 
 import { initScene } from './initScene.js';
 import { startRenderLoop } from './renderLoop.js';
+import { refs } from './modelManager.js';
 // 이벤트 핸들러
 import {
   onPointerDown,
@@ -41,6 +42,8 @@ import {
 function main() {
   // 1) 씬/카메라/렌더러/GUI 초기화
   const { renderer, scene, camera, stats } = initScene();
+
+  refs.renderer = renderer;
 
   // 2) 이벤트 리스너 등록
   //    - 포인터, 휠, 리사이즈
