@@ -8,7 +8,9 @@ import { highlightSelectedTooth } from './dentalChartUI.js';
  * Module-level state
  */
 let scene, camera, renderer, controls;
+// 모듈 변수와 윈도우 변수 둘 다 선언하여 공유 가능하게 함
 let placementActive = false;
+window.placementActive = false; // 전역 객체에 노출
 let selectedToothId = null;
 let selectedModelPath = null;
 let placementPoints = [];
@@ -174,6 +176,10 @@ export function initToothPlacement(sceneObj, cameraObj, rendererObj, controlsObj
  */
 export function startToothPlacement(toothId, modelPath) {
   placementActive   = true;
+  window.placementActive = true; // 전역 변수도 true로 설정
+  
+  console.log("위치 지정 모드 활성화:", placementActive, window.placementActive); // 디버깅용 로그 추가
+  
   selectedToothId   = toothId;
   selectedModelPath = modelPath;
   placementPoints   = [];
@@ -221,8 +227,8 @@ function getToothQuadrant(toothId) {
  * Handle clicks in the Three.js canvas during placement
  */
 function onMouseClick(event) {
-  console.log(placementActive)
-  if (!placementActive) return;
+  console.log("Mouse Click - placementActive:", window.placementActive); // 수정: window.placementActive 사용
+  if (!window.placementActive) return; // 수정: window.placementActive 사용
   
   // If we already have a preview tooth, ignore clicks
   if (previewTooth) return;
@@ -539,7 +545,7 @@ function createRotationHelper(position) {
  * @param {THREE.Vector3} pos 
  */
 function createMarker(pos) {
-  console.log('ff')
+  console.log('마커 생성:', pos);
   const geom = new THREE.SphereGeometry(0.025, 16, 16);
   const mat  = new THREE.MeshBasicMaterial({ color: 0xff0000 });
   const marker = new THREE.Mesh(geom, mat);
@@ -590,7 +596,7 @@ function cleanupPreviewTooth() {
  * Handle mouse down events
  */
 function onMouseDown(event) {
-  if (!placementActive || !previewTooth) return;
+  if (!window.placementActive || !previewTooth) return;
   
   // 대구치 (17, 27, 37, 47)인지 확인
   const isMolar = [17, 27, 37, 47].includes(parseInt(selectedToothId));
@@ -640,7 +646,7 @@ function onMouseDown(event) {
  * Handle mouse move events
  */
 function onMouseMove(event) {
-  if (!placementActive || (!isDragging && !isRotating)) return;
+  if (!window.placementActive || (!isDragging && !isRotating)) return;
   
   // 대구치 (17, 27, 37, 47)인지 확인
   const isMolar = [17, 27, 37, 47].includes(parseInt(selectedToothId));
@@ -714,7 +720,7 @@ function onMouseUp() {
  * User confirms placement → calls global placeToothModel
  */
 function confirmPlacement() {
-  if (!placementActive) return;
+  if (!window.placementActive) return;
 
   const isMolar = [17, 27, 37, 47].includes(parseInt(selectedToothId));
   
@@ -789,6 +795,7 @@ function cancelPlacement() {
 function cleanupPlacement() {
   cleanupPreviewTooth();
   placementActive = false;
+  window.placementActive = false; // 전역 변수도 false로 설정
   selectedToothId = null;
   selectedModelPath = null;
   placementPoints = [];
@@ -806,7 +813,7 @@ function cleanupPlacement() {
  * Utility to check if placement is active
  */
 export function isPlacementActive() {
-  return placementActive;
+  return placementActive || window.placementActive; // 둘 중 하나라도 true면 활성 상태
 }
 
 /**
