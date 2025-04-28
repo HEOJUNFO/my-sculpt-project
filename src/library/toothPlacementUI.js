@@ -221,6 +221,7 @@ function getToothQuadrant(toothId) {
  * Handle clicks in the Three.js canvas during placement
  */
 function onMouseClick(event) {
+  console.log(placementActive)
   if (!placementActive) return;
   
   // If we already have a preview tooth, ignore clicks
@@ -538,6 +539,7 @@ function createRotationHelper(position) {
  * @param {THREE.Vector3} pos 
  */
 function createMarker(pos) {
+  console.log('ff')
   const geom = new THREE.SphereGeometry(0.025, 16, 16);
   const mat  = new THREE.MeshBasicMaterial({ color: 0xff0000 });
   const marker = new THREE.Mesh(geom, mat);

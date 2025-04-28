@@ -3,6 +3,7 @@
 import * as THREE from 'three';
 import { pushUndoState, refs, redoStack, undo, redo } from './modelManager.js';
 import { memos, openEditMemoModal, openNewMemoModal } from './memo.js';
+import { isLibraryStep, isFlipperStep, canSculpt } from './processSteps.js';
 
 export let mouse = new THREE.Vector2();
 export let lastMouse = new THREE.Vector2();
@@ -80,6 +81,11 @@ export function onPointerDown(e) {
     return;
   }
 
+  // 라이브러리 모드에서는 스컬프 기능 비활성화
+  if (isLibraryStep() || isFlipperStep() || !canSculpt()) {
+    return;
+  }
+
   // 4) Sculpt
   if (!refs.targetMesh) return;
   const res = raycaster.intersectObject(refs.targetMesh);
@@ -115,6 +121,12 @@ export function onWheel(e) {
     return;
   }
 
+  // 라이브러리 모드에서는 스컬프 기능 비활성화 (휠 스크롤은 줌으로만 사용)
+  if (isLibraryStep() || isFlipperStep()) {
+    // 스컬프 기능 비활성화 - 줌만 가능하게 함
+    refs.controls.enabled = true;
+    return;
+  }
 
   let delta = e.deltaY;
   if ( e.deltaMode === 1 ) delta *= 40;

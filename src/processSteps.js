@@ -30,6 +30,35 @@ export const STEPS = {
 let currentStep = 1;
 
 /**
+ * 현재 단계 번호를 반환하는 함수
+ */
+export function getCurrentStep() {
+  return currentStep;
+}
+
+/**
+ * 현재 단계가 라이브러리 단계인지 확인하는 함수
+ */
+export function isLibraryStep() {
+  return currentStep === 5;
+}
+
+/**
+ * 현재 단계가 플리퍼 단계인지 확인하는 함수
+ */
+export function isFlipperStep() {
+  return currentStep === 7;
+}
+
+/**
+ * 현재 단계가 스컬프를 실행해도 되는 단계인지 확인
+ */
+export function canSculpt() {
+  // 단계 2, 4, 6, 8에서만 스컬프 가능
+  return currentStep === 2 || currentStep === 4 || currentStep === 6 || currentStep === 8;
+}
+
+/**
  * 현재 단계에 따라 상단 진행 바 업데이트
  */
 function updateTopBar() {
@@ -155,7 +184,7 @@ function updateUIVisibility() {
       if (sculptUI) sculptUI.style.display = 'none'; // Hide sculpt UI
       break;
       
-    default: // 기타 단계 (미구현 - 임시로 스컬프 UI 표시)
+    default: // 기타 단계
       if (sculptUI) sculptUI.style.display = 'block';
       break;
   }
@@ -170,6 +199,11 @@ export function setStep(step) {
     updateTopBar();
     updateUIVisibility();
     console.log('단계 변경됨:', currentStep);
+    
+    // 전역 상태 업데이트 - 이벤트 발생
+    window.dispatchEvent(new CustomEvent('appStepChanged', { 
+      detail: { step: currentStep } 
+    }));
   } else {
     console.error('잘못된 단계 번호:', step);
   }
@@ -277,6 +311,10 @@ export function initProcessSteps() {
 
 // Expose functions for global access (for use in library UI)
 window.appSteps = {
+  getCurrentStep,
+  isLibraryStep,
+  isFlipperStep,
+  canSculpt,
   completeSculpting,
   completeBlockout,
   completeLibrary,
