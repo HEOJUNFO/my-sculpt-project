@@ -21,12 +21,17 @@ import { onMemoNewOkBtn, onMemoEditUpdateBtn, onMemoEditDeleteBtn, makeDraggable
 // Import the setupBlockoutUI function
 import { setupBlockoutUI } from './blockoutUI.js';
 
+// Import library integration (new)
+import './libraryIntegration.js';
+
 // Import process steps module
 import { 
   initProcessSteps, 
   completeUpload, 
   completeSculpting, 
   completeBlockout,
+  completeLibrary,
+  completeFlipper,
   STEPS 
 } from './processSteps.js';
 
@@ -117,7 +122,13 @@ function main() {
   startRenderLoop(renderer, scene, camera, stats);
   
   // 전역 접근을 위해 window 객체에 추가 (디버깅용)
-  window.appSteps = { completeSculpting, completeBlockout, STEPS };
+  window.appSteps = { 
+    completeSculpting, 
+    completeBlockout, 
+    completeLibrary,
+    completeFlipper,
+    STEPS 
+  };
 }
 
 /**

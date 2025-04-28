@@ -1,6 +1,11 @@
 // src/processSteps.js
 // 프로세스 단계를 숫자로 관리하는 모듈
 
+// Import UI module integration functions
+import { initLibraryMode, cleanupLibraryMode } from './libraryIntegration.js';
+import { initFlipperUI, cleanupFlipperUI } from './flipperUI.js';
+import { initExportUI, cleanupExportUI } from './exportUI.js';
+
 // 단계 정의 (상수)
 export const STEPS = {
   UPLOAD: 'upload',
@@ -17,7 +22,9 @@ export const STEPS = {
 // 4 = 블록아웃 단계 + 스컬프 UI
 // 5 = 라이브러리 단계 + 라이브러리 UI
 // 6 = 라이브러리 단계 + 스컬프 UI
-// ...
+// 7 = 플리퍼 단계 + 플리퍼 UI
+// 8 = 플리퍼 단계 + 스컬프 UI
+// 9 = 익스포트 단계 + 익스포트 UI
 
 // 현재 단계 숫자 (처음에는 1: 업로드 UI)
 let currentStep = 1;
@@ -93,6 +100,19 @@ function updateUIVisibility() {
   if (blockoutUI) blockoutUI.style.display = 'none';
   if (dragHint) dragHint.style.display = 'none';
   
+  // 이전 단계의 특수 UI들 정리
+  if (currentStep !== 5 && currentStep !== 6) {
+    cleanupLibraryMode();
+  }
+  
+  if (currentStep !== 7 && currentStep !== 8) {
+    cleanupFlipperUI();
+  }
+  
+  if (currentStep !== 9) {
+    cleanupExportUI();
+  }
+  
   // 현재 단계 숫자에 따라 적절한 UI 표시
   switch (currentStep) {
     case 1: // 업로드 UI 표시
@@ -112,10 +132,29 @@ function updateUIVisibility() {
       if (sculptUI) sculptUI.style.display = 'block';
       break;
       
-    case 5: // 라이브러리 UI (미구현 - 임시로 스컬프 UI 표시)
-      if (sculptUI) sculptUI.style.display = 'block';
+    case 5: // 라이브러리 UI 표시
+      initLibraryMode(); // Initialize library UI
+      if (sculptUI) sculptUI.style.display = 'none'; // Hide sculpt UI
       break;
     
+    case 6: // 스컬프 UI 표시 (라이브러리 단계)
+      if (sculptUI) sculptUI.style.display = 'block';
+      break;
+      
+    case 7: // 플리퍼 UI 표시
+      initFlipperUI(); // Initialize flipper UI
+      if (sculptUI) sculptUI.style.display = 'none'; // Hide sculpt UI
+      break;
+      
+    case 8: // 스컬프 UI 표시 (플리퍼 단계)
+      if (sculptUI) sculptUI.style.display = 'block';
+      break;
+      
+    case 9: // 익스포트 UI 표시
+      initExportUI(); // Initialize export UI
+      if (sculptUI) sculptUI.style.display = 'none'; // Hide sculpt UI
+      break;
+      
     default: // 기타 단계 (미구현 - 임시로 스컬프 UI 표시)
       if (sculptUI) sculptUI.style.display = 'block';
       break;
@@ -176,6 +215,22 @@ export function completeBlockout() {
 }
 
 /**
+ * 라이브러리 완료 시 - 단계 6으로 변경 (라이브러리 단계 + 스컬프 UI)
+ */
+export function completeLibrary() {
+  setStep(6); // 단계 6: 라이브러리 단계 + 스컬프 UI
+  console.log('라이브러리 완료 - 스컬프 UI로 돌아감');
+}
+
+/**
+ * 플리퍼 완료 시 - 단계 8로 변경 (플리퍼 단계 + 스컬프 UI)
+ */
+export function completeFlipper() {
+  setStep(8); // 단계 8: 플리퍼 단계 + 스컬프 UI
+  console.log('플리퍼 완료 - 스컬프 UI로 돌아감');
+}
+
+/**
  * 특정 단계 이름으로 이동 (단계명 기반)
  * 주로 상단바 클릭을 위한 함수
  */
@@ -219,3 +274,12 @@ export function initProcessSteps() {
     });
   });
 }
+
+// Expose functions for global access (for use in library UI)
+window.appSteps = {
+  completeSculpting,
+  completeBlockout,
+  completeLibrary,
+  completeFlipper,
+  STEPS
+};
