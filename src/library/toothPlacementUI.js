@@ -12,7 +12,9 @@ let scene, camera, renderer, controls;
 let placementActive = false;
 window.placementActive = false; // 전역 객체에 노출
 let selectedToothId = null;
+window.selectedToothId = null; // 전역 객체에 추가
 let selectedModelPath = null;
+window.selectedModelPath = null; // 전역 객체에 추가
 let placementPoints = [];
 let placementMarkers = [];
 let placedTeeth = [];
@@ -175,22 +177,27 @@ export function initToothPlacement(sceneObj, cameraObj, rendererObj, controlsObj
  * @param {string} modelPath 
  */
 export function startToothPlacement(toothId, modelPath) {
-  placementActive   = true;
+  placementActive = true;
   window.placementActive = true; // 전역 변수도 true로 설정
   
-  console.log("위치 지정 모드 활성화:", placementActive, window.placementActive); // 디버깅용 로그 추가
-  
-  selectedToothId   = toothId;
+  selectedToothId = toothId;
+  window.selectedToothId = toothId; // 전역 객체에 설정
   selectedModelPath = modelPath;
-  placementPoints   = [];
+  window.selectedModelPath = modelPath; // 전역 객체에 설정
+  
+  console.log("위치 지정 모드 활성화:", placementActive, window.placementActive); // 디버깅용 로그 추가
+  console.log("선택된 치아 ID:", selectedToothId, window.selectedToothId); // 디버깅용 로그 추가
+  console.log("선택된 모델 경로:", selectedModelPath, window.selectedModelPath); // 디버깅용 로그 추가
+  
+  placementPoints = [];
 
   clearPlacementMarkers();
   cleanupPreviewTooth();
   highlightSelectedTooth(toothId);
 
-  const ui          = document.getElementById('placement-ui');
-  const instr       = document.getElementById('placement-instructions');
-  const confirmBtn  = document.getElementById('confirm-placement-btn');
+  const ui = document.getElementById('placement-ui');
+  const instr = document.getElementById('placement-instructions');
+  const confirmBtn = document.getElementById('confirm-placement-btn');
   const sliderContainer = document.getElementById('rotation-slider-container');
 
   ui.style.display = 'block';
@@ -255,7 +262,7 @@ function onMouseClick(event) {
       placementPoints.splice(markerIndex, 1);
       
       // Update UI
-      const isMolar = [17, 27, 37, 47].includes(parseInt(selectedToothId));
+      const isMolar = [17, 27, 37, 47].includes(parseInt(window.selectedToothId)); // 수정
       const needed  = isMolar ? 1 : 2;
       const instr   = document.getElementById('placement-instructions');
       const confirmBtn = document.getElementById('confirm-placement-btn');
@@ -264,7 +271,7 @@ function onMouseClick(event) {
       
       if (placementPoints.length === 0) {
         instr.textContent = isMolar
-          ? `${selectedToothId}번 치아 배치: 위치를 클릭하세요`
+          ? `${window.selectedToothId}번 치아 배치: 위치를 클릭하세요` // 수정
           : '두 지점을 클릭하세요 (중앙에 배치됩니다)';
       } else if (!isMolar && placementPoints.length === 1) {
         instr.textContent = '두 번째 지점을 클릭하세요.';
@@ -284,7 +291,7 @@ function onMouseClick(event) {
   const point = hits[0].point.clone();
   
   // 대구치 (17, 27, 37, 47)의 경우
-  const isMolar = [17, 27, 37, 47].includes(parseInt(selectedToothId));
+  const isMolar = [17, 27, 37, 47].includes(parseInt(window.selectedToothId)); // 수정
   
   if (isMolar) {
     // 대구치는 즉시 프리뷰 생성 (드래그 및 회전 가능)
@@ -321,14 +328,14 @@ function createSimplePreview(position) {
   `;
   loadingMessage.innerHTML = `
     <div class="loading-spinner"></div>
-    <p>${selectedToothId}번 치아 미리보기를 생성 중입니다...</p>
+    <p>${window.selectedToothId}번 치아 미리보기를 생성 중입니다...</p>
   `;
   document.body.appendChild(loadingMessage);
   
   // STL 로드
   const loader = new STLLoader();
   loader.load(
-    selectedModelPath,
+    window.selectedModelPath, // 수정
     (geometry) => {
       const posAttr = geometry.getAttribute('position');
       if (!posAttr) {
@@ -358,7 +365,7 @@ function createSimplePreview(position) {
       // 프리뷰 치아 생성
       previewTooth = new THREE.Mesh(geometry, previewMaterial);
       previewTooth.position.copy(position);
-      previewTooth.userData = { type: 'previewTooth', toothId: selectedToothId };
+      previewTooth.userData = { type: 'previewTooth', toothId: window.selectedToothId }; // 수정
       
       // 기본 회전 설정
       setInitialRotation(previewTooth);
@@ -401,7 +408,7 @@ function createPreviewTooth(position) {
   `;
   loadingMessage.innerHTML = `
     <div class="loading-spinner"></div>
-    <p>${selectedToothId}번 치아 미리보기를 생성 중입니다...</p>
+    <p>${window.selectedToothId}번 치아 미리보기를 생성 중입니다...</p>
   `;
   document.body.appendChild(loadingMessage);
   
@@ -410,7 +417,7 @@ function createPreviewTooth(position) {
   
   // 모델 로드
   loader.load(
-    selectedModelPath,
+    window.selectedModelPath, // 수정
     (geometry) => {
       /*** geometry processing ***/
       const posAttr = geometry.getAttribute('position');
@@ -441,7 +448,7 @@ function createPreviewTooth(position) {
       // 프리뷰 치아 생성
       previewTooth = new THREE.Mesh(geometry, previewMaterial);
       previewTooth.position.copy(position);
-      previewTooth.userData = { type: 'previewTooth', toothId: selectedToothId };
+      previewTooth.userData = { type: 'previewTooth', toothId: window.selectedToothId }; // 수정
       
       // 회전 설정 (치아 번호에 따른 기본 회전)
       setInitialRotation(previewTooth);
@@ -482,7 +489,7 @@ function createPreviewTooth(position) {
  * Set the initial rotation based on tooth ID
  */
 function setInitialRotation(tooth) {
-  const toothId = parseInt(selectedToothId);
+  const toothId = parseInt(window.selectedToothId); // 수정
   
   // Y축 기준으로 회전값 설정
   let yRotation = 0;
@@ -599,7 +606,7 @@ function onMouseDown(event) {
   if (!window.placementActive || !previewTooth) return;
   
   // 대구치 (17, 27, 37, 47)인지 확인
-  const isMolar = [17, 27, 37, 47].includes(parseInt(selectedToothId));
+  const isMolar = [17, 27, 37, 47].includes(parseInt(window.selectedToothId)); // 수정
   if (!isMolar) return; // 비대구치는 드래그/회전 불가
   
   // Convert to normalized device coords
@@ -649,7 +656,7 @@ function onMouseMove(event) {
   if (!window.placementActive || (!isDragging && !isRotating)) return;
   
   // 대구치 (17, 27, 37, 47)인지 확인
-  const isMolar = [17, 27, 37, 47].includes(parseInt(selectedToothId));
+  const isMolar = [17, 27, 37, 47].includes(parseInt(window.selectedToothId)); // 수정
   if (!isMolar) return; // 비대구치는 드래그/회전 불가
   
   // Convert to normalized device coords
@@ -722,7 +729,9 @@ function onMouseUp() {
 function confirmPlacement() {
   if (!window.placementActive) return;
 
-  const isMolar = [17, 27, 37, 47].includes(parseInt(selectedToothId));
+  const isMolar = [17, 27, 37, 47].includes(parseInt(window.selectedToothId)); // 수정
+  
+  console.log("확인 시 모델 경로:", window.selectedModelPath); // 수정
   
   // 프리뷰가 있는 경우 (대구치)
   if (previewTooth) {
@@ -736,7 +745,7 @@ function confirmPlacement() {
     
     // 글로벌 배치 함수 호출
     if (window.placeToothModel) {
-      window.placeToothModel(selectedToothId, selectedModelPath, finalPosition, finalRotation);
+      window.placeToothModel(window.selectedToothId, window.selectedModelPath, finalPosition, finalRotation); // 수정
     }
   } 
   // 프리뷰가 없는 경우 (비대구치)
@@ -748,7 +757,7 @@ function confirmPlacement() {
     
     // 기본 회전값 계산
     const rotation = new THREE.Euler();
-    const toothId = parseInt(selectedToothId);
+    const toothId = parseInt(window.selectedToothId); // 수정
     
     // Y축 기준으로 회전값 설정
     let yRotation = 0;
@@ -775,7 +784,7 @@ function confirmPlacement() {
     
     // 글로벌 배치 함수 호출
     if (window.placeToothModel) {
-      window.placeToothModel(selectedToothId, selectedModelPath, midpoint, rotation);
+      window.placeToothModel(window.selectedToothId, window.selectedModelPath, midpoint, rotation); // 수정
     }
   }
   
@@ -797,7 +806,9 @@ function cleanupPlacement() {
   placementActive = false;
   window.placementActive = false; // 전역 변수도 false로 설정
   selectedToothId = null;
+  window.selectedToothId = null; // 전역 객체 초기화
   selectedModelPath = null;
+  window.selectedModelPath = null; // 전역 객체 초기화
   placementPoints = [];
   clearPlacementMarkers();
   document.getElementById('placement-ui').style.display = 'none';
