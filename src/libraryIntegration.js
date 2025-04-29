@@ -3,11 +3,15 @@ import { refs } from './modelManager.js';
 import { loadModuleExports } from './moduleLoader.js';
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
 import * as THREE from 'three';
+import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
 // Global UI container for the library
 let libraryUIContainer = null;
 let modulesLoaded = false;
 let placedTeeth = []; // 배치된 치아 추적용 배열
+
+// 라이브러리 모드 활성화 플래그 추가
+let libraryModeActive = false;
 
 /**
  * 치아 모델을 특정 위치에 배치하는 함수
@@ -59,15 +63,7 @@ function placeToothModel(toothId, modelPath, position, rotation) {
         newGeometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
         newGeometry.setIndex(new THREE.Uint32BufferAttribute(indices, 1));
         newGeometry.deleteAttribute('uv');
-        
-        // BufferGeometryUtils 가져오기
-        const BufferGeometryUtils = THREE.BufferGeometryUtils || 
-          (window.THREE && window.THREE.BufferGeometryUtils);
-        
-        if (BufferGeometryUtils && BufferGeometryUtils.mergeVertices) {
-          newGeometry = BufferGeometryUtils.mergeVertices(newGeometry);
-        }
-        
+        newGeometry = BufferGeometryUtils.mergeVertices(newGeometry);
         newGeometry.computeVertexNormals();
         newGeometry.computeBoundingSphere();
         if (newGeometry.boundingSphere) {
@@ -366,6 +362,9 @@ function handleToothSelection(event) {
   // 치아 배치 모드일 때는 무시
   if (window.placementActive) return;
   
+  // 라이브러리 모드가 활성화되지 않았을 때도 무시
+  if (!libraryModeActive) return;
+  
   console.log("치아 선택 클릭 이벤트 발생", event, "placedTeeth:", placedTeeth.length);
   
   // 마우스 좌표 계산
@@ -421,10 +420,8 @@ function handleToothSelection(event) {
       setTimeout(() => msg.remove(), 500);
     }, 3000);
   }
-  // 치아를 클릭하지 않았지만 TransformControls가 활성화되어 있다면 제거
-  else if (refs.transformControls && refs.transformControls.object) {
-    detachTransformControls();
-  }
+  // 치아를 클릭하지 않은 경우는 아무 동작도 하지 않음 (트랜스폼 컨트롤을 유지)
+  // 이전 코드에서는 여기서 detachTransformControls()를 호출했음
 }
 
 // 전역 객체에 함수 등록
@@ -436,6 +433,9 @@ window.placeToothModel = placeToothModel;
  */
 export function initLibraryMode() {
   console.log('Initializing library mode UI');
+  
+  // 라이브러리 모드 활성화 플래그 설정
+  libraryModeActive = true;
   
   // Create library UI container if not exists
   if (!libraryUIContainer) {
@@ -755,6 +755,12 @@ function createLibraryControlPanel() {
   
   // Add event listener for completion button
   document.getElementById('complete-library-btn').addEventListener('click', () => {
+    // 라이브러리 모드 비활성화 플래그 설정
+    libraryModeActive = false;
+    
+    // 이 시점에 트랜스폼 컨트롤 UI 제거
+    detachTransformControls();
+    
     // Call the completion function from processSteps
     if (window.appSteps && window.appSteps.completeSculpting) {
       window.appSteps.completeSculpting();
@@ -772,6 +778,9 @@ function createLibraryControlPanel() {
 export function cleanupLibraryMode() {
   console.log('Cleaning up library mode UI');
   
+  // 라이브러리 모드 비활성화 플래그 설정
+  libraryModeActive = false;
+  
   // Remove dental chart if it exists
   const dentalChart = document.getElementById('dental-chart-container');
   if (dentalChart) dentalChart.remove();
@@ -784,7 +793,7 @@ export function cleanupLibraryMode() {
   const placementUI = document.getElementById('placement-ui');
   if (placementUI) placementUI.remove();
   
-  // Remove transform UI if it exists
+  // Remove transform UI if it exists (라이브러리 모드가 종료될 때만 제거)
   const transformUI = document.getElementById('transform-ui');
   if (transformUI) transformUI.remove();
   
@@ -792,7 +801,7 @@ export function cleanupLibraryMode() {
   const controlPanel = document.getElementById('library-control-panel');
   if (controlPanel) controlPanel.remove();
   
-  // Detach transform controls if attached
+  // Detach transform controls if attached (라이브러리 모드가 종료될 때만 제거)
   detachTransformControls();
   
   // Remove tooth selection event listener
