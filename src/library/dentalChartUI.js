@@ -154,8 +154,8 @@ export function createDentalChartUI() {
   styleElement.textContent = `
     #dental-chart-container {
       position: fixed;
-      left: 20px;
-      top: 50%;
+      left: 0px;
+      top: 49%;
       transform: translateY(-50%);
       width: 350px;
       background-color: white;

@@ -360,10 +360,16 @@ function detachTransformControls() {
  */
 function handleToothSelection(event) {
   // 치아 배치 모드일 때는 무시
-  if (window.placementActive) return;
+  if (window.placementActive) {
+    console.log("배치 모드 활성화 - 선택 무시");
+    return;
+  }
   
   // 라이브러리 모드가 활성화되지 않았을 때도 무시
-  if (!libraryModeActive) return;
+  if (!libraryModeActive) {
+    console.log("라이브러리 모드 비활성화 - 선택 무시");
+    return;
+  }
   
   console.log("치아 선택 클릭 이벤트 발생", event, "placedTeeth:", placedTeeth.length);
   
@@ -377,6 +383,9 @@ function handleToothSelection(event) {
   // 레이캐스터 생성
   const raycaster = new THREE.Raycaster();
   raycaster.setFromCamera(mouse, refs.camera);
+  
+  // 수정 5: 배치된 치아 목록 재확인
+  console.log("배치된 치아 목록 검사:", placedTeeth.map(t => t.userData?.toothId || "unknown"));
   
   // 배치된 치아와 교차 확인 
   const intersects = raycaster.intersectObjects(placedTeeth, true); // true 추가: 자식 객체도 검사
@@ -392,10 +401,13 @@ function handleToothSelection(event) {
       clickedTooth = clickedTooth.parent;
     }
     
-    console.log("선택된 치아:", clickedTooth);
+    console.log("선택된 치아:", clickedTooth, "치아 ID:", clickedTooth.userData?.toothId);
     
     // 이미 같은 치아가 선택되어 있으면 무시
-    if (refs.transformControls && refs.transformControls.object === clickedTooth) return;
+    if (refs.transformControls && refs.transformControls.object === clickedTooth) {
+      console.log("이미 선택된 치아 - 무시");
+      return;
+    }
     
     // 다른 치아가 선택되어 있었다면 UI 제거
     detachTransformControls();
@@ -419,9 +431,9 @@ function handleToothSelection(event) {
       msg.style.opacity = '0';
       setTimeout(() => msg.remove(), 500);
     }, 3000);
+  } else {
+    console.log("선택된 치아 없음");
   }
-  // 치아를 클릭하지 않은 경우는 아무 동작도 하지 않음 (트랜스폼 컨트롤을 유지)
-  // 이전 코드에서는 여기서 detachTransformControls()를 호출했음
 }
 
 // 전역 객체에 함수 등록
@@ -436,139 +448,6 @@ export function initLibraryMode() {
   
   // 라이브러리 모드 활성화 플래그 설정
   libraryModeActive = true;
-  
-  // Create library UI container if not exists
-  if (!libraryUIContainer) {
-    libraryUIContainer = document.createElement('div');
-    libraryUIContainer.id = 'library-ui-container';
-    document.body.appendChild(libraryUIContainer);
-  
-    // Load required CSS
-    const style = document.createElement('style');
-    style.textContent = `
-      #dental-chart-container {
-        position: fixed;
-        left: 20px;
-        top: 50%;
-        transform: translateY(-50%);
-        width: 350px;
-        background-color: white;
-        border-radius: 10px;
-        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-        z-index: 1000;
-      }
-      .jaw-label {
-        text-align: center;
-        margin: 20px 0 10px;
-        font-size: 16px;
-        font-weight: bold;
-        color: #333;
-      }
-      .teeth-container {
-        position: relative;
-        height: 240px;
-        margin: 0 auto;
-        width: 100%;
-      }
-      .tooth {
-        position: absolute;
-        width: 30px;
-        height: 45px;
-        transition: transform 0.2s;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        z-index: 10;
-        cursor: pointer;
-      }
-      .tooth:hover {
-        transform: scale(1.1);
-      }
-      .tooth.selected {
-        border: 2px solid #FF5722;
-        border-radius: 8px;
-        background-color: rgba(255, 87, 34, 0.1);
-      }
-      .tooth-image {
-        width: 100%;
-        height: 100%;
-        object-fit: contain;
-      }
-      .tooth-number {
-        position: absolute;
-        width: 15px;
-        height: 15px;
-        border-radius: 50%;
-        background-color: #4691E0;
-        color: white;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 11px;
-        font-weight: bold;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-        z-index: 20;
-      }
-      
-      #model-selection-ui {
-        position: fixed;
-        top: 20px;
-        right: 20px;
-        background: white;
-        border-radius: 10px;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-        padding: 15px;
-        z-index: 1100;
-        width: 320px;
-        max-height: 80vh;
-        overflow-y: auto;
-      }
-      
-      #placement-ui {
-        position: fixed;
-        bottom: 20px;
-        left: 50%;
-        transform: translateX(-50%);
-        background: white;
-        border-radius: 10px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-        padding: 15px;
-        z-index: 1200;
-        display: none;
-        width: 350px;
-      }
-      
-      .loading-spinner {
-        width: 40px;
-        height: 40px;
-        border: 4px solid rgba(255, 255, 255, 0.3);
-        border-radius: 50%;
-        border-top: 4px solid white;
-        animation: spin 1s linear infinite;
-        margin-bottom: 10px;
-      }
-      
-      /* Transform UI 스타일 */
-      .transform-btn {
-        flex: 1;
-        padding: 6px;
-        background: #eee;
-        color: #333;
-        border: none;
-        border-radius: 3px;
-        cursor: pointer;
-      }
-      .transform-btn:hover {
-        background: #e0e0e0;
-      }
-      
-      @keyframes spin {
-        0% { transform: rotate(0deg); }
-        100% { transform: rotate(360deg); }
-      }
-    `;
-    document.head.appendChild(style);
-  }
 
   // 로딩 메시지 표시
   const loadingMessage = document.createElement('div');
@@ -705,14 +584,16 @@ function initLibraryUI() {
     console.error('initToothPlacement 함수를 찾을 수 없습니다');
   }
   
-  // 치아 선택 이벤트 리스너 추가
+  // 치아 선택 이벤트 리스너 추가 
+  // 이미 등록된 이벤트 리스너가 있다면 제거 후 다시 등록
+  refs.renderer?.domElement.removeEventListener('click', handleToothSelection);
   refs.renderer?.domElement.addEventListener('click', handleToothSelection);
   
   // 컨트롤 패널 생성
   createLibraryControlPanel();
   
-  // 배치된 치아 배열 초기화
-  placedTeeth = [];
+  // 배치된 치아 배열 초기화 제거함
+  console.log("라이브러리 모드 진입 - 현재 배치된 치아 개수:", placedTeeth.length);
   
   // 치아 배치 함수 등록 확인
   console.log("치아 배치 함수 등록 완료:", typeof window.placeToothModel);
@@ -726,8 +607,8 @@ function createLibraryControlPanel() {
   panel.id = 'library-control-panel';
   panel.style.cssText = `
     position: fixed;
-    right: 20px;
-    top: 20px;
+    left: 0px;
+    bottom: 0px;
     background: #fff;
     padding: 15px;
     border-radius: 8px;
@@ -753,20 +634,21 @@ function createLibraryControlPanel() {
   
   document.body.appendChild(panel);
   
-  // Add event listener for completion button
+  // 완료 버튼 이벤트 리스너 수정: completeSculpting() -> completeLibrary()
   document.getElementById('complete-library-btn').addEventListener('click', () => {
     // 라이브러리 모드 비활성화 플래그 설정
     libraryModeActive = false;
     
-    // 이 시점에 트랜스폼 컨트롤 UI 제거
+    // 트랜스폼 컨트롤 UI 제거
     detachTransformControls();
     
-    // Call the completion function from processSteps
-    if (window.appSteps && window.appSteps.completeSculpting) {
-      window.appSteps.completeSculpting();
+    // 이 부분을 수정: completeSculpting() -> completeLibrary()
+    // completeLibrary()는 단계 6(라이브러리 단계 + 스컬프 UI)로 설정
+    if (window.appSteps && window.appSteps.completeLibrary) {
+      window.appSteps.completeLibrary();
     }
     
-    // Clean up the library UI
+    // 라이브러리 UI 정리
     cleanupLibraryMode();
   });
 }
