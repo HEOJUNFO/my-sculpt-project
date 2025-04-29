@@ -48,63 +48,83 @@ function placeToothModel(toothId, modelPath, position, rotation) {
         return;
       }
       
-      const positions = posAttr.array;
-      const indices = [];
-      for (let i = 0; i < positions.length / 3; i += 3) {
-        indices.push(i, i + 1, i + 2);
-      }
+      try {
+        const positions = posAttr.array;
+        const indices = [];
+        for (let i = 0; i < positions.length / 3; i += 3) {
+          indices.push(i, i + 1, i + 2);
+        }
 
-      let newGeometry = new THREE.BufferGeometry();
-      newGeometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-      newGeometry.setIndex(new THREE.Uint32BufferAttribute(indices, 1));
-      newGeometry.deleteAttribute('uv');
-      newGeometry = BufferGeometryUtils.mergeVertices(newGeometry);
-      newGeometry.computeVertexNormals();
-      newGeometry.computeBoundingSphere();
-      if (newGeometry.boundingSphere) {
-        const radius = newGeometry.boundingSphere.radius;
-        newGeometry.scale(0.2 / radius, 0.2 / radius, 0.2 / radius);
+        let newGeometry = new THREE.BufferGeometry();
+        newGeometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+        newGeometry.setIndex(new THREE.Uint32BufferAttribute(indices, 1));
+        newGeometry.deleteAttribute('uv');
+        
+        // BufferGeometryUtils 가져오기
+        const BufferGeometryUtils = THREE.BufferGeometryUtils || 
+          (window.THREE && window.THREE.BufferGeometryUtils);
+        
+        if (BufferGeometryUtils && BufferGeometryUtils.mergeVertices) {
+          newGeometry = BufferGeometryUtils.mergeVertices(newGeometry);
+        }
+        
+        newGeometry.computeVertexNormals();
+        newGeometry.computeBoundingSphere();
+        if (newGeometry.boundingSphere) {
+          const radius = newGeometry.boundingSphere.radius;
+          newGeometry.scale(0.2 / radius, 0.2 / radius, 0.2 / radius);
+        }
+        newGeometry.center();
+        newGeometry.computeBoundingBox();
+        
+        // 치아 재질 생성
+        const toothMaterial = new THREE.MeshMatcapMaterial({
+          flatShading: false,
+          side: THREE.DoubleSide,
+          matcap: refs.matcaps['Clay']
+        });
+        
+        // 치아 메쉬 생성
+        const toothMesh = new THREE.Mesh(newGeometry, toothMaterial);
+        toothMesh.position.copy(position);
+        
+        // 회전 적용
+        if (rotation) {
+          toothMesh.rotation.copy(rotation);
+        }
+        
+        // userdata에 정보 추가
+        toothMesh.userData = { 
+          type: 'placedTooth', 
+          toothId, 
+          modelPath,
+          isLibraryTooth: true  // 라이브러리에서 배치된 치아임을 표시
+        };
+        
+        // 씬에 추가
+        refs.scene.add(toothMesh);
+        
+        // 배치된 치아 추적 (중요)
+        placedTeeth.push(toothMesh);
+        console.log("배치된 치아 개수:", placedTeeth.length);
+        
+        // 설치된 치아 추적 (이 함수가 있다면)
+        if (window.addPlacedTooth) {
+          window.addPlacedTooth(toothMesh);
+        }
+        
+        // 로딩 메시지 제거
+        loadingMessage.remove();
+        
+        // 성공 메시지 표시
+        showSuccessMessage(toothId);
+        
+        // 자동으로 TransformControls 부착
+        attachTransformControlsToTooth(toothMesh);
+      } catch (error) {
+        console.error("치아 처리 중 오류:", error);
+        loadingMessage.remove();
       }
-      newGeometry.center();
-      newGeometry.computeBoundingBox();
-      
-      // 치아 재질 생성
-      const toothMaterial = new THREE.MeshMatcapMaterial({
-        flatShading: false,
-        side: THREE.DoubleSide,
-        matcap: refs.matcaps['Clay']
-      });
-      
-      // 치아 메쉬 생성
-      const toothMesh = new THREE.Mesh(newGeometry, toothMaterial);
-      toothMesh.position.copy(position);
-      
-      // 회전 적용
-      if (rotation) {
-        toothMesh.rotation.copy(rotation);
-      }
-      
-      toothMesh.userData = { type: 'placedTooth', toothId, modelPath };
-      
-      // 씬에 추가
-      refs.scene.add(toothMesh);
-      
-      // 배치된 치아 추적
-      placedTeeth.push(toothMesh);
-      
-      // 설치된 치아 추적 (이 함수가 있다면)
-      if (window.addPlacedTooth) {
-        window.addPlacedTooth(toothMesh);
-      }
-      
-      // 로딩 메시지 제거
-      loadingMessage.remove();
-      
-      // 성공 메시지 표시
-      showSuccessMessage(toothId);
-      
-      // 자동으로 TransformControls 부착
-      attachTransformControlsToTooth(toothMesh);
     },
     (xhr) => console.log(`${(xhr.loaded / xhr.total * 100).toFixed(1)}% 로드됨`),
     (error) => {
@@ -140,23 +160,35 @@ function showSuccessMessage(toothId) {
  * 배치된 치아에 TransformControls 부착
  */
 function attachTransformControlsToTooth(toothMesh) {
+  console.log("TransformControls 부착 시도:", toothMesh);
+  
   // 이미 TransformControls가 부착되어 있는지 확인
   if (refs.transformControls && refs.transformControls.object === toothMesh) {
+    console.log("이미 같은 치아에 부착되어 있음");
     return;
   }
   
   // 이미 다른 객체에 부착되어 있는 경우 분리
   if (refs.transformControls && refs.transformControls.object) {
+    console.log("다른 객체에서 분리");
     detachTransformControls();
   }
   
   // TransformControls 설정 및 부착
   if (refs.transformControls) {
+    console.log("새 TransformControls 부착");
     refs.transformControls.attach(toothMesh);
-    refs.scene.add(refs.transformControls);
+    refs.scene.add(refs.transformControls.getHelper());
     
     // UI 생성
     createTransformUI();
+    
+    // 라이브러리 모드에서는 OrbitControls 비활성화
+    if (refs.controls) {
+      refs.controls.enabled = false;
+    }
+  } else {
+    console.error("refs.transformControls가 없음");
   }
 }
 
@@ -310,8 +342,20 @@ function setupTransformUIEvents() {
 function detachTransformControls() {
   if (refs.transformControls) {
     refs.transformControls.detach();
+    
+    // 헬퍼를 씬에서 제거 (최신 버전 Three.js 방식)
+    const helper = refs.transformControls.getHelper();
+    if (helper && refs.scene) {
+      refs.scene.remove(helper);
+    }
+    
     const transformUI = document.getElementById('transform-ui');
     if (transformUI) transformUI.remove();
+    
+    // 컨트롤 다시 활성화
+    if (refs.controls) {
+      refs.controls.enabled = true;
+    }
   }
 }
 
@@ -320,7 +364,9 @@ function detachTransformControls() {
  */
 function handleToothSelection(event) {
   // 치아 배치 모드일 때는 무시
-  if (window.placementActive && window.placementActive()) return;
+  if (window.placementActive) return;
+  
+  console.log("치아 선택 클릭 이벤트 발생", event, "placedTeeth:", placedTeeth.length);
   
   // 마우스 좌표 계산
   const rect = refs.renderer.domElement.getBoundingClientRect();
@@ -333,12 +379,21 @@ function handleToothSelection(event) {
   const raycaster = new THREE.Raycaster();
   raycaster.setFromCamera(mouse, refs.camera);
   
-  // 배치된 치아와 교차 확인
-  const intersects = raycaster.intersectObjects(placedTeeth);
+  // 배치된 치아와 교차 확인 
+  const intersects = raycaster.intersectObjects(placedTeeth, true); // true 추가: 자식 객체도 검사
+  
+  console.log("intersects 결과:", intersects.length);
   
   // 치아를 클릭한 경우
   if (intersects.length > 0) {
-    const clickedTooth = intersects[0].object;
+    // 클릭된 객체 또는 부모 객체(치아) 가져오기
+    let clickedTooth = intersects[0].object;
+    // 부모 객체가 치아인 경우 부모를 사용
+    while (clickedTooth.parent && !clickedTooth.userData.type && clickedTooth.parent !== refs.scene) {
+      clickedTooth = clickedTooth.parent;
+    }
+    
+    console.log("선택된 치아:", clickedTooth);
     
     // 이미 같은 치아가 선택되어 있으면 무시
     if (refs.transformControls && refs.transformControls.object === clickedTooth) return;
@@ -348,6 +403,23 @@ function handleToothSelection(event) {
     
     // 선택한 치아에 TransformControls 부착
     attachTransformControlsToTooth(clickedTooth);
+    
+    // 성공 메시지 표시
+    const msg = document.createElement('div');
+    msg.style.cssText = `
+      position: fixed; top: 20px; left: 50%;
+      transform: translateX(-50%);
+      background: rgba(76,175,80,0.9);
+      color: #fff; padding: 12px 20px;
+      border-radius: 8px; font-weight: bold;
+      z-index: 2000; transition: opacity 0.5s;
+    `;
+    msg.textContent = `치아가 선택되었습니다. 이제 위치를 조정할 수 있습니다.`;
+    document.body.appendChild(msg);
+    setTimeout(() => {
+      msg.style.opacity = '0';
+      setTimeout(() => msg.remove(), 500);
+    }, 3000);
   }
   // 치아를 클릭하지 않았지만 TransformControls가 활성화되어 있다면 제거
   else if (refs.transformControls && refs.transformControls.object) {
