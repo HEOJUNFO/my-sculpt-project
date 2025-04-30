@@ -73,11 +73,30 @@ function placeToothModel(toothId, modelPath, position, rotation) {
         newGeometry.center();
         newGeometry.computeBoundingBox();
         
-        // 치아 재질 생성
+        // 치아 재질 생성 - 치아 ID에 따라 다른 matcap 사용
+        let matcapTexture;
+        
+        // 치아 번호에 따라 다른 matcap 선택
+        if (parseInt(toothId) >= 11 && parseInt(toothId) <= 18) {
+          // 우측 상악 (밝은 색상)
+          matcapTexture = refs.matcaps['Pearl'] || refs.matcaps['White'];
+        } else if (parseInt(toothId) >= 21 && parseInt(toothId) <= 28) {
+          // 좌측 상악 (약간 다른 밝은 색상)
+          matcapTexture = refs.matcaps['White'] || refs.matcaps['Pearl'];
+        } else if (parseInt(toothId) >= 31 && parseInt(toothId) <= 38) {
+          // 좌측 하악 (다른 색조)
+          matcapTexture = refs.matcaps['Shiny Green'] || refs.matcaps['White'];
+        } else if (parseInt(toothId) >= 41 && parseInt(toothId) <= 48) {
+          // 우측 하악 (또 다른 색조)
+          matcapTexture = refs.matcaps['Red Wax'] || refs.matcaps['White'];
+        }
+        
         const toothMaterial = new THREE.MeshMatcapMaterial({
           flatShading: false,
           side: THREE.DoubleSide,
-          matcap: refs.matcaps['Clay']
+          matcap: matcapTexture || refs.matcaps['White'],
+          transparent: true,
+          opacity: 0.9 // 치아는 약간 반투명하게
         });
         
         // 치아 메쉬 생성
@@ -94,7 +113,8 @@ function placeToothModel(toothId, modelPath, position, rotation) {
           type: 'placedTooth', 
           toothId, 
           modelPath,
-          isLibraryTooth: true  // 라이브러리에서 배치된 치아임을 표시
+          isLibraryTooth: true,  // 라이브러리에서 배치된 치아임을 표시
+          originalMatcap: matcapTexture // 나중에 참조할 수 있도록 원본 matcap 저장
         };
         
         // 씬에 추가
@@ -695,3 +715,16 @@ export function cleanupLibraryMode() {
     libraryUIContainer = null;
   }
 }
+
+/**
+ * Make placedTeeth array available to other modules
+ * @returns {Array} Array of placed tooth meshes
+ */
+function getPlacedTeeth() {
+  return placedTeeth;
+}
+
+// Expose the function and array to the global scope for access by other modules
+window.placedTeeth = placedTeeth;
+window.appLib = window.appLib || {};
+window.appLib.getPlacedTeeth = getPlacedTeeth;
