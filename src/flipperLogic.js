@@ -215,7 +215,6 @@ function onFlipperPointerDown(event) {
   const mouseX = ((event.clientX - rect.left) / rect.width) * 2 - 1;
   const mouseY = -((event.clientY - rect.top) / rect.height) * 2 + 1;
   
-  // 마우스 위치 저장
   lastMousePosition = new THREE.Vector2(mouseX, mouseY);
   
   // 레이캐스터 생성
@@ -939,55 +938,97 @@ export function generateFlipper() {
     
     // 남은 엣지는 경계 엣지임 - 측면 삼각형 생성
     for (const [key, [a, b]] of edgeMap.entries()) {
-      // 앞면-뒷면 연결 삼각형
-      indices.push(a, b, b + frontCount);
-      indices.push(a, b + frontCount, a + frontCount);
-    }
-    
-    // 10. 버퍼 지오메트리 완성
-    const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
-    geometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
-    geometry.setIndex(indices);
-    
-    // 유효성 검사 및 중복 정점 병합
-    let mergedGeometry = validateGeometry(geometry);
-    if (mergedGeometry) {
-      try {
-        mergedGeometry = BufferGeometryUtils.mergeVertices(mergedGeometry);
-        mergedGeometry.computeVertexNormals();
-        
-        // 안전한 바운딩 스피어 계산
-        try {
-          mergedGeometry.computeBoundingSphere();
-          
-          // NaN 검사
-          if (isNaN(mergedGeometry.boundingSphere.radius)) {
-            mergedGeometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), 1);
-          }
-        } catch (error) {
-          console.error('바운딩 스피어 계산 오류:', error);
-          mergedGeometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), 1);
-        }
-      } catch (error) {
-        console.error('지오메트리 병합 오류:', error);
-        mergedGeometry = geometry;
-        mergedGeometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), 1);
+      // 인덱스 유효성 검사
+      if (a >= frontCount || b >= frontCount) {
+        continue;
+      }
+      
+      // 앞면 정점
+      const ax = vertices[a * 3];
+      const ay = vertices[a * 3 + 1];
+      const az = vertices[a * 3 + 2];
+      
+      const bx = vertices[b * 3];
+      const by = vertices[b * 3 + 1];
+      const bz = vertices[b * 3 + 2];
+      
+      // 뒷면 정점
+      const cx = vertices[(a + frontCount) * 3];
+      const cy = vertices[(a + frontCount) * 3 + 1];
+      const cz = vertices[(a + frontCount) * 3 + 2];
+      
+      const dx = vertices[(b + frontCount) * 3];
+      const dy = vertices[(b + frontCount) * 3 + 1];
+      const dz = vertices[(b + frontCount) * 3 + 2];
+      
+      // 유효하지 않은 정점 건너뛰기
+      if (isNaN(ax) || isNaN(ay) || isNaN(az) ||
+          isNaN(bx) || isNaN(by) || isNaN(bz) ||
+          isNaN(cx) || isNaN(cy) || isNaN(cz) ||
+          isNaN(dx) || isNaN(dy) || isNaN(dz)) {
+        continue;
+      }
+      
+      // 벽면 노멀 계산
+      const edgeDir = new THREE.Vector3(bx - ax, by - ay, bz - az).normalize();
+      const faceNormal = new THREE.Vector3(
+        normals[a * 3],
+        normals[a * 3 + 1],
+        normals[a * 3 + 2]
+      );
+      const wallNormal = new THREE.Vector3().crossVectors(edgeDir, faceNormal).normalize();
+      
+      // 유효하지 않은 노멀 검사
+      if (isNaN(wallNormal.x) || isNaN(wallNormal.y) || isNaN(wallNormal.z) ||
+          wallNormal.length() < 0.001) {
+        wallNormal.copy(averageNormal);
+      }
+      
+      // 첫 번째 삼각형: a, b, c
+      vertices.push(ax, ay, az);
+      vertices.push(bx, by, bz);
+      vertices.push(cx, cy, cz);
+      
+      for (let i = 0; i < 3; i++) {
+        normals.push(wallNormal.x, wallNormal.y, wallNormal.z);
+      }
+      
+      // 두 번째 삼각형: b, d, c
+      vertices.push(bx, by, bz);
+      vertices.push(dx, dy, dz);
+      vertices.push(cx, cy, cz);
+      
+      for (let i = 0; i < 3; i++) {
+        normals.push(wallNormal.x, wallNormal.y, wallNormal.z);
       }
     }
     
+    // Float32Array 생성
+    const positionsArray = new Float32Array(vertices);
+    const normalsArray = new Float32Array(normals);
+    
+    // 지오메트리 생성
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.BufferAttribute(positionsArray, 3));
+    geometry.setAttribute('normal', new THREE.BufferAttribute(normalsArray, 3));
+    
+    // 노멀 계산
+    geometry.computeVertexNormals();
+    
     // 재질 생성
-    const material = new THREE.MeshMatcapMaterial({
+    const surfaceMaterial = new THREE.MeshMatcapMaterial({
       matcap: refs.matcaps['Red Wax'],
-      transparent: true,
-      opacity: 0.9,
-      side: THREE.DoubleSide
+      side: THREE.DoubleSide,
+      flatShading: false,
     });
     
     // 메시 생성
-    flipperMesh = new THREE.Mesh(mergedGeometry, material);
-    flipperMesh.userData.isFlipperMesh = true;
-    refs.scene.add(flipperMesh);
+    const surfaceMesh = new THREE.Mesh(geometry, surfaceMaterial);
+    surfaceMesh.userData.isFlipperMesh = true;
+    refs.scene.add(surfaceMesh);
+    
+    // 참조 저장
+    flipperMesh = surfaceMesh;
     
     // 성공 메시지 업데이트
     updateFlipperInfoText(`플리퍼가 생성되었습니다. 두께: ${flipperThickness}mm`);
@@ -1008,6 +1049,9 @@ export function generateFlipper() {
   }
 }
 
+/**
+ * 점과 선분 사이의 거리 계산 함수
+ */
 function distanceToLineSegment(px, py, x1, y1, x2, y2) {
   const A = px - x1;
   const B = py - y1;
@@ -1038,6 +1082,224 @@ function distanceToLineSegment(px, py, x1, y1, x2, y2) {
   const dy = py - yy;
   
   return Math.sqrt(dx * dx + dy * dy);
+}
+
+/**
+ * 밀도 높은 삼각형 그리드 생성
+ */
+function createDenseTriangleGrid(boundaryPoints, gridSize = 40) {
+  // 경계 상자 찾기
+  const minX = Math.min(...boundaryPoints.map(p => p.x));
+  const maxX = Math.max(...boundaryPoints.map(p => p.x));
+  const minY = Math.min(...boundaryPoints.map(p => p.y));
+  const maxY = Math.max(...boundaryPoints.map(p => p.y));
+  
+  // 지정된 해상도로 조밀한 그리드 생성
+  const stepX = (maxX - minX) / gridSize;
+  const stepY = (maxY - minY) / gridSize;
+  
+  // 정점 생성
+  const vertices = [];
+  
+  // 다각형 내부의 그리드 점 생성
+  for (let i = 0; i <= gridSize; i++) {
+    for (let j = 0; j <= gridSize; j++) {
+      const x = minX + i * stepX;
+      const y = minY + j * stepY;
+      const point = new THREE.Vector2(x, y);
+      
+      if (isPointInPolygon(point, boundaryPoints)) {
+        vertices.push(point.clone());
+      }
+    }
+  }
+  
+  // 경계 점 추가
+  boundaryPoints.forEach(p => {
+    vertices.push(p.clone());
+  });
+  
+  // Delaunay 삼각분할 생성
+  const delaunay = computeDelaunay(vertices);
+  
+  // 경계 내부의 삼각형 필터링
+  const triangleVertices = [];
+  
+  for (let i = 0; i < delaunay.length; i += 3) {
+    const p0 = delaunay[i];
+    const p1 = delaunay[i + 1];
+    const p2 = delaunay[i + 2];
+    
+    // 삼각형 중심 계산
+    const centroid = new THREE.Vector2(
+      (p0.x + p1.x + p2.x) / 3,
+      (p0.y + p1.y + p2.y) / 3
+    );
+    
+    // 중심이 경계 내부에 있으면 삼각형 유지
+    if (isPointInPolygon(centroid, boundaryPoints)) {
+      triangleVertices.push(p0, p1, p2);
+    }
+  }
+  
+  return triangleVertices;
+}
+
+/**
+ * 간단한 Delaunay 삼각분할
+ */
+function computeDelaunay(points) {
+  // 모든 점을 포함하는 슈퍼 삼각형 생성
+  const minX = Math.min(...points.map(p => p.x));
+  const maxX = Math.max(...points.map(p => p.x));
+  const minY = Math.min(...points.map(p => p.y));
+  const maxY = Math.max(...points.map(p => p.y));
+  
+  const dx = maxX - minX;
+  const dy = maxY - minY;
+  const dmax = Math.max(dx, dy) * 2;
+  
+  const superTriangle = [
+    new THREE.Vector2(minX - dmax, minY - dmax),
+    new THREE.Vector2(minX + dx + dmax, minY - dmax),
+    new THREE.Vector2(minX - dmax, minY + dy + dmax)
+  ];
+  
+  // 슈퍼 삼각형으로 시작
+  const triangles = [superTriangle[0], superTriangle[1], superTriangle[2]];
+  
+  // 점을 하나씩 추가
+  for (let i = 0; i < points.length; i++) {
+    const p = points[i];
+    
+    // 해당 점이 외접원에 포함되는 삼각형 찾기
+    const badTriangles = [];
+    
+    for (let j = 0; j < triangles.length; j += 3) {
+      const t0 = triangles[j];
+      const t1 = triangles[j + 1];
+      const t2 = triangles[j + 2];
+      
+      if (isPointInCircumcircle(p, t0, t1, t2)) {
+        badTriangles.push(j);
+      }
+    }
+    
+    // 다각형 구멍의 경계 찾기
+    const polygon = [];
+    
+    for (let j = 0; j < badTriangles.length; j++) {
+      const t = badTriangles[j];
+      
+      // 삼각형의 각 엣지
+      const edges = [
+        [triangles[t], triangles[t + 1]],
+        [triangles[t + 1], triangles[t + 2]],
+        [triangles[t + 2], triangles[t]]
+      ];
+      
+      // 엣지가 다른 잘못된 삼각형과 공유되는지 확인
+      for (const edge of edges) {
+        let isShared = false;
+        
+        for (let k = 0; k < badTriangles.length; k++) {
+          if (j === k) continue;
+          
+          const otherT = badTriangles[k];
+          const otherEdges = [
+            [triangles[otherT], triangles[otherT + 1]],
+            [triangles[otherT + 1], triangles[otherT + 2]],
+            [triangles[otherT + 2], triangles[otherT]]
+          ];
+          
+          for (const otherEdge of otherEdges) {
+            if ((edge[0] === otherEdge[0] && edge[1] === otherEdge[1]) ||
+                (edge[0] === otherEdge[1] && edge[1] === otherEdge[0])) {
+              isShared = true;
+              break;
+            }
+          }
+          
+          if (isShared) break;
+        }
+        
+        if (!isShared) {
+          polygon.push(edge[0], edge[1]);
+        }
+      }
+    }
+    
+    // 잘못된 삼각형 제거
+    badTriangles.sort((a, b) => b - a);
+    
+    for (const t of badTriangles) {
+      triangles.splice(t, 3);
+    }
+    
+    // 점과 다각형 엣지를 연결하는 새 삼각형 추가
+    for (let j = 0; j < polygon.length; j += 2) {
+      triangles.push(polygon[j], polygon[j + 1], p);
+    }
+  }
+  
+  // 슈퍼 삼각형과 정점을 공유하는 삼각형 제거
+  const result = [];
+  
+  for (let i = 0; i < triangles.length; i += 3) {
+    const t0 = triangles[i];
+    const t1 = triangles[i + 1];
+    const t2 = triangles[i + 2];
+    
+    const usesSuperTriangle = 
+      superTriangle.some(sp => 
+        (t0.x === sp.x && t0.y === sp.y) || 
+        (t1.x === sp.x && t1.y === sp.y) || 
+        (t2.x === sp.x && t2.y === sp.y)
+      );
+    
+    if (!usesSuperTriangle) {
+      result.push(t0, t1, t2);
+    }
+  }
+  
+  return result;
+}
+
+/**
+ * 점이 삼각형의 외접원 내부에 있는지 확인
+ */
+function isPointInCircumcircle(p, a, b, c) {
+  const ax = a.x - p.x;
+  const ay = a.y - p.y;
+  const bx = b.x - p.x;
+  const by = b.y - p.y;
+  const cx = c.x - p.x;
+  const cy = c.y - p.y;
+  
+  const det = 
+    (ax * ax + ay * ay) * (bx * cy - cx * by) -
+    (bx * bx + by * by) * (ax * cy - cx * ay) +
+    (cx * cx + cy * cy) * (ax * by - bx * ay);
+  
+  return det > 0;
+}
+
+/**
+ * 점이 다각형 내부에 있는지 확인
+ */
+function isPointInPolygon(point, polygon) {
+  let inside = false;
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const xi = polygon[i].x, yi = polygon[i].y;
+    const xj = polygon[j].x, yj = polygon[j].y;
+    
+    const intersect = ((yi > point.y) !== (yj > point.y)) &&
+      (point.x < (xj - xi) * (point.y - yi) / (yj - yi) + xi);
+    
+    if (intersect) inside = !inside;
+  }
+  
+  return inside;
 }
 
 /**
