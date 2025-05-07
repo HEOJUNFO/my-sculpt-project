@@ -713,25 +713,33 @@ export function generateFlipper() {
   updateFlipperInfoText('플리퍼를 생성하는 중...');
   
   try {
-    // 1. 영역 중심과 평균 노멀 계산
-    const centroid = new THREE.Vector3();
-    const averageNormal = new THREE.Vector3();
-    
-    drawingPoints.forEach(point => {
-      centroid.add(point.position);
-      averageNormal.add(point.normal);
+    // 1. 모든 경계점 수집
+    const boundaryPoints = [];
+    selectedAreaPoints.forEach(point => {
+      boundaryPoints.push(point.clone());
     });
     
-    centroid.divideScalar(drawingPoints.length);
+    // 2. 평균 노멀 계산
+    const averageNormal = new THREE.Vector3();
+    drawingPoints.forEach(pointData => {
+      averageNormal.add(pointData.normal);
+    });
     
-    // 노멀 유효성 확인
+    // 유효한 노멀 확인
     if (averageNormal.length() < 0.001) {
       averageNormal.set(0, 0, 1);
     } else {
       averageNormal.normalize();
     }
     
-    // 2. 로컬 좌표계 설정
+    // 3. 평균 노멀과 무게중심을 이용하여 평면 생성
+    const centroid = new THREE.Vector3();
+    boundaryPoints.forEach(point => {
+      centroid.add(point);
+    });
+    centroid.divideScalar(boundaryPoints.length);
+    
+    // 4. 튼튼한 축으로 경계점을 평면에 투영
     let tempUp = new THREE.Vector3(0, 1, 0);
     if (Math.abs(averageNormal.dot(tempUp)) > 0.9) {
       tempUp.set(1, 0, 0);
@@ -740,57 +748,146 @@ export function generateFlipper() {
     const tangent1 = new THREE.Vector3().crossVectors(averageNormal, tempUp).normalize();
     const tangent2 = new THREE.Vector3().crossVectors(averageNormal, tangent1).normalize();
     
-    // 3. 3D 점들을 2D 평면에 투영
+    // 경계점을 2D로 투영
     const boundary2D = [];
-    drawingPoints.forEach(point => {
-      const relativePos = point.position.clone().sub(centroid);
+    boundaryPoints.forEach(point => {
+      const relativePos = point.clone().sub(centroid);
       const x = relativePos.dot(tangent1);
       const y = relativePos.dot(tangent2);
       boundary2D.push(new THREE.Vector2(x, y));
     });
     
-    // 4. 2D 형상 생성 (THREE.Shape)
-    const shape = new THREE.Shape();
-    shape.moveTo(boundary2D[0].x, boundary2D[0].y);
-    for (let i = 1; i < boundary2D.length; i++) {
-      shape.lineTo(boundary2D[i].x, boundary2D[i].y);
-    }
-    shape.closePath();
+    // 5. 경계 정리
+    const cleanBoundary2D = [];
+    const minPointDistance = 0.0001;
     
-    // 5. 세분화된 메시 생성
-    const shapeGeometry = new THREE.ShapeGeometry(shape, 32);
-    
-    // 6. 2D 형상의 각 정점에 대해 최대 경계 거리 계산
-    const points2D = [];
-    const positions = shapeGeometry.getAttribute('position').array;
-    
-    for (let i = 0; i < positions.length; i += 3) {
-      const x = positions[i];
-      const y = positions[i + 1];
-      points2D.push(new THREE.Vector2(x, y));
+    for (let i = 0; i < boundary2D.length; i++) {
+      const p1 = boundary2D[i];
+      const p2 = boundary2D[(i + 1) % boundary2D.length];
+      
+      cleanBoundary2D.push(p1);
+      
+      if (p1.distanceTo(p2) < minPointDistance) {
+        continue;
+      }
     }
     
-    // 중심점 계산
+    // 고밀도 삼각형 그리드 사용
+    let triangles = createDenseTriangleGrid(cleanBoundary2D, 80);
+    
+    // 6. 삼각분할을 위한 3D 정점 생성 (개선된 레이캐스트)
+    const frontPositions = new Float32Array(triangles.length * 3);
+    const frontNormals = new Float32Array(triangles.length * 3);
+    
+    // 정점 맵 - 원래 점 인덱스에서 노멀이 있는 정점으로
+    const vertexMap = new Map();
+    
+    for (let i = 0; i < triangles.length; i++) {
+      const point2D = triangles[i];
+      
+      // 3D 정점 가져오기 또는 생성
+      let vertex3D;
+      const key = `${point2D.x.toFixed(6)},${point2D.y.toFixed(6)}`;
+      
+      if (vertexMap.has(key)) {
+        vertex3D = vertexMap.get(key);
+      } else {
+        // 2D 점을 3D로 변환
+        const worldPoint = centroid.clone()
+          .add(tangent1.clone().multiplyScalar(point2D.x))
+          .add(tangent2.clone().multiplyScalar(point2D.y));
+        
+        // 다양한 오프셋으로 다중 레이캐스팅
+        const raycastOffsets = [0.1, 0.2, 0.05, 0.15];
+        let bestIntersect = null;
+        let bestDistance = Infinity;
+        
+        for (const offset of raycastOffsets) {
+          const rayStart = worldPoint.clone().add(averageNormal.clone().multiplyScalar(offset));
+          const rayDir = averageNormal.clone().negate();
+          
+          const raycaster = new THREE.Raycaster(rayStart, rayDir);
+          raycaster.firstHitOnly = true;
+          const intersects = raycaster.intersectObject(refs.targetMesh, true);
+          
+          if (intersects.length > 0) {
+            const distance = intersects[0].distance;
+            if (distance < bestDistance) {
+              bestDistance = distance;
+              bestIntersect = intersects[0];
+            }
+          }
+        }
+        
+        if (bestIntersect) {
+          // 최적의 교차점과 노멀 사용
+          vertex3D = {
+            position: bestIntersect.point.clone(),
+            normal: bestIntersect.face.normal.clone().transformDirection(refs.targetMesh.matrixWorld),
+            point2D: new THREE.Vector2(point2D.x, point2D.y)
+          };
+          // z-fighting 방지
+          vertex3D.position.addScaledVector(vertex3D.normal, 0.002);
+        } else {
+          // 대체 - 평균 노멀이 있는 평면 점 사용
+          vertex3D = {
+            position: worldPoint.clone(),
+            normal: averageNormal.clone(),
+            point2D: new THREE.Vector2(point2D.x, point2D.y)
+          };
+        }
+        
+        vertexMap.set(key, vertex3D);
+      }
+      
+      // 앞면의 위치와 노멀 설정
+      frontPositions[i * 3] = vertex3D.position.x;
+      frontPositions[i * 3 + 1] = vertex3D.position.y;
+      frontPositions[i * 3 + 2] = vertex3D.position.z;
+      
+      frontNormals[i * 3] = vertex3D.normal.x;
+      frontNormals[i * 3 + 1] = vertex3D.normal.y;
+      frontNormals[i * 3 + 2] = vertex3D.normal.z;
+    }
+    
+    // 경계로부터의 거리를 계산할 2D 도형 생성
+    const shape2D = new THREE.Shape();
+    if (cleanBoundary2D.length > 0) {
+      shape2D.moveTo(cleanBoundary2D[0].x, cleanBoundary2D[0].y);
+      for (let i = 1; i < cleanBoundary2D.length; i++) {
+        shape2D.lineTo(cleanBoundary2D[i].x, cleanBoundary2D[i].y);
+      }
+      shape2D.closePath();
+    }
+    
+    // 경계로부터의 최대 거리 찾기
     const centroid2D = new THREE.Vector2();
-    boundary2D.forEach(point => centroid2D.add(point));
-    centroid2D.divideScalar(boundary2D.length);
+    cleanBoundary2D.forEach(point => {
+      centroid2D.add(point);
+    });
+    centroid2D.divideScalar(cleanBoundary2D.length);
     
-    // 최대 경계 거리 계산
     let maxDistanceFromBorder = 0;
-    for (const point of boundary2D) {
-      const distanceToCentroid = point.distanceTo(centroid2D);
-      maxDistanceFromBorder = Math.max(maxDistanceFromBorder, distanceToCentroid);
-    }
+    cleanBoundary2D.forEach(point => {
+      const distToBoundary = point.distanceTo(centroid2D);
+      maxDistanceFromBorder = Math.max(maxDistanceFromBorder, distToBoundary);
+    });
     
-    // 7. 각 정점의 경계와의 거리 계산
+    // 7. 가변 압출로 뒷면 위치 생성
+    const backPositions = new Float32Array(frontPositions.length);
+    const backNormals = new Float32Array(frontNormals.length);
+    
+    // 각 정점에 대한 경계로부터의 거리 계산
     const distancesFromBorder = [];
-    for (const point2D of points2D) {
+    
+    for (let i = 0; i < triangles.length; i++) {
+      const point2D = triangles[i];
+      
       let minDistToBorder = Number.MAX_VALUE;
       
-      // 각 경계 선분과의 최소 거리 계산
-      for (let j = 0; j < boundary2D.length; j++) {
-        const p1 = boundary2D[j];
-        const p2 = boundary2D[(j + 1) % boundary2D.length];
+      for (let j = 0; j < cleanBoundary2D.length; j++) {
+        const p1 = cleanBoundary2D[j];
+        const p2 = cleanBoundary2D[(j + 1) % cleanBoundary2D.length];
         
         const distToSegment = distanceToLineSegment(
           point2D.x, point2D.y,
@@ -801,134 +898,118 @@ export function generateFlipper() {
         minDistToBorder = Math.min(minDistToBorder, distToSegment);
       }
       
-      // 거리값 정규화 (0~1 사이)
       const normalizedDistance = Math.min(minDistToBorder / maxDistanceFromBorder, 1);
-      distancesFromBorder.push(normalizedDistance);
+      distancesFromBorder[i] = normalizedDistance;
     }
     
-    // 8. 3D 정점 및 노멀 생성
-    const vertices = [];
-    const normals = [];
-    
-    // 각 2D 점을 3D로 변환하고 레이캐스팅으로 표면 찾기
-    for (let i = 0; i < points2D.length; i++) {
-      const point2D = points2D[i];
+    // 유효하지 않은 삼각형 필터링
+    const validTriangleIndices = [];
+    for (let i = 0; i < triangles.length / 3; i++) {
+      const idx1 = i * 3;
+      const idx2 = idx1 + 1;
+      const idx3 = idx1 + 2;
       
-      // 2D 좌표의 유효성 검사
-      if (isNaN(point2D.x) || isNaN(point2D.y)) {
-        continue;
-      }
+      let hasInvalidCoord = false;
       
-      // 3D 공간으로 역투영
-      const pos3D = centroid.clone()
-        .add(tangent1.clone().multiplyScalar(point2D.x))
-        .add(tangent2.clone().multiplyScalar(point2D.y));
-      
-      // 여러 방향에서 레이캐스트 시도
-      const raycastOffsets = [0.2, 0.1, 0.3, 0.05];
-      let bestIntersect = null;
-      
-      for (const offset of raycastOffsets) {
-        if (bestIntersect) break;
+      for (let j = 0; j < 3; j++) {
+        const x = frontPositions[(idx1 + j) * 3];
+        const y = frontPositions[(idx1 + j) * 3 + 1];
+        const z = frontPositions[(idx1 + j) * 3 + 2];
         
-        const rayOrigin = pos3D.clone().addScaledVector(averageNormal, offset);
-        const rayDirection = averageNormal.clone().negate();
-        
-        try {
-          const raycaster = new THREE.Raycaster(rayOrigin, rayDirection);
-          raycaster.firstHitOnly = true;
-          const intersects = raycaster.intersectObject(refs.targetMesh, true);
-          
-          if (intersects.length > 0) {
-            bestIntersect = intersects[0];
-          }
-        } catch (err) {
-          console.warn('레이캐스트 오류:', err);
+        if (isNaN(x) || isNaN(y) || isNaN(z)) {
+          hasInvalidCoord = true;
+          break;
         }
       }
       
-      let frontVertex, frontNormal;
-      
-      if (bestIntersect) {
-        frontVertex = bestIntersect.point.clone();
-        frontNormal = bestIntersect.face.normal.clone();
-        frontNormal.transformDirection(refs.targetMesh.matrixWorld);
-        
-        // 충돌 지점 약간 오프셋
-        frontVertex.addScaledVector(frontNormal, 0.001);
-      } else {
-        // 레이캐스트 실패 시 기본값 사용
-        frontVertex = pos3D.clone();
-        frontNormal = averageNormal.clone();
+      if (!hasInvalidCoord) {
+        validTriangleIndices.push(idx1, idx2, idx3);
       }
+    }
+    
+    // 경계로부터의 거리에 따라 압출 적용
+    for (let i = 0; i < frontPositions.length; i += 3) {
+      const vertexIndex = i / 3;
+      const nx = frontNormals[i];
+      const ny = frontNormals[i + 1];
+      const nz = frontNormals[i + 2];
       
-      // 유효성 검사
-      if (isNaN(frontVertex.x) || isNaN(frontVertex.y) || isNaN(frontVertex.z)) {
-        frontVertex.set(pos3D.x || 0, pos3D.y || 0, pos3D.z || 0);
-      }
-      
-      if (isNaN(frontNormal.x) || isNaN(frontNormal.y) || isNaN(frontNormal.z)) {
-        frontNormal.copy(averageNormal);
-      }
-      
-      // 경계 거리에 따른 두께 계산 (0.2mm ~ 설정값)
-      const normalizedDistance = distancesFromBorder[i];
-      
-      // 시그모이드 함수로 두께 변화 (경계: 얇게, 중심: 두껍게)
+      const normalizedDistance = distancesFromBorder[vertexIndex];
+       
+      // 시그모이드 함수로 크기 조정
       const sigmoidValue = normalizedDistance / (0.1 + normalizedDistance);
       const scaleFactor = sigmoidValue / (1 / (0.1 + 1));
       
-      // 최소 두께(경계)에서 최대 두께(중심)까지 변화
-      const extrusionAmount = (0.2 + (flipperThickness - 0.2) * scaleFactor) * 0.01;
+      // flipperThickness 사용
+      const extrusionAmount = (flipperThickness * 0.01) * scaleFactor;
+    
+      // 가변 두께로 노멀을 따라 오프셋
+      backPositions[i] = frontPositions[i] + nx * extrusionAmount;
+      backPositions[i + 1] = frontPositions[i + 1] + ny * extrusionAmount;
+      backPositions[i + 2] = frontPositions[i + 2] + nz * extrusionAmount;
       
-      // 앞면 정점 추가
-      vertices.push(frontVertex.x, frontVertex.y, frontVertex.z);
-      normals.push(frontNormal.x, frontNormal.y, frontNormal.z);
-      
-      // 뒷면 정점 추가 (두께 적용)
-      const backVertex = frontVertex.clone().addScaledVector(frontNormal, extrusionAmount);
-      vertices.push(backVertex.x, backVertex.y, backVertex.z);
-      normals.push(-frontNormal.x, -frontNormal.y, -frontNormal.z);
+      // 뒷면을 위한 노멀 반전
+      backNormals[i] = -nx;
+      backNormals[i + 1] = -ny;
+      backNormals[i + 2] = -nz;
     }
     
-    // 9. 삼각형 인덱스 생성
-    const indices = [];
-    const frontCount = points2D.length;
+    // 정점과 노멀 수집
+    const positionArray = [];
+    const normalArray = [];
     
-    // 앞면 및 뒷면 삼각형
-    for (let i = 0; i < shapeGeometry.index.count; i += 3) {
-      const a = shapeGeometry.index.array[i];
-      const b = shapeGeometry.index.array[i + 1];
-      const c = shapeGeometry.index.array[i + 2];
-      
-      // 앞면 삼각형
-      indices.push(a, b, c);
-      
-      // 뒷면 삼각형 (반대 방향)
-      indices.push(a + frontCount, c + frontCount, b + frontCount);
+    // 앞면 정점 추가
+    for (let i = 0; i < frontPositions.length; i++) {
+      positionArray.push(frontPositions[i]);
+      normalArray.push(frontNormals[i]);
     }
     
-    // 측면 삼각형
-    // 이 부분은 매우 복잡합니다 - 경계 엣지를 찾아 측면 삼각형을 생성해야 합니다
+    // 뒷면 정점 추가
+    for (let i = 0; i < backPositions.length; i++) {
+      positionArray.push(backPositions[i]);
+      normalArray.push(backNormals[i]);
+    }
+    
+    // 측면 생성
+    const frontFaceCount = triangles.length / 3;
+    const vertexCount = frontPositions.length / 3;
+    
+    // 엣지 맵으로 엣지 추적
     const edgeMap = new Map();
     
-    // 모든 엣지를 가장자리로 표시
-    for (let i = 0; i < shapeGeometry.index.count; i += 3) {
-      const a = shapeGeometry.index.array[i];
-      const b = shapeGeometry.index.array[i + 1];
-      const c = shapeGeometry.index.array[i + 2];
+    // 앞면의 엣지 찾기
+    for (let i = 0; i < frontFaceCount; i++) {
+      const idx0 = i * 3;
+      const idx1 = idx0 + 1;
+      const idx2 = idx0 + 2;
       
-      addEdgeToMap(a, b);
-      addEdgeToMap(b, c);
-      addEdgeToMap(c, a);
+      // 유효하지 않은 정점 건너뛰기
+      let hasInvalidCoord = false;
+      for (let j = 0; j < 3; j++) {
+        const x = frontPositions[(idx0 + j) * 3];
+        const y = frontPositions[(idx0 + j) * 3 + 1];
+        const z = frontPositions[(idx0 + j) * 3 + 2];
+        
+        if (isNaN(x) || isNaN(y) || isNaN(z)) {
+          hasInvalidCoord = true;
+          break;
+        }
+      }
+      
+      if (hasInvalidCoord) continue;
+      
+      // 세 개의 모든 엣지 확인
+      addEdge(idx0, idx1);
+      addEdge(idx1, idx2);
+      addEdge(idx2, idx0);
     }
     
-    // 엣지 맵에 엣지 추가 함수
-    function addEdgeToMap(a, b) {
+    // 엣지 추가 도우미 함수
+    function addEdge(a, b) {
       const edgeKey = a < b ? `${a}-${b}` : `${b}-${a}`;
       
       if (edgeMap.has(edgeKey)) {
-        // 이미 존재하는 엣지는 내부 엣지이므로 제거
+        // 내부 엣지 제거 (두 번 나타남)
         edgeMap.delete(edgeKey);
       } else {
         // 새 엣지 추가
@@ -936,33 +1017,33 @@ export function generateFlipper() {
       }
     }
     
-    // 남은 엣지는 경계 엣지임 - 측면 삼각형 생성
+    // 남은 엣지가 경계 엣지
     for (const [key, [a, b]] of edgeMap.entries()) {
-      // 인덱스 유효성 검사
-      if (a >= frontCount || b >= frontCount) {
+      // 인덱스 검증
+      if (a >= frontPositions.length / 3 || b >= frontPositions.length / 3) {
         continue;
       }
       
       // 앞면 정점
-      const ax = vertices[a * 3];
-      const ay = vertices[a * 3 + 1];
-      const az = vertices[a * 3 + 2];
+      const ax = frontPositions[a * 3];
+      const ay = frontPositions[a * 3 + 1];
+      const az = frontPositions[a * 3 + 2];
       
-      const bx = vertices[b * 3];
-      const by = vertices[b * 3 + 1];
-      const bz = vertices[b * 3 + 2];
+      const bx = frontPositions[b * 3];
+      const by = frontPositions[b * 3 + 1];
+      const bz = frontPositions[b * 3 + 2];
       
       // 뒷면 정점
-      const cx = vertices[(a + frontCount) * 3];
-      const cy = vertices[(a + frontCount) * 3 + 1];
-      const cz = vertices[(a + frontCount) * 3 + 2];
+      const cx = backPositions[a * 3];
+      const cy = backPositions[a * 3 + 1];
+      const cz = backPositions[a * 3 + 2];
       
-      const dx = vertices[(b + frontCount) * 3];
-      const dy = vertices[(b + frontCount) * 3 + 1];
-      const dz = vertices[(b + frontCount) * 3 + 2];
+      const dx = backPositions[b * 3];
+      const dy = backPositions[b * 3 + 1];
+      const dz = backPositions[b * 3 + 2];
       
       // 유효하지 않은 정점 건너뛰기
-      if (isNaN(ax) || isNaN(ay) || isNaN(az) ||
+      if (isNaN(ax) || isNaN(ay) || isNaN(az) || 
           isNaN(bx) || isNaN(by) || isNaN(bz) ||
           isNaN(cx) || isNaN(cy) || isNaN(cz) ||
           isNaN(dx) || isNaN(dy) || isNaN(dz)) {
@@ -970,52 +1051,58 @@ export function generateFlipper() {
       }
       
       // 벽면 노멀 계산
-      const edgeDir = new THREE.Vector3(bx - ax, by - ay, bz - az).normalize();
+      const edgeDir = new THREE.Vector3(
+        bx - ax,
+        by - ay,
+        bz - az
+      ).normalize();
+      
       const faceNormal = new THREE.Vector3(
-        normals[a * 3],
-        normals[a * 3 + 1],
-        normals[a * 3 + 2]
+        frontNormals[a * 3],
+        frontNormals[a * 3 + 1],
+        frontNormals[a * 3 + 2]
       );
+      
       const wallNormal = new THREE.Vector3().crossVectors(edgeDir, faceNormal).normalize();
       
-      // 유효하지 않은 노멀 검사
+      // 유효한 노멀 확인
       if (isNaN(wallNormal.x) || isNaN(wallNormal.y) || isNaN(wallNormal.z) ||
           wallNormal.length() < 0.001) {
         wallNormal.copy(averageNormal);
       }
       
       // 첫 번째 삼각형: a, b, c
-      vertices.push(ax, ay, az);
-      vertices.push(bx, by, bz);
-      vertices.push(cx, cy, cz);
+      positionArray.push(ax, ay, az);
+      positionArray.push(bx, by, bz);
+      positionArray.push(cx, cy, cz);
       
       for (let i = 0; i < 3; i++) {
-        normals.push(wallNormal.x, wallNormal.y, wallNormal.z);
+        normalArray.push(wallNormal.x, wallNormal.y, wallNormal.z);
       }
       
       // 두 번째 삼각형: b, d, c
-      vertices.push(bx, by, bz);
-      vertices.push(dx, dy, dz);
-      vertices.push(cx, cy, cz);
+      positionArray.push(bx, by, bz);
+      positionArray.push(dx, dy, dz);
+      positionArray.push(cx, cy, cz);
       
       for (let i = 0; i < 3; i++) {
-        normals.push(wallNormal.x, wallNormal.y, wallNormal.z);
+        normalArray.push(wallNormal.x, wallNormal.y, wallNormal.z);
       }
     }
     
-    // Float32Array 생성
-    const positionsArray = new Float32Array(vertices);
-    const normalsArray = new Float32Array(normals);
+    // Float32Arrays 생성
+    const positions = new Float32Array(positionArray);
+    const normals = new Float32Array(normalArray);
     
     // 지오메트리 생성
     const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute('position', new THREE.BufferAttribute(positionsArray, 3));
-    geometry.setAttribute('normal', new THREE.BufferAttribute(normalsArray, 3));
+    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    geometry.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
     
-    // 노멀 계산
+    // 부드러운 음영을 위한 정점 노멀 계산
     geometry.computeVertexNormals();
     
-    // 재질 생성
+    // 원래 모델과 유사한 재질 생성
     const surfaceMaterial = new THREE.MeshMatcapMaterial({
       matcap: refs.matcaps['Red Wax'],
       side: THREE.DoubleSide,
@@ -1050,42 +1137,7 @@ export function generateFlipper() {
 }
 
 /**
- * 점과 선분 사이의 거리 계산 함수
- */
-function distanceToLineSegment(px, py, x1, y1, x2, y2) {
-  const A = px - x1;
-  const B = py - y1;
-  const C = x2 - x1;
-  const D = y2 - y1;
-
-  const dot = A * C + B * D;
-  const len_sq = C * C + D * D;
-  let param = -1;
-  
-  if (len_sq !== 0)
-    param = dot / len_sq;
-
-  let xx, yy;
-
-  if (param < 0) {
-    xx = x1;
-    yy = y1;
-  } else if (param > 1) {
-    xx = x2;
-    yy = y2;
-  } else {
-    xx = x1 + param * C;
-    yy = y1 + param * D;
-  }
-
-  const dx = px - xx;
-  const dy = py - yy;
-  
-  return Math.sqrt(dx * dx + dy * dy);
-}
-
-/**
- * 밀도 높은 삼각형 그리드 생성
+ * 고밀도 삼각형 그리드 생성 함수
  */
 function createDenseTriangleGrid(boundaryPoints, gridSize = 40) {
   // 경계 상자 찾기
@@ -1300,6 +1352,41 @@ function isPointInPolygon(point, polygon) {
   }
   
   return inside;
+}
+
+/**
+ * 점과 선분 사이의 거리 계산 함수
+ */
+function distanceToLineSegment(px, py, x1, y1, x2, y2) {
+  const A = px - x1;
+  const B = py - y1;
+  const C = x2 - x1;
+  const D = y2 - y1;
+
+  const dot = A * C + B * D;
+  const len_sq = C * C + D * D;
+  let param = -1;
+  
+  if (len_sq !== 0)
+    param = dot / len_sq;
+
+  let xx, yy;
+
+  if (param < 0) {
+    xx = x1;
+    yy = y1;
+  } else if (param > 1) {
+    xx = x2;
+    yy = y2;
+  } else {
+    xx = x1 + param * C;
+    yy = y1 + param * D;
+  }
+
+  const dx = px - xx;
+  const dy = py - yy;
+  
+  return Math.sqrt(dx * dx + dy * dy);
 }
 
 /**
