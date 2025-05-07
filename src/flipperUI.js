@@ -26,7 +26,7 @@ export function initFlipperUI() {
       position: absolute;
       left: 10px;
       bottom: 10px;
-      width: 250px;
+      width: 270px;
       background: #d9d9d9;
       color: #fff;
       font: 14px sans-serif;
@@ -78,14 +78,41 @@ export function initFlipperUI() {
           <input 
             type="range" 
             id="flipperThicknessRange" 
-            min="0.5" 
-            max="3" 
+            min="0.2" 
+            max="5" 
             step="0.1" 
             value="1.5"
             class="custom-slider"
             style="flex: 1; margin-right: 8px;"
           />
           <span id="thickness-value" style="color: #000; font-weight: bold;">1.5mm</span>
+        </div>
+      </div>
+      
+      <div class="slider-row" style="
+        background-color: #ccc; 
+        padding: 8px;
+        margin-bottom: 12px;
+        border-radius: 4px;
+      ">
+        <label for="flipperGridResolution" style="
+          display: block;
+          font-size: 13px;
+          margin-bottom: 6px;
+          color: #000;
+        ">격자 해상도</label>
+        <div style="display: flex; align-items: center;">
+          <input 
+            type="range" 
+            id="flipperGridResolution" 
+            min="20" 
+            max="100" 
+            step="10" 
+            value="80"
+            class="custom-slider"
+            style="flex: 1; margin-right: 8px;"
+          />
+          <span id="resolution-value" style="color: #000; font-weight: bold;">80</span>
         </div>
       </div>
       
@@ -148,6 +175,7 @@ export function initFlipperUI() {
         cursor: pointer;
         font-size: 14px;
         height: 36px;
+        disabled: true;
       ">
         <span style="display: flex; align-items: center; justify-content: center;">
           <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 8px;">
@@ -189,6 +217,9 @@ export function initFlipperUI() {
   }
 }
 
+// 전역 변수로 격자 해상도 및 설정 추가
+let gridResolution = 80;
+
 /**
  * Set up event listeners for the Flipper UI
  */
@@ -208,6 +239,24 @@ function setupFlipperEvents() {
       
       // 플리퍼 두께 설정
       setFlipperThickness(value);
+    });
+  }
+  
+  // 격자 해상도 슬라이더
+  const gridResolutionSlider = document.getElementById('flipperGridResolution');
+  const resolutionValue = document.getElementById('resolution-value');
+  
+  if (gridResolutionSlider) {
+    gridResolutionSlider.addEventListener('input', () => {
+      gridResolution = parseInt(gridResolutionSlider.value);
+      
+      // UI 업데이트
+      if (resolutionValue) {
+        resolutionValue.textContent = `${gridResolution}`;
+      }
+      
+      // 업데이트된 코드에서는 createDenseTriangleGrid 함수에서 gridSize 매개변수 사용
+      // 여기에서는 전역 변수로 저장하고 플리퍼 생성 시 접근
     });
   }
   
@@ -232,6 +281,10 @@ function setupFlipperEvents() {
       
       // 약간의 지연 후 실행 (UI 업데이트를 위해)
       setTimeout(() => {
+        // 새로운 코드는 gridResolution을 generateFlipper 함수 내부에서 사용
+        // 필요한 경우 여기서 전역 변수를 설정해야 함
+        window.flipperGridResolution = gridResolution;
+        
         const success = generateFlipper();
         
         // 버튼 상태 원복
@@ -263,6 +316,13 @@ function setupFlipperEvents() {
         if (success) {
           applyBtn.innerHTML = '<span style="display: flex; align-items: center; justify-content: center;"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 8px;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>플리퍼 적용 완료</span>';
           applyBtn.style.background = '#4CAF50';
+          
+          // 완료 버튼 활성화
+          const completeBtn = document.getElementById('btn-flipper-complete');
+          if (completeBtn) {
+            completeBtn.disabled = false;
+            completeBtn.classList.add('active');
+          }
         } else {
           applyBtn.innerHTML = '<span style="display: flex; align-items: center; justify-content: center;"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 8px;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>플리퍼 적용</span>';
           applyBtn.disabled = false;
@@ -274,6 +334,7 @@ function setupFlipperEvents() {
   // 완료 버튼
   const completeBtn = document.getElementById('btn-flipper-complete');
   if (completeBtn) {
+    completeBtn.disabled = true; // 초기에는 비활성화
     completeBtn.addEventListener('click', () => {
       // 리소스 정리
       cleanupFlipperModule();
@@ -310,6 +371,11 @@ function setupFlipperEvents() {
           applyBtn.style.background = '#555';
           applyBtn.innerHTML = '<span style="display: flex; align-items: center; justify-content: center;"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 8px;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>플리퍼 적용</span>';
         }
+        
+        if (completeBtn) {
+          completeBtn.disabled = true;
+          completeBtn.classList.remove('active');
+        }
       }
     });
   }
@@ -329,4 +395,7 @@ export function cleanupFlipperUI() {
   
   // 플리퍼 모듈 정리
   cleanupFlipperModule();
+  
+  // 전역 변수 삭제
+  delete window.flipperGridResolution;
 }
