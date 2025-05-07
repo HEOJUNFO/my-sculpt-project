@@ -58,7 +58,7 @@ function cleanupFlipperData() {
     }
   });
   
-  // 플리퍼 메시가 있다면 제거
+  // 플리퍼 메쉬가 있다면 제거
   if (flipperMesh && flipperMesh.parent) {
     flipperMesh.parent.remove(flipperMesh);
     flipperMesh.geometry.dispose();
@@ -664,6 +664,35 @@ function updateFlipperMesh() {
 }
 
 /**
+ * 지오메트리 유효성 검사 함수
+ */
+function validateGeometry(geometry) {
+  if (!geometry || !geometry.attributes || !geometry.attributes.position) {
+    console.error('유효하지 않은 지오메트리');
+    return null;
+  }
+  
+  const positions = geometry.attributes.position.array;
+  let hasNaN = false;
+  
+  // NaN 값 검사 및 수정
+  for (let i = 0; i < positions.length; i++) {
+    if (isNaN(positions[i])) {
+      hasNaN = true;
+      console.warn(`위치 인덱스 ${i}에서 NaN 발견, 0으로 대체`);
+      positions[i] = 0;
+    }
+  }
+  
+  if (hasNaN) {
+    geometry.attributes.position.needsUpdate = true;
+    console.warn('지오메트리의 NaN 값을 수정했습니다');
+  }
+  
+  return geometry;
+}
+
+/**
  * 플리퍼 생성
  */
 export function generateFlipper() {
@@ -687,158 +716,263 @@ export function generateFlipper() {
   // 프로세스 시작
   console.log('플리퍼 생성 시작...');
   
-  // 1. 영역 중심과 평균 노멀 계산
-  const centroid = new THREE.Vector3();
-  const averageNormal = new THREE.Vector3();
-  
-  drawingPoints.forEach(point => {
-    centroid.add(point.position);
-    averageNormal.add(point.normal);
-  });
-  
-  centroid.divideScalar(drawingPoints.length);
-  averageNormal.normalize();
-  
-  // 2. 로컬 좌표계 설정을 위한 기저 벡터 계산
-  let tempUp = new THREE.Vector3(0, 1, 0);
-  if (Math.abs(averageNormal.dot(tempUp)) > 0.9) {
-    tempUp.set(1, 0, 0);
-  }
-  
-  const tangent1 = new THREE.Vector3().crossVectors(averageNormal, tempUp).normalize();
-  const tangent2 = new THREE.Vector3().crossVectors(averageNormal, tangent1).normalize();
-  
-  // 3. 3D 점들을 2D 평면에 투영
-  const points2D = [];
-  drawingPoints.forEach(point => {
-    const relativePos = point.position.clone().sub(centroid);
-    const x = relativePos.dot(tangent1);
-    const y = relativePos.dot(tangent2);
-    points2D.push(new THREE.Vector2(x, y));
-  });
-  
-  // 4. 2D 형상 생성 (THREE.Shape)
-  const shape = new THREE.Shape();
-  
-  // 형상 윤곽선 정의
-  shape.moveTo(points2D[0].x, points2D[0].y);
-  for (let i = 1; i < points2D.length; i++) {
-    shape.lineTo(points2D[i].x, points2D[i].y);
-  }
-  shape.closePath();
-  
-  // 5. 형상 세분화 (더 부드러운 곡면을 위해)
-  const shapeGeometry = new THREE.ShapeGeometry(shape, 32);
-  
-  // 6. 세분화된 2D 형상의 각 정점을 3D 공간으로 역투영
-  const geometry = new THREE.BufferGeometry();
-  const vertices = [];
-  const normals = [];
-  
-  // 위쪽면 (top face)
-  const positions = shapeGeometry.getAttribute('position').array;
-  
-  for (let i = 0; i < positions.length; i += 3) {
-    const x2D = positions[i];
-    const y2D = positions[i + 1];
+  try {
+    // 1. 영역 중심과 평균 노멀 계산
+    const centroid = new THREE.Vector3();
+    const averageNormal = new THREE.Vector3();
     
-    // 3D 공간으로 역투영
-    const pos3D = centroid.clone()
-      .add(tangent1.clone().multiplyScalar(x2D))
-      .add(tangent2.clone().multiplyScalar(y2D));
+    drawingPoints.forEach(point => {
+      centroid.add(point.position);
+      averageNormal.add(point.normal);
+    });
     
-    // 가장 가까운 표면 점 찾기
-    const rayOrigin = pos3D.clone().addScaledVector(averageNormal, 0.2);
-    const rayDirection = averageNormal.clone().negate();
+    centroid.divideScalar(drawingPoints.length);
+    averageNormal.normalize();
     
-    const raycaster = new THREE.Raycaster(rayOrigin, rayDirection);
-    const intersects = raycaster.intersectObject(refs.targetMesh, true);
-    
-    if (intersects.length > 0) {
-      // 가장 가까운 교차점 사용
-      const hitNormal = intersects[0].face.normal.clone();
-      hitNormal.transformDirection(refs.targetMesh.matrixWorld);
-      
-      // 위쪽 면
-      const topVertex = intersects[0].point.clone().addScaledVector(hitNormal, 0.001);
-      vertices.push(topVertex.x, topVertex.y, topVertex.z);
-      normals.push(hitNormal.x, hitNormal.y, hitNormal.z);
-      
-      // 아래쪽 면 (bottom face) - 두께 적용
-      const bottomVertex = topVertex.clone().addScaledVector(hitNormal, flipperThickness * 0.01);
-      vertices.push(bottomVertex.x, bottomVertex.y, bottomVertex.z);
-      normals.push(-hitNormal.x, -hitNormal.y, -hitNormal.z); // 노멀 반전
-    } else {
-      // 레이캐스트 실패 시 평균 노멀 사용
-      // 위쪽 면
-      vertices.push(pos3D.x, pos3D.y, pos3D.z);
-      normals.push(averageNormal.x, averageNormal.y, averageNormal.z);
-      
-      // 아래쪽 면
-      const bottomVertex = pos3D.clone().addScaledVector(averageNormal, flipperThickness * 0.01);
-      vertices.push(bottomVertex.x, bottomVertex.y, bottomVertex.z);
-      normals.push(-averageNormal.x, -averageNormal.y, -averageNormal.z);
+    // 2. 로컬 좌표계 설정을 위한 기저 벡터 계산
+    let tempUp = new THREE.Vector3(0, 1, 0);
+    if (Math.abs(averageNormal.dot(tempUp)) > 0.9) {
+      tempUp.set(1, 0, 0);
     }
-  }
-  
-  // 삼각형 인덱스 생성
-  const indices = [];
-  const vertCount = vertices.length / 3;
-  const faceCount = vertCount / 2;
-  
-  // 위쪽 면과 아래쪽 면의 삼각형
-  for (let i = 0; i < faceCount; i += 3) {
-    // 위쪽 면 삼각형 (반시계 방향)
-    indices.push(i, i + 1, i + 2);
     
-    // 아래쪽 면 삼각형 (시계 방향으로 뒤집음)
-    indices.push(i + faceCount, i + faceCount + 2, i + faceCount + 1);
-  }
-  
-  // 측면 삼각형 생성 (위쪽과 아래쪽 면을 연결)
-  for (let i = 0; i < faceCount; i++) {
-    const next = (i + 1) % faceCount;
+    const tangent1 = new THREE.Vector3().crossVectors(averageNormal, tempUp).normalize();
+    const tangent2 = new THREE.Vector3().crossVectors(averageNormal, tangent1).normalize();
     
-    // 위쪽면 정점, 아래쪽면 정점, 다음 위쪽면 정점
-    indices.push(i, i + faceCount, next);
+    // 3. 3D 점들을 2D 평면에 투영
+    const points2D = [];
+    drawingPoints.forEach(point => {
+      const relativePos = point.position.clone().sub(centroid);
+      const x = relativePos.dot(tangent1);
+      const y = relativePos.dot(tangent2);
+      points2D.push(new THREE.Vector2(x, y));
+    });
     
-    // 다음 위쪽면 정점, 아래쪽면 정점, 다음 아래쪽면 정점
-    indices.push(next, i + faceCount, next + faceCount);
+    // 4. 2D 형상 생성 (THREE.Shape)
+    const shape = new THREE.Shape();
+    
+    // 형상 윤곽선 정의
+    shape.moveTo(points2D[0].x, points2D[0].y);
+    for (let i = 1; i < points2D.length; i++) {
+      shape.lineTo(points2D[i].x, points2D[i].y);
+    }
+    shape.closePath();
+    
+    // 5. 형상 세분화 (더 부드러운 곡면을 위해)
+    const shapeGeometry = new THREE.ShapeGeometry(shape, 32);
+    
+    // 6. 세분화된 2D 형상의 각 정점을 3D 공간으로 역투영
+    const geometry = new THREE.BufferGeometry();
+    const vertices = [];
+    const normals = [];
+    
+    // 위쪽면 (top face)
+    const positions = shapeGeometry.getAttribute('position').array;
+    
+    // 유효하지 않은 값 체크 함수
+    const isValidCoordinate = (x, y, z) => !isNaN(x) && !isNaN(y) && !isNaN(z) && 
+                                           isFinite(x) && isFinite(y) && isFinite(z);
+
+    for (let i = 0; i < positions.length; i += 3) {
+      const x2D = positions[i];
+      const y2D = positions[i + 1];
+      
+      // NaN 값 체크
+      if (!isValidCoordinate(x2D, y2D, 0)) {
+        console.warn(`유효하지 않은 2D 좌표 발견 (${x2D}, ${y2D}), 0으로 대체`);
+        const safeX = isValidCoordinate(x2D, 0, 0) ? x2D : 0;
+        const safeY = isValidCoordinate(0, y2D, 0) ? y2D : 0;
+        
+        // 안전한 값으로 계속 진행
+        const pos3D = centroid.clone()
+          .add(tangent1.clone().multiplyScalar(safeX))
+          .add(tangent2.clone().multiplyScalar(safeY));
+        
+        // 레이캐스트 대신 기본값 사용
+        vertices.push(pos3D.x, pos3D.y, pos3D.z);
+        normals.push(averageNormal.x, averageNormal.y, averageNormal.z);
+        
+        // 아래쪽 면
+        const bottomVertex = pos3D.clone().addScaledVector(averageNormal, flipperThickness * 0.01);
+        vertices.push(bottomVertex.x, bottomVertex.y, bottomVertex.z);
+        normals.push(-averageNormal.x, -averageNormal.y, -averageNormal.z);
+        
+        continue;
+      }
+      
+      // 3D 공간으로 역투영
+      const pos3D = centroid.clone()
+        .add(tangent1.clone().multiplyScalar(x2D))
+        .add(tangent2.clone().multiplyScalar(y2D));
+      
+      // 여러 방향에서 레이캐스트 시도 (더 강건한 접근법)
+      const raycastOffsets = [0.1, 0.2, 0.05];
+      let foundValidIntersection = false;
+      
+      for (const offset of raycastOffsets) {
+        if (foundValidIntersection) break;
+        
+        const rayOrigin = pos3D.clone().addScaledVector(averageNormal, offset);
+        const rayDirection = averageNormal.clone().negate();
+        
+        try {
+          const raycaster = new THREE.Raycaster(rayOrigin, rayDirection);
+          raycaster.firstHitOnly = true;
+          const intersects = raycaster.intersectObject(refs.targetMesh, true);
+          
+          if (intersects.length > 0) {
+            const hitPoint = intersects[0].point;
+            const hitNormal = intersects[0].face.normal.clone();
+            hitNormal.transformDirection(refs.targetMesh.matrixWorld);
+            
+            // 유효성 검사
+            if (isValidCoordinate(hitPoint.x, hitPoint.y, hitPoint.z) && 
+                isValidCoordinate(hitNormal.x, hitNormal.y, hitNormal.z)) {
+              
+              // 위쪽 면
+              const topVertex = hitPoint.clone().addScaledVector(hitNormal, 0.001);
+              vertices.push(topVertex.x, topVertex.y, topVertex.z);
+              normals.push(hitNormal.x, hitNormal.y, hitNormal.z);
+              
+              // 아래쪽 면 (bottom face) - 두께 적용
+              const bottomVertex = topVertex.clone().addScaledVector(hitNormal, flipperThickness * 0.01);
+              vertices.push(bottomVertex.x, bottomVertex.y, bottomVertex.z);
+              normals.push(-hitNormal.x, -hitNormal.y, -hitNormal.z); // 노멀 반전
+              
+              foundValidIntersection = true;
+            }
+          }
+        } catch (err) {
+          console.warn('레이캐스트 중 오류:', err);
+        }
+      }
+      
+      // 레이캐스트 실패 시 평균 노멀 사용 (안전한 폴백)
+      if (!foundValidIntersection) {
+        console.warn('레이캐스트 실패, 안전한 기본값 사용');
+        
+        // 위쪽 면
+        vertices.push(pos3D.x, pos3D.y, pos3D.z);
+        normals.push(averageNormal.x, averageNormal.y, averageNormal.z);
+        
+        // 아래쪽 면
+        const bottomVertex = pos3D.clone().addScaledVector(averageNormal, flipperThickness * 0.01);
+        vertices.push(bottomVertex.x, bottomVertex.y, bottomVertex.z);
+        normals.push(-averageNormal.x, -averageNormal.y, -averageNormal.z);
+      }
+    }
+    
+    // 삼각형 인덱스 생성
+    const indices = [];
+    const vertCount = vertices.length / 3;
+    const faceCount = vertCount / 2;
+    
+    // 유효하지 않은 좌표 체크
+    for (let i = 0; i < vertices.length; i += 3) {
+      if (!isValidCoordinate(vertices[i], vertices[i+1], vertices[i+2])) {
+        console.warn(`유효하지 않은 3D 좌표 발견 (${vertices[i]}, ${vertices[i+1]}, ${vertices[i+2]}), 0으로 대체`);
+        vertices[i] = 0;
+        vertices[i+1] = 0;
+        vertices[i+2] = 0;
+      }
+    }
+    
+    // 위쪽 면과 아래쪽 면의 삼각형
+    for (let i = 0; i < faceCount; i += 3) {
+      // 인덱스가 유효한지 확인
+      if (i + 2 < faceCount) {
+        // 위쪽 면 삼각형 (반시계 방향)
+        indices.push(i, i + 1, i + 2);
+        
+        // 아래쪽 면 삼각형 (시계 방향으로 뒤집음)
+        indices.push(i + faceCount, i + faceCount + 2, i + faceCount + 1);
+      }
+    }
+    
+    // 측면 삼각형 생성 (위쪽과 아래쪽 면을 연결)
+    for (let i = 0; i < faceCount; i++) {
+      const next = (i + 1) % faceCount;
+      
+      // 인덱스가 유효한지 확인
+      if (i < vertCount / 2 && next < vertCount / 2 &&
+          i + faceCount < vertCount && next + faceCount < vertCount) {
+        // 위쪽면 정점, 아래쪽면 정점, 다음 위쪽면 정점
+        indices.push(i, i + faceCount, next);
+        
+        // 다음 위쪽면 정점, 아래쪽면 정점, 다음 아래쪽면 정점
+        indices.push(next, i + faceCount, next + faceCount);
+      }
+    }
+    
+    // 버퍼 지오메트리 완성
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+    geometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+    geometry.setIndex(indices);
+    
+    // 지오메트리 검증 및 정리
+    let mergedGeometry = validateGeometry(geometry);
+    if (mergedGeometry) {
+      try {
+        mergedGeometry = BufferGeometryUtils.mergeVertices(mergedGeometry);
+        mergedGeometry.computeVertexNormals();
+        
+        // 바운딩 스피어 계산 전 최종 검증
+        mergedGeometry = validateGeometry(mergedGeometry);
+        if (mergedGeometry) {
+          // 안전한 바운딩 스피어 계산
+          try {
+            mergedGeometry.computeBoundingSphere();
+          } catch (error) {
+            console.error('바운딩 스피어 계산 오류:', error);
+            // 폴백: 수동으로 바운딩 스피어 설정
+            mergedGeometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), 1);
+          }
+          
+          // 추가 검증: 바운딩 스피어 반지름이 NaN인 경우
+          if (isNaN(mergedGeometry.boundingSphere.radius)) {
+            console.warn('바운딩 스피어 반지름이 NaN입니다. 기본값 설정');
+            mergedGeometry.boundingSphere.radius = 1;
+          }
+        }
+      } catch (error) {
+        console.error('지오메트리 병합 오류:', error);
+        // 검증 실패 시 기본 지오메트리 유지
+        mergedGeometry = geometry;
+        
+        // 폴백: 수동으로 바운딩 스피어 설정
+        mergedGeometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), 1);
+      }
+    }
+    
+    // 재질 생성
+    const material = new THREE.MeshMatcapMaterial({
+      matcap: refs.matcaps['Red Wax'],
+      transparent: true,
+      opacity: 0.9,
+      side: THREE.DoubleSide
+    });
+    
+    // 메시 생성
+    flipperMesh = new THREE.Mesh(mergedGeometry, material);
+    flipperMesh.userData.isFlipperMesh = true;
+    refs.scene.add(flipperMesh);
+    
+    // 성공 메시지 업데이트
+    updateFlipperInfoText(`플리퍼가 생성되었습니다. 두께: ${flipperThickness}mm`);
+    
+    // 적용 버튼 활성화
+    const applyBtn = document.getElementById('btn-apply-flipper');
+    if (applyBtn) {
+      applyBtn.disabled = false;
+      applyBtn.classList.add('active');
+    }
+    
+    console.log('플리퍼 생성 완료');
+    return true;
+  } catch (error) {
+    console.error('플리퍼 생성 중 오류 발생:', error);
+    updateFlipperInfoText('플리퍼 생성 중 오류가 발생했습니다. 다시 시도해주세요.');
+    return false;
   }
-  
-  // 버퍼 지오메트리 완성
-  geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
-  geometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
-  geometry.setIndex(indices);
-  
-  // 지오메트리 정리 (중복 정점 병합, 노멀 계산)
-  const mergedGeometry = BufferGeometryUtils.mergeVertices(geometry);
-  mergedGeometry.computeVertexNormals();
-  
-  // 메시 생성
-  const material = new THREE.MeshMatcapMaterial({
-    matcap: refs.matcaps['Red Wax'],
-    transparent: true,
-    opacity: 0.9,
-    side: THREE.DoubleSide
-  });
-  
-  flipperMesh = new THREE.Mesh(mergedGeometry, material);
-  flipperMesh.userData.isFlipperMesh = true;
-  refs.scene.add(flipperMesh);
-  
-  // 성공 메시지 업데이트
-  updateFlipperInfoText(`플리퍼가 생성되었습니다. 두께: ${flipperThickness}mm`);
-  
-  // 적용 버튼 활성화
-  const applyBtn = document.getElementById('btn-apply-flipper');
-  if (applyBtn) {
-    applyBtn.disabled = false;
-    applyBtn.classList.add('active');
-  }
-  
-  console.log('플리퍼 생성 완료');
-  return true;
 }
 
 /**
@@ -863,23 +997,75 @@ export function applyFlipper() {
     const targetGeometry = refs.targetMesh.geometry.clone();
     const flipperGeometry = flipperMesh.geometry.clone();
     
+    // 유효성 검사 후 병합
+    const validTargetGeometry = validateGeometry(targetGeometry);
+    const validFlipperGeometry = validateGeometry(flipperGeometry);
+    
+    if (!validTargetGeometry || !validFlipperGeometry) {
+      throw new Error('유효하지 않은 지오메트리');
+    }
+    
     // 두 지오메트리 병합
-    const mergedGeometry = BufferGeometryUtils.mergeGeometries(
-      [targetGeometry, flipperGeometry], 
-      false
-    );
+    let mergedGeometry;
+    try {
+      mergedGeometry = BufferGeometryUtils.mergeGeometries(
+        [validTargetGeometry, validFlipperGeometry], 
+        false
+      );
+    } catch (error) {
+      console.error('지오메트리 병합 오류:', error);
+      throw new Error('지오메트리 병합 실패');
+    }
+    
+    if (!mergedGeometry) {
+      throw new Error('병합된 지오메트리가 없습니다');
+    }
+    
+    // 최종 유효성 검사
+    const validMergedGeometry = validateGeometry(mergedGeometry);
+    if (!validMergedGeometry) {
+      throw new Error('병합 후 유효하지 않은 지오메트리');
+    }
     
     // 중복 정점 병합 및 정리
-    const cleanGeometry = BufferGeometryUtils.mergeVertices(mergedGeometry);
-    cleanGeometry.computeVertexNormals();
-    cleanGeometry.computeBoundingSphere();
+    let cleanGeometry;
+    try {
+      cleanGeometry = BufferGeometryUtils.mergeVertices(validMergedGeometry);
+      cleanGeometry.computeVertexNormals();
+      
+      // 안전한 바운딩 스피어 계산
+      try {
+        cleanGeometry.computeBoundingSphere();
+      } catch (error) {
+        console.error('바운딩 스피어 계산 오류:', error);
+        // 폴백: 수동으로 바운딩 스피어 설정
+        cleanGeometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), 1);
+      }
+      
+      // NaN 바운딩 스피어 반지름 체크
+      if (isNaN(cleanGeometry.boundingSphere.radius)) {
+        console.warn('바운딩 스피어 반지름이 NaN입니다. 기본값 설정');
+        cleanGeometry.boundingSphere.radius = 1;
+      }
+    } catch (error) {
+      console.error('지오메트리 정리 오류:', error);
+      // 최소 정리만 수행
+      cleanGeometry = validMergedGeometry;
+      cleanGeometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), 1);
+    }
     
     // 기존 지오메트리 교체
     refs.targetMesh.geometry.dispose();
     refs.targetMesh.geometry = cleanGeometry;
     
     // BVH 재계산 (성능 최적화)
-    refs.targetMesh.geometry.computeBoundsTree?.({ setBoundingBox: false });
+    try {
+      if (typeof refs.targetMesh.geometry.computeBoundsTree === 'function') {
+        refs.targetMesh.geometry.computeBoundsTree({ setBoundingBox: false });
+      }
+    } catch (error) {
+      console.warn('BVH 계산 오류:', error);
+    }
     
     // BVH 헬퍼 업데이트
     if (refs.bvhHelper && refs.bvhHelper.parent) {
