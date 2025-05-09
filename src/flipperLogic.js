@@ -43,7 +43,7 @@ export function initFlipperDrawing() {
 /**
  * 플리퍼 모든 데이터 정리
  */
-function cleanupFlipperData() {
+function cleanupFlipperData(preserveFlipper = false) {
   // 모든 마커 제거
   pointMarkers.forEach(marker => {
     if (marker && marker.parent) {
@@ -58,8 +58,9 @@ function cleanupFlipperData() {
     }
   });
   
-  // 플리퍼 메쉬가 있다면 제거
-  if (flipperMesh && flipperMesh.parent) {
+  // 플리퍼 메쉬가 있다면 제거 (단, preserveFlipper가 true인 경우 유지)
+  if (!preserveFlipper && flipperMesh && flipperMesh.parent) {
+    console.log('ff')
     flipperMesh.parent.remove(flipperMesh);
     flipperMesh.geometry.dispose();
     flipperMesh.material.dispose();
@@ -660,35 +661,6 @@ function updateFlipperMesh() {
   if (flipperMesh && flipperMesh.parent) {
     generateFlipper();
   }
-}
-
-/**
- * 지오메트리 유효성 검사 함수
- */
-function validateGeometry(geometry) {
-  if (!geometry || !geometry.attributes || !geometry.attributes.position) {
-    console.error('유효하지 않은 지오메트리');
-    return null;
-  }
-  
-  const positions = geometry.attributes.position.array;
-  let hasNaN = false;
-  
-  // NaN 값 검사 및 수정
-  for (let i = 0; i < positions.length; i++) {
-    if (isNaN(positions[i])) {
-      hasNaN = true;
-      console.warn(`위치 인덱스 ${i}에서 NaN 발견, 0으로 대체`);
-      positions[i] = 0;
-    }
-  }
-  
-  if (hasNaN) {
-    geometry.attributes.position.needsUpdate = true;
-    console.warn('지오메트리의 NaN 값을 수정했습니다');
-  }
-  
-  return geometry;
 }
 
 /**
@@ -1402,9 +1374,10 @@ function updateFlipperInfoText(text) {
 /**
  * 모듈 정리 함수
  */
-export function cleanupFlipperModule() {
+export function cleanupFlipperModule(preserveFlipper = false) {
+  console.log(preserveFlipper)
   removeFlipperEventListeners();
-  cleanupFlipperData();
+  cleanupFlipperData(preserveFlipper);
 }
 
 /**

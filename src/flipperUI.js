@@ -236,7 +236,8 @@ function setupFlipperEvents() {
     completeBtn.disabled = true; // 초기에는 비활성화
     completeBtn.addEventListener('click', () => {
       // 리소스 정리
-      cleanupFlipperModule();
+      cleanupFlipperModule(true);
+      console.log('여기')
       
       // UI 제거
       cleanupFlipperUI();
@@ -286,6 +287,4 @@ export function cleanupFlipperUI() {
     flipperUIContainer = null;
   }
   
-  // 플리퍼 모듈 정리
-  cleanupFlipperModule();
 }
