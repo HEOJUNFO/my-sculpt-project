@@ -9,6 +9,7 @@ import { generateFlipper } from './flipperGeometry.js';
 
 // Flipper UI container 
 let flipperUIContainer = null;
+let teethVisible = true; // 치아 가시성 상태를 추적하는 변수 추가
 
 /**
  * Initialize the Flipper UI
@@ -87,6 +88,31 @@ export function initFlipperUI() {
           <span id="thickness-value" style="color: #000; font-weight: bold;">1.5mm</span>
         </div>
       </div>
+      
+      <!-- 치아 숨기기/보이기 버튼 추가 -->
+      <button id="btn-toggle-teeth" class="brush-btn btn-full" style="
+        display: block;
+        width: 100%;
+        margin-bottom: 12px;
+        text-align: center;
+        background: #5c6bc0;
+        color: #fff;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 14px;
+        height: 36px;
+        position: relative;
+        overflow: hidden;
+      ">
+        <span style="display: flex; align-items: center; justify-content: center;">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 8px;">
+            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+            <circle cx="12" cy="12" r="3"></circle>
+          </svg>
+          치아 숨기기
+        </span>
+      </button>
       
       <button id="btn-generate-flipper" class="brush-btn btn-full" style="
         display: block;
@@ -188,6 +214,14 @@ function setupFlipperEvents() {
     });
   }
   
+  // 치아 숨기기/보이기 버튼 이벤트 리스너 추가
+  const toggleTeethBtn = document.getElementById('btn-toggle-teeth');
+  if (toggleTeethBtn) {
+    toggleTeethBtn.addEventListener('click', () => {
+      toggleTeethVisibility();
+    });
+  }
+  
   // 플리퍼 생성 버튼
   const generateBtn = document.getElementById('btn-generate-flipper');
   if (generateBtn) {
@@ -237,10 +271,14 @@ function setupFlipperEvents() {
     completeBtn.addEventListener('click', () => {
       // 리소스 정리
       cleanupFlipperModule(true);
-      console.log('여기')
       
       // UI 제거
       cleanupFlipperUI();
+      
+      // 치아 가시성 복원 (만약 숨겨져 있었다면)
+      if (!teethVisible) {
+        toggleTeethVisibility();
+      }
       
       // 단계 완료 처리
       completeFlipper();
@@ -276,6 +314,73 @@ function setupFlipperEvents() {
 }
 
 /**
+ * 치아 가시성 토글 함수
+ * 배치된 모든 치아의 가시성을 토글합니다.
+ */
+function toggleTeethVisibility() {
+  teethVisible = !teethVisible; // 상태 토글
+  
+  // 버튼 텍스트 변경
+  const toggleBtn = document.getElementById('btn-toggle-teeth');
+  if (toggleBtn) {
+    const btnIcon = teethVisible ? 
+      '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 8px;"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>' :
+      '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 8px;"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>';
+    
+    toggleBtn.innerHTML = `<span style="display: flex; align-items: center; justify-content: center;">
+      ${btnIcon}
+      ${teethVisible ? '치아 숨기기' : '치아 보이기'}
+    </span>`;
+    
+    // 버튼 색상 변경
+    toggleBtn.style.background = teethVisible ? '#5c6bc0' : '#ff7043';
+  }
+  
+  // 치아 가시성 변경
+  let placedTeeth = [];
+  
+  // window.placedTeeth 또는 window.appLib.getPlacedTeeth() 중 하나를 사용
+  if (window.placedTeeth) {
+    placedTeeth = window.placedTeeth;
+  } else if (window.appLib && window.appLib.getPlacedTeeth) {
+    placedTeeth = window.appLib.getPlacedTeeth();
+  }
+  
+  // 배치된 모든 치아의 가시성을 토글
+  placedTeeth.forEach(tooth => {
+    if (tooth && tooth.visible !== undefined) {
+      tooth.visible = teethVisible;
+    }
+  });
+  
+  // 상태 메시지 표시
+  const message = document.createElement('div');
+  message.style.cssText = `
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(33, 150, 243, 0.9);
+    color: white;
+    padding: 10px 20px;
+    border-radius: 4px;
+    font-weight: bold;
+    z-index: 2000;
+    transition: opacity 0.5s;
+  `;
+  message.textContent = teethVisible ? '치아가 표시되었습니다.' : '치아가 숨겨졌습니다.';
+  document.body.appendChild(message);
+  
+  // 3초 후 메시지 사라짐
+  setTimeout(() => {
+    message.style.opacity = '0';
+    setTimeout(() => message.remove(), 500);
+  }, 3000);
+  
+  console.log(`치아 가시성 변경: ${teethVisible ? '표시' : '숨김'}`);
+}
+
+/**
  * 플리퍼 정보 텍스트 업데이트 함수
  * flipperDrawing.js에서 사용
  */
@@ -296,5 +401,25 @@ export function cleanupFlipperUI() {
   if (flipperUIContainer) {
     flipperUIContainer.remove();
     flipperUIContainer = null;
+  }
+  
+  // 치아 가시성 복원 (만약 숨겨져 있었다면)
+  if (!teethVisible) {
+    // 치아를 다시 표시
+    let placedTeeth = [];
+    if (window.placedTeeth) {
+      placedTeeth = window.placedTeeth;
+    } else if (window.appLib && window.appLib.getPlacedTeeth) {
+      placedTeeth = window.appLib.getPlacedTeeth();
+    }
+    
+    placedTeeth.forEach(tooth => {
+      if (tooth && tooth.visible !== undefined) {
+        tooth.visible = true;
+      }
+    });
+    
+    // 가시성 상태 변수 초기화
+    teethVisible = true;
   }
 }
