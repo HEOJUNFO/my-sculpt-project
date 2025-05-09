@@ -4,7 +4,6 @@ import {
   initFlipperDrawing, 
   setFlipperThickness, 
   generateFlipper, 
-  applyFlipper,
   cleanupFlipperModule
 } from './flipperLogic.js';
 
@@ -89,33 +88,6 @@ export function initFlipperUI() {
         </div>
       </div>
       
-      <div class="slider-row" style="
-        background-color: #ccc; 
-        padding: 8px;
-        margin-bottom: 12px;
-        border-radius: 4px;
-      ">
-        <label for="flipperGridResolution" style="
-          display: block;
-          font-size: 13px;
-          margin-bottom: 6px;
-          color: #000;
-        ">격자 해상도</label>
-        <div style="display: flex; align-items: center;">
-          <input 
-            type="range" 
-            id="flipperGridResolution" 
-            min="20" 
-            max="100" 
-            step="10" 
-            value="80"
-            class="custom-slider"
-            style="flex: 1; margin-right: 8px;"
-          />
-          <span id="resolution-value" style="color: #000; font-weight: bold;">80</span>
-        </div>
-      </div>
-      
       <button id="btn-generate-flipper" class="brush-btn btn-full" style="
         display: block;
         width: 100%;
@@ -137,29 +109,6 @@ export function initFlipperUI() {
             <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
           </svg>
           플리퍼 생성
-        </span>
-      </button>
-      
-      <button id="btn-apply-flipper" class="brush-btn btn-full" style="
-        display: block;
-        width: 100%;
-        margin-bottom: 12px;
-        text-align: center;
-        background: #555;
-        color: #fff;
-        border: none;
-        border-radius: 4px;
-        cursor: pointer;
-        font-size: 14px;
-        height: 36px;
-        disabled: true;
-      ">
-        <span style="display: flex; align-items: center; justify-content: center;">
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 8px;">
-            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
-            <polyline points="22 4 12 14.01 9 11.01"></polyline>
-          </svg>
-          플리퍼 적용
         </span>
       </button>
       
@@ -217,9 +166,6 @@ export function initFlipperUI() {
   }
 }
 
-// 전역 변수로 격자 해상도 및 설정 추가
-let gridResolution = 80;
-
 /**
  * Set up event listeners for the Flipper UI
  */
@@ -239,24 +185,6 @@ function setupFlipperEvents() {
       
       // 플리퍼 두께 설정
       setFlipperThickness(value);
-    });
-  }
-  
-  // 격자 해상도 슬라이더
-  const gridResolutionSlider = document.getElementById('flipperGridResolution');
-  const resolutionValue = document.getElementById('resolution-value');
-  
-  if (gridResolutionSlider) {
-    gridResolutionSlider.addEventListener('input', () => {
-      gridResolution = parseInt(gridResolutionSlider.value);
-      
-      // UI 업데이트
-      if (resolutionValue) {
-        resolutionValue.textContent = `${gridResolution}`;
-      }
-      
-      // 업데이트된 코드에서는 createDenseTriangleGrid 함수에서 gridSize 매개변수 사용
-      // 여기에서는 전역 변수로 저장하고 플리퍼 생성 시 접근
     });
   }
   
@@ -281,41 +209,12 @@ function setupFlipperEvents() {
       
       // 약간의 지연 후 실행 (UI 업데이트를 위해)
       setTimeout(() => {
-        // 새로운 코드는 gridResolution을 generateFlipper 함수 내부에서 사용
-        // 필요한 경우 여기서 전역 변수를 설정해야 함
-        window.flipperGridResolution = gridResolution;
-        
         const success = generateFlipper();
         
         // 버튼 상태 원복
         if (success) {
           generateBtn.innerHTML = '<span style="display: flex; align-items: center; justify-content: center;"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 8px;"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>플리퍼 생성 완료</span>';
           generateBtn.style.background = '#4CAF50';
-        } else {
-          generateBtn.innerHTML = '<span style="display: flex; align-items: center; justify-content: center;"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 8px;"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>플리퍼 생성</span>';
-          generateBtn.disabled = false;
-        }
-      }, 500);
-    });
-  }
-  
-  // 플리퍼 적용 버튼
-  const applyBtn = document.getElementById('btn-apply-flipper');
-  if (applyBtn) {
-    applyBtn.disabled = true;
-    applyBtn.addEventListener('click', () => {
-      // 로딩 효과 표시
-      applyBtn.innerHTML = '<span style="display: inline-block; width: 16px; height: 16px; border: 2px solid #fff; border-top-color: transparent; border-radius: 50%; animation: flipper-spin 1s linear infinite;"></span> 적용 중...';
-      applyBtn.disabled = true;
-      
-      // 약간의 지연 후 실행 (UI 업데이트를 위해)
-      setTimeout(() => {
-        const success = applyFlipper();
-        
-        // 버튼 상태 원복
-        if (success) {
-          applyBtn.innerHTML = '<span style="display: flex; align-items: center; justify-content: center;"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 8px;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>플리퍼 적용 완료</span>';
-          applyBtn.style.background = '#4CAF50';
           
           // 완료 버튼 활성화
           const completeBtn = document.getElementById('btn-flipper-complete');
@@ -324,8 +223,8 @@ function setupFlipperEvents() {
             completeBtn.classList.add('active');
           }
         } else {
-          applyBtn.innerHTML = '<span style="display: flex; align-items: center; justify-content: center;"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 8px;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>플리퍼 적용</span>';
-          applyBtn.disabled = false;
+          generateBtn.innerHTML = '<span style="display: flex; align-items: center; justify-content: center;"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 8px;"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>플리퍼 생성</span>';
+          generateBtn.disabled = false;
         }
       }, 500);
     });
@@ -366,12 +265,6 @@ function setupFlipperEvents() {
           generateBtn.innerHTML = '<span style="display: flex; align-items: center; justify-content: center;"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 8px;"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>플리퍼 생성</span>';
         }
         
-        if (applyBtn) {
-          applyBtn.disabled = true;
-          applyBtn.style.background = '#555';
-          applyBtn.innerHTML = '<span style="display: flex; align-items: center; justify-content: center;"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 8px;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>플리퍼 적용</span>';
-        }
-        
         if (completeBtn) {
           completeBtn.disabled = true;
           completeBtn.classList.remove('active');
@@ -395,7 +288,4 @@ export function cleanupFlipperUI() {
   
   // 플리퍼 모듈 정리
   cleanupFlipperModule();
-  
-  // 전역 변수 삭제
-  delete window.flipperGridResolution;
 }
