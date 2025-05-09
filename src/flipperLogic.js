@@ -1120,11 +1120,11 @@ export function generateFlipper() {
     // 성공 메시지 업데이트
     updateFlipperInfoText(`플리퍼가 생성되었습니다. 두께: ${flipperThickness}mm`);
     
-    // 적용 버튼 활성화
-    const applyBtn = document.getElementById('btn-apply-flipper');
-    if (applyBtn) {
-      applyBtn.disabled = false;
-      applyBtn.classList.add('active');
+    // 완료 버튼 활성화
+    const completeBtn = document.getElementById('btn-flipper-complete');
+    if (completeBtn) {
+      completeBtn.disabled = false;
+      completeBtn.classList.add('active');
     }
     
     console.log('플리퍼 생성 완료');
@@ -1139,7 +1139,7 @@ export function generateFlipper() {
 /**
  * 고밀도 삼각형 그리드 생성 함수
  */
-function createDenseTriangleGrid(boundaryPoints, gridSize = 40) {
+function createDenseTriangleGrid(boundaryPoints, gridSize = 80) {
   // 경계 상자 찾기
   const minX = Math.min(...boundaryPoints.map(p => p.x));
   const maxX = Math.max(...boundaryPoints.map(p => p.x));
@@ -1387,130 +1387,6 @@ function distanceToLineSegment(px, py, x1, y1, x2, y2) {
   const dy = py - yy;
   
   return Math.sqrt(dx * dx + dy * dy);
-}
-
-/**
- * 플리퍼 적용 - 최종 메시로 변환
- */
-export function applyFlipper() {
-  if (!flipperMesh) {
-    console.warn('적용할 플리퍼가 없습니다.');
-    return false;
-  }
-  
-  if (!refs.targetMesh) {
-    console.warn('대상 메시가 없습니다.');
-    return false;
-  }
-  
-  // 로딩 메시지 표시
-  updateFlipperInfoText('플리퍼를 적용하는 중...');
-  
-  try {
-    // 플리퍼 메시를 대상 메시와 결합
-    const targetGeometry = refs.targetMesh.geometry.clone();
-    const flipperGeometry = flipperMesh.geometry.clone();
-    
-    // 유효성 검사 후 병합
-    const validTargetGeometry = validateGeometry(targetGeometry);
-    const validFlipperGeometry = validateGeometry(flipperGeometry);
-    
-    if (!validTargetGeometry || !validFlipperGeometry) {
-      throw new Error('유효하지 않은 지오메트리');
-    }
-    
-    // 두 지오메트리 병합
-    let mergedGeometry;
-    try {
-      mergedGeometry = BufferGeometryUtils.mergeGeometries(
-        [validTargetGeometry, validFlipperGeometry], 
-        false
-      );
-    } catch (error) {
-      console.error('지오메트리 병합 오류:', error);
-      throw new Error('지오메트리 병합 실패');
-    }
-    
-    if (!mergedGeometry) {
-      throw new Error('병합된 지오메트리가 없습니다');
-    }
-    
-    // 최종 유효성 검사
-    const validMergedGeometry = validateGeometry(mergedGeometry);
-    if (!validMergedGeometry) {
-      throw new Error('병합 후 유효하지 않은 지오메트리');
-    }
-    
-    // 중복 정점 병합 및 정리
-    let cleanGeometry;
-    try {
-      cleanGeometry = BufferGeometryUtils.mergeVertices(validMergedGeometry);
-      cleanGeometry.computeVertexNormals();
-      
-      // 안전한 바운딩 스피어 계산
-      try {
-        cleanGeometry.computeBoundingSphere();
-      } catch (error) {
-        console.error('바운딩 스피어 계산 오류:', error);
-        // 폴백: 수동으로 바운딩 스피어 설정
-        cleanGeometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), 1);
-      }
-      
-      // NaN 바운딩 스피어 반지름 체크
-      if (isNaN(cleanGeometry.boundingSphere.radius)) {
-        console.warn('바운딩 스피어 반지름이 NaN입니다. 기본값 설정');
-        cleanGeometry.boundingSphere.radius = 1;
-      }
-    } catch (error) {
-      console.error('지오메트리 정리 오류:', error);
-      // 최소 정리만 수행
-      cleanGeometry = validMergedGeometry;
-      cleanGeometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0, 0), 1);
-    }
-    
-    // 기존 지오메트리 교체
-    refs.targetMesh.geometry.dispose();
-    refs.targetMesh.geometry = cleanGeometry;
-    
-    // BVH 재계산 (성능 최적화)
-    try {
-      if (typeof refs.targetMesh.geometry.computeBoundsTree === 'function') {
-        refs.targetMesh.geometry.computeBoundsTree({ setBoundingBox: false });
-      }
-    } catch (error) {
-      console.warn('BVH 계산 오류:', error);
-    }
-    
-    // BVH 헬퍼 업데이트
-    if (refs.bvhHelper && refs.bvhHelper.parent) {
-      refs.bvhHelper.update();
-    }
-    
-    // 플리퍼 메시 제거 (이미 대상 메시에 병합됨)
-    if (flipperMesh && flipperMesh.parent) {
-      flipperMesh.parent.remove(flipperMesh);
-      flipperMesh.geometry.dispose();
-      flipperMesh.material.dispose();
-      flipperMesh = null;
-    }
-    
-    // 성공 메시지 업데이트
-    updateFlipperInfoText('플리퍼가 성공적으로 적용되었습니다! 완료 버튼을 클릭하세요.');
-    
-    // 완료 버튼 활성화
-    const completeBtn = document.getElementById('btn-flipper-complete');
-    if (completeBtn) {
-      completeBtn.disabled = false;
-      completeBtn.classList.add('active');
-    }
-    
-    console.log('플리퍼 적용 완료');
-    return true;
-  } catch (error) {
-    console.error('플리퍼 적용 중 오류 발생:', error);
-    updateFlipperInfoText('플리퍼 적용 중 오류가 발생했습니다.');
-    return false;
-  }
 }
 
 /**
