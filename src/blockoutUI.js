@@ -182,135 +182,115 @@ function detectUndercuts() {
 }
 
 function applyBlockout() {
-  if (!refs.targetMesh) {
-    console.warn('대상 메시가 없어 블록아웃을 적용할 수 없습니다');
+  if (!refs.targetMesh || !undercutMesh) {
+    console.warn('No target mesh or undercuts detected');
     return;
   }
   
-  // 언더컷이 감지되었는지 확인
-  if (!undercutMesh || !undercutMesh.parent) {
-    console.warn('감지된 언더컷이 없습니다. 먼저 언더컷을 감지해주세요.');
-    return;
+  // Convert to non-indexed geometry if needed
+  if (refs.targetMesh.geometry.index !== null) {
+    refs.targetMesh.geometry = refs.targetMesh.geometry.toNonIndexed();
   }
   
-  // 슬라이더에서 블록아웃 거리 가져오기
-  const blockoutDistanceSlider = document.getElementById('blockoutDistanceRange');
-  const blockoutDistance = blockoutDistanceSlider ? parseFloat(blockoutDistanceSlider.value) : 0.1;
+  // Get blockout distance from slider if available
+  let blockoutDistance = 0.1; // Default distance
+  const blockoutSlider = document.getElementById('blockoutDistanceRange');
+  if (blockoutSlider) {
+    blockoutDistance = parseFloat(blockoutSlider.value);
+  }
   
-  console.log(`블록아웃 적용 중: 거리 = ${blockoutDistance}`);
+  const insertionDir = new THREE.Vector3();
   
-  // 대상 메시에서 지오메트리 데이터 가져오기
-  refs.targetMesh.updateMatrixWorld(true);
-  const geometry = refs.targetMesh.geometry;
-  const posAttr = geometry.attributes.position;
-  const indexAttr = geometry.index;
-  const matrixWorld = refs.targetMesh.matrixWorld;
+  if (savedCameraState && savedCameraState.direction) {
+    insertionDir.copy(savedCameraState.direction);
+  } else {
+    refs.camera.getWorldDirection(insertionDir);
+  }
   
-  // 중복 작업을 피하기 위해 수정된 정점을 추적할 Set 생성
-  const modifiedVertices = new Set();
+  const undercutPositions = undercutMesh.geometry.attributes.position.array;
+  const triangleCount = undercutPositions.length / 9;
+  const blockoutGeometries = [];
   
-  // 저장된 상태나 현재 카메라에서 카메라 위치 가져오기
-  const cameraPos = savedCameraState ? savedCameraState.position.clone() : refs.camera.position.clone();
-  
-  // 카메라에서 멀어지는 면을 감지하기 위한 임계값 (detectUndercuts와 동일)
-  const threshold = 0.01;
-  const triangleCount = indexAttr ? indexAttr.count / 3 : posAttr.count / 3;
-  
-  // 메시의 각 삼각형에 대해
   for (let i = 0; i < triangleCount; i++) {
-    let a, b, c;
-    let aIndex, bIndex, cIndex;
+    const a = new THREE.Vector3(
+      undercutPositions[i * 9],
+      undercutPositions[i * 9 + 1],
+      undercutPositions[i * 9 + 2]
+    );
+    const b = new THREE.Vector3(
+      undercutPositions[i * 9 + 3],
+      undercutPositions[i * 9 + 4],
+      undercutPositions[i * 9 + 5]
+    );
+    const c = new THREE.Vector3(
+      undercutPositions[i * 9 + 6],
+      undercutPositions[i * 9 + 7],
+      undercutPositions[i * 9 + 8]
+    );
+  
+    // Create extruded triangle (prism)
+    const a2 = a.clone().addScaledVector(insertionDir, blockoutDistance);
+    const b2 = b.clone().addScaledVector(insertionDir, blockoutDistance);
+    const c2 = c.clone().addScaledVector(insertionDir, blockoutDistance);
+  
+    const vertices = [];
+    // Top face
+    vertices.push(a2.x, a2.y, a2.z, b2.x, b2.y, b2.z, c2.x, c2.y, c2.z);
+    // Bottom face
+    vertices.push(a.x, a.y, a.z, c.x, c.y, c.z, b.x, b.y, b.z);
+    // Side 1
+    vertices.push(a.x, a.y, a.z, b.x, b.y, b.z, b2.x, b2.y, b2.z);
+    vertices.push(a.x, a.y, a.z, b2.x, b2.y, b2.z, a2.x, a2.y, a2.z);
+    // Side 2
+    vertices.push(b.x, b.y, b.z, c.x, c.y, c.z, c2.x, c2.y, c2.z);
+    vertices.push(b.x, b.y, b.z, c2.x, c2.y, c2.z, b2.x, b2.y, b2.z);
+    // Side 3
+    vertices.push(c.x, c.y, c.z, a.x, a.y, a.z, a2.x, a2.y, a2.z);
+    vertices.push(c.x, c.y, c.z, a2.x, a2.y, a2.z, c2.x, c2.y, c2.z);
+  
+    const prismGeometry = new THREE.BufferGeometry();
+    prismGeometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+    prismGeometry.computeVertexNormals();
+
+    const nonIndexedPrismGeometry = prismGeometry.index ? prismGeometry.toNonIndexed() : prismGeometry;
+    blockoutGeometries.push(nonIndexedPrismGeometry);
+  }
+  
+  if (blockoutGeometries.length > 0) {
+    // Merge all blockout geometries
+    const mergedBlockoutGeometry = BufferGeometryUtils.mergeGeometries(blockoutGeometries, false);
     
-    if (indexAttr) {
-      aIndex = indexAttr.getX(i * 3);
-      bIndex = indexAttr.getX(i * 3 + 1);
-      cIndex = indexAttr.getX(i * 3 + 2);
-      a = new THREE.Vector3().fromBufferAttribute(posAttr, aIndex).applyMatrix4(matrixWorld);
-      b = new THREE.Vector3().fromBufferAttribute(posAttr, bIndex).applyMatrix4(matrixWorld);
-      c = new THREE.Vector3().fromBufferAttribute(posAttr, cIndex).applyMatrix4(matrixWorld);
-    } else {
-      aIndex = i * 3;
-      bIndex = i * 3 + 1;
-      cIndex = i * 3 + 2;
-      a = new THREE.Vector3().fromBufferAttribute(posAttr, aIndex).applyMatrix4(matrixWorld);
-      b = new THREE.Vector3().fromBufferAttribute(posAttr, bIndex).applyMatrix4(matrixWorld);
-      c = new THREE.Vector3().fromBufferAttribute(posAttr, cIndex).applyMatrix4(matrixWorld);
+    // Merge with target mesh
+    let mergedGeometry = BufferGeometryUtils.mergeGeometries(
+      [refs.targetMesh.geometry, mergedBlockoutGeometry],
+      false
+    );
+    
+    // Clean up geometry
+    mergedGeometry = BufferGeometryUtils.mergeVertices(mergedGeometry, 1e-5);
+    mergedGeometry.computeVertexNormals();
+    mergedGeometry.computeBoundingSphere();
+    
+    // Update target mesh with new geometry
+    refs.targetMesh.geometry.dispose();
+    refs.targetMesh.geometry = mergedGeometry;
+    
+    // Compute BVH for the new geometry
+    refs.targetMesh.geometry.computeBoundsTree?.({ setBoundingBox: false });
+    
+    // Update BVH helper if it exists
+    if (refs.bvhHelper && refs.bvhHelper.parent) {
+      refs.bvhHelper.update();
     }
     
-    // 삼각형 중심과 노멀 계산
-    const center = new THREE.Vector3().addVectors(a, b).add(c).divideScalar(3);
-    const ab = new THREE.Vector3().subVectors(b, a);
-    const ac = new THREE.Vector3().subVectors(c, a);
-    const normal = new THREE.Vector3().crossVectors(ab, ac).normalize();
+    console.log(`Applied blockout to ${triangleCount} undercut areas`);
     
-    // 시점 벡터 계산 (삼각형 중심에서 카메라 방향)
-    const viewVec = new THREE.Vector3().subVectors(cameraPos, center).normalize();
-    
-    // 면이 카메라로부터 멀어지는지 확인 (언더컷)
-    const dot = normal.dot(viewVec);
-    if (dot <= threshold) {
-      // 이 삼각형은 언더컷이므로 정점을 블록아웃 방향으로 이동
-      
-      // 월드 공간 정점을 수정을 위해 로컬 좌표로 변환
-      const localA = new THREE.Vector3().fromBufferAttribute(posAttr, aIndex);
-      const localB = new THREE.Vector3().fromBufferAttribute(posAttr, bIndex);
-      const localC = new THREE.Vector3().fromBufferAttribute(posAttr, cIndex);
-      
-      // 월드 공간에서 로컬 공간으로 시점 벡터 변환
-      const inverseMatrix = new THREE.Matrix4().copy(matrixWorld).invert();
-      const localViewVec = viewVec.clone().transformDirection(inverseMatrix);
-      
-      // 방향을 반대로 하기 위해 localViewVec의 방향을 반전
-      localViewVec.negate();
-      
-      // 아직 수정되지 않은 정점에 블록아웃 적용
-      if (!modifiedVertices.has(aIndex)) {
-        modifiedVertices.add(aIndex);
-        const newPos = localA.clone().addScaledVector(localViewVec, blockoutDistance);
-        posAttr.setXYZ(aIndex, newPos.x, newPos.y, newPos.z);
-      }
-      
-      if (!modifiedVertices.has(bIndex)) {
-        modifiedVertices.add(bIndex);
-        const newPos = localB.clone().addScaledVector(localViewVec, blockoutDistance);
-        posAttr.setXYZ(bIndex, newPos.x, newPos.y, newPos.z);
-      }
-      
-      if (!modifiedVertices.has(cIndex)) {
-        modifiedVertices.add(cIndex);
-        const newPos = localC.clone().addScaledVector(localViewVec, blockoutDistance);
-        posAttr.setXYZ(cIndex, newPos.x, newPos.y, newPos.z);
-      }
+    // Clean up undercut visualization
+    if (undercutMesh && undercutMesh.parent) {
+      refs.scene.remove(undercutMesh);
+      undercutMesh.geometry.dispose();
+      undercutMesh.material.dispose();
+      undercutMesh = null;
     }
-  }
-  
-  // 지오메트리 업데이트
-  posAttr.needsUpdate = true;
-  geometry.computeVertexNormals();
-  
-  // 지오메트리에 BVH가 있는 경우 업데이트
-  if (geometry.boundsTree) {
-    geometry.boundsTree.refit();
-  }
-  
-  // BVH 헬퍼 업데이트
-  if (refs.bvhHelper) {
-    refs.bvhHelper.update();
-  }
-  
-  // 언더컷 시각화 정리
-  if (undercutMesh && undercutMesh.parent) {
-    refs.scene.remove(undercutMesh);
-    undercutMesh.geometry.dispose();
-    undercutMesh.material.dispose();
-    undercutMesh = null;
-  }
-  
-  console.log(`블록아웃이 ${modifiedVertices.size}개의 정점에 적용되었습니다.`);
-  
-  // UI 업데이트
-  const countElement = document.getElementById('undercut-count');
-  if (countElement) {
-    countElement.textContent = `블록아웃이 ${modifiedVertices.size}개의 정점에 적용되었습니다`;
   }
 }
