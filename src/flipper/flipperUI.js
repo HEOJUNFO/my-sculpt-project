@@ -1,11 +1,11 @@
-// src/flipperUI.js
+// src/flipper/flipperUI.js
 import { completeFlipper } from '../processSteps.js';
 import { 
   initFlipperDrawing, 
   setFlipperThickness, 
-  generateFlipper, 
   cleanupFlipperModule
-} from './flipperLogic.js';
+} from './flipperDrawing.js';
+import { generateFlipper } from './flipperGeometry.js';
 
 // Flipper UI container 
 let flipperUIContainer = null;
@@ -276,6 +276,17 @@ function setupFlipperEvents() {
 }
 
 /**
+ * 플리퍼 정보 텍스트 업데이트 함수
+ * flipperDrawing.js에서 사용
+ */
+export function updateFlipperInfoText(text) {
+  const infoElement = document.getElementById('flipper-info');
+  if (infoElement) {
+    infoElement.textContent = text;
+  }
+}
+
+/**
  * Clean up the Flipper UI
  * This function will be called when transitioning out of the flipper step
  */
@@ -286,5 +297,4 @@ export function cleanupFlipperUI() {
     flipperUIContainer.remove();
     flipperUIContainer = null;
   }
-  
 }
