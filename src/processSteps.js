@@ -3,7 +3,7 @@
 
 // Import UI module integration functions
 import { initLibraryMode, cleanupLibraryMode } from './libraryIntegration.js';
-import { initFlipperUI, cleanupFlipperUI } from './flipperUI.js';
+import { initFlipperUI, cleanupFlipperUI } from './flipper/flipperUI.js';
 import { initExportUI, cleanupExportUI } from './exportUI.js';
 
 // 단계 정의 (상수)
