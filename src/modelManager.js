@@ -632,8 +632,6 @@ export function importModel(file) {
       console.error('STL load error:', err);
     });
 
-    
-
-
-
 }
+
+window.setTargetMeshAsActive = setTargetMeshAsActive;
