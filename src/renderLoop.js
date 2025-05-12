@@ -13,7 +13,7 @@ import {
   rightClick,
   someUpdateFunc,
 } from './eventHandlers.js';
-import { isLibraryStep, isFlipperStep, canSculpt } from './processSteps.js';
+import { isLibraryStep, isFlipperStep, canSculpt, getCurrentStep } from './processSteps.js';
 
 let animationId = null; // 현재 렌더 루프의 requestAnimationFrame ID를 저장할 변수
 
@@ -50,6 +50,9 @@ export function startRenderLoop(renderer, scene, camera, stats) {
       refs.targetMesh.material.matcap = refs.matcaps[ refs.params.matcap ];
     }
 
+    // 라이브러리 완료 단계 확인 (단계 6)
+    const isLibraryCompleted = getCurrentStep() === 6;
+
     // 브러시 표시 여부 - 라이브러리/플리퍼 모드에서는 스컬프 비활성화
     if (
       isLibraryStep() || 
@@ -72,13 +75,46 @@ export function startRenderLoop(renderer, scene, camera, stats) {
       const raycaster = new THREE.Raycaster();
       raycaster.setFromCamera(mouse, camera);
       raycaster.firstHitOnly = true;
-
-      const hit = raycaster.intersectObject(refs.targetMesh, true)[0];
-      if ( hit ) {
-        if ( refs.brush ) {
+      
+      // 레이캐스팅 대상을 결정
+      let hit;
+      
+      if (isLibraryCompleted) {
+        // 라이브러리 완료 단계에서는 치아 모델만 대상으로 레이캐스팅 수행
+        const toothModels = scene.children.filter(obj => 
+          obj.isMesh && obj.userData && obj.userData.isLibraryTooth);
+        
+        if (toothModels.length > 0) {
+          // 모든 치아 모델에 레이캐스팅 수행
+          const intersects = raycaster.intersectObjects(toothModels);
+          hit = intersects[0]; // 가장 가까운 교차점
+          
+          if (hit) {
+            // 선택된 치아 모델을 targetMesh로 설정
+            if (refs.targetMesh !== hit.object) {
+              refs.targetMesh = hit.object;
+            }
+          }
+        }
+      } else {
+        // 일반 스컬프 단계에서는 targetMesh를 대상으로 레이캐스팅
+        hit = raycaster.intersectObject(refs.targetMesh, true)[0];
+      }
+      
+      if (hit) {
+        // 라이브러리 완료 단계에서 치아가 아닌 경우 스컬프 비활성화
+        if (isLibraryCompleted && (!hit.object.userData || !hit.object.userData.isLibraryTooth)) {
+          if (refs.brush) {
+            refs.brush.visible = false;
+          }
+          lastCastPose.setScalar(Infinity);
+          return;
+        }
+        
+        if (refs.brush) {
           refs.brush.visible = true;
-          refs.brush.scale.set( refs.params.size, refs.params.size, 0.1 );
-          refs.brush.position.copy( hit.point );
+          refs.brush.scale.set(refs.params.size, refs.params.size, 0.1);
+          refs.brush.position.copy(hit.point);
 
           const zFactor = 0.01 + (refs.params.intensity * 0.01);
           refs.brush.scale.z = zFactor;
@@ -86,7 +122,7 @@ export function startRenderLoop(renderer, scene, camera, stats) {
 
         refs.controls.enabled = false;
 
-        if ( lastCastPose.x === Infinity ) {
+        if (lastCastPose.x === Infinity) {
           lastCastPose.copy(hit.point);
         }
 
@@ -97,9 +133,12 @@ export function startRenderLoop(renderer, scene, camera, stats) {
           return;
         }
 
-        if ( !(mouseState || lastMouseState) ) {
+        // 타겟 메시 결정 (일반 단계에서는 refs.targetMesh, 라이브러리 완료 후에는 hit.object)
+        const targetObject = isLibraryCompleted ? hit.object : refs.targetMesh;
+
+        if (!(mouseState || lastMouseState)) {
           // 브러시 첫 클릭
-          performStroke(hit.point, refs.brush, true, {}, refs.targetMesh, refs.params, rightClick);
+          performStroke(hit.point, refs.brush, true, {}, targetObject, refs.params, rightClick);
 
           lastMouse.copy(mouse);
           lastCastPose.copy(hit.point);
@@ -125,34 +164,34 @@ export function startRenderLoop(renderer, scene, camera, stats) {
             accumulatedTraversedNodeIndices: traversedNodeIndices,
           };
 
-          while ( castDist > step && mdist > refs.params.size * 200 / hit.distance ) {
+          while (castDist > step && mdist > refs.params.size * 200 / hit.distance) {
             lastMouse.lerp(mouse, percent);
             lastCastPose.lerp(hit.point, percent);
             castDist -= step;
             mdist -= mstep;
 
-            performStroke(lastCastPose, refs.brush, false, sets, refs.targetMesh, refs.params, rightClick);
+            performStroke(lastCastPose, refs.brush, false, sets, targetObject, refs.params, rightClick);
             stepCount++;
-            if ( stepCount > refs.params.maxSteps ) {
+            if (stepCount > refs.params.maxSteps) {
               break;
             }
           }
 
-          if ( stepCount > 0 ) {
-            updateNormals(changedTriangles, changedIndices, refs.targetMesh);
-            refs.targetMesh.geometry.boundsTree?.refit(traversedNodeIndices);
-            if ( refs.bvhHelper && refs.bvhHelper.parent ) {
+          if (stepCount > 0) {
+            updateNormals(changedTriangles, changedIndices, targetObject);
+            targetObject.geometry.boundsTree?.refit(traversedNodeIndices);
+            if (refs.bvhHelper && refs.bvhHelper.parent) {
               refs.bvhHelper.update();
             }
           } else {
             // 움직임 작으면 단일 stroke만
-            performStroke(hit.point, refs.brush, true, {}, refs.targetMesh, refs.params, rightClick);
+            performStroke(hit.point, refs.brush, true, {}, targetObject, refs.params, rightClick);
           }
         }
 
       } else {
         // 대상 mesh hit 없음
-        if ( refs.brush ) {
+        if (refs.brush) {
           refs.brush.visible = false;
         }
         refs.controls.enabled = true;

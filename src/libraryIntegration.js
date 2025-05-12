@@ -73,6 +73,11 @@ function placeToothModel(toothId, modelPath, position, rotation) {
         newGeometry.center();
         newGeometry.computeBoundingBox();
         
+        // 스컬프 가능하도록 설정 추가 - 이 부분이 중요합니다!
+        newGeometry.attributes.position.setUsage(THREE.DynamicDrawUsage);
+        newGeometry.attributes.normal.setUsage(THREE.DynamicDrawUsage);
+        newGeometry.computeBoundsTree({ setBoundingBox: false });
+        
         // 치아 재질 생성 - 치아 ID에 따라 다른 matcap 사용
         let matcapTexture;
         
