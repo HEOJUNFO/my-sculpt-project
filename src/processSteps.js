@@ -5,6 +5,8 @@
 import { initLibraryMode, cleanupLibraryMode } from './libraryIntegration.js';
 import { initFlipperUI, cleanupFlipperUI } from './flipper/flipperUI.js';
 import { initExportUI, cleanupExportUI } from './exportUI.js';
+import { refs } from './modelManager.js';
+
 
 // 단계 정의 (상수)
 export const STEPS = {
@@ -230,7 +232,21 @@ export function completeSculpting() {
     setStep(5);
   }
   else if (currentStep === 6) {
-    // 라이브러리 후 스컬프 완료: 단계 7로 (플리퍼 UI)
+    // 라이브러리 후 스컬프 완료 시: 플리퍼 UI로 가기 전에 타겟 메쉬를 원래 모델(잇몸)로 변경
+    
+    // 원래 모델(잇몸)을 찾아서 타겟 메쉬로 설정
+    const baseModel = findBaseModel();
+    if (baseModel) {
+      // 모델 매니저의 setTargetMeshAsActive 함수 호출
+      if (window.setTargetMeshAsActive) {
+        window.setTargetMeshAsActive(baseModel);
+      } else {
+        // 전역 함수가 없다면 직접 설정
+        refs.targetMesh = baseModel;
+      }
+    }
+    
+    // 단계 7로 (플리퍼 UI)
     setStep(7);
   }
   else if (currentStep === 8) {
@@ -238,6 +254,33 @@ export function completeSculpting() {
     setStep(9);
   }
   console.log('스컬프 완료 - 다음 단계로 진행:', currentStep);
+}
+
+// 원래 모델(잇몸)을 찾는 함수 추가
+function findBaseModel() {
+  // 모델 리스트에서 라이브러리 치아가 아닌 모델 찾기
+  if (window.modelList) {
+    // modelList 배열을 순회하며 원래 모델 찾기
+    for (const item of window.modelList) {
+      // 라이브러리 치아가 아닌 메쉬를 찾음 (userData.isLibraryTooth가 없거나 false)
+      if (item.mesh && (!item.mesh.userData || !item.mesh.userData.isLibraryTooth)) {
+        return item.mesh;
+      }
+    }
+  }
+  
+  // 또는 씬에서 직접 찾기
+  if (refs.scene) {
+    for (const object of refs.scene.children) {
+      if (object.isMesh && (!object.userData || !object.userData.isLibraryTooth)) {
+        return object;
+      }
+    }
+  }
+  
+  // 찾지 못한 경우
+  console.warn('원래 모델(잇몸)을 찾을 수 없습니다.');
+  return null;
 }
 
 /**
