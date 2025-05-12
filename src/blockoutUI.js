@@ -270,6 +270,9 @@ function applyBlockout() {
     mergedGeometry = BufferGeometryUtils.mergeVertices(mergedGeometry, 1e-5);
     mergedGeometry.computeVertexNormals();
     mergedGeometry.computeBoundingSphere();
+
+    mergedGeometry.attributes.position.setUsage(THREE.DynamicDrawUsage);
+    mergedGeometry.attributes.normal.setUsage(THREE.DynamicDrawUsage);
     
     // Update target mesh with new geometry
     refs.targetMesh.geometry.dispose();
