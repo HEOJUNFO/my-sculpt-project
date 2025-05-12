@@ -32,6 +32,26 @@ let savedCameraState = null;
 export function initFlipperDrawing() {
   console.log('플리퍼 그리기 모드 초기화');
   
+  // 기존에 생성된 플리퍼 메시가 있는지 확인
+  if (flipperMesh && flipperMesh.parent) {
+    console.log('기존 플리퍼가 있습니다. 플리퍼 데이터 초기화를 건너뜁니다.');
+    
+    // 상태 메시지 업데이트
+    updateFlipperInfoText('기존 플리퍼가 있습니다. 완료 버튼을 클릭하거나, 초기화 후 새로 그리세요.');
+    
+    // 완료 버튼 활성화
+    const completeBtn = document.getElementById('btn-flipper-complete');
+    if (completeBtn) {
+      completeBtn.disabled = false;
+      completeBtn.classList.add('active');
+    }
+    
+    // 이벤트 리스너 추가
+    addFlipperEventListeners();
+    
+    return true;
+  }
+  
   // 이전 데이터 초기화
   cleanupFlipperData();
   
