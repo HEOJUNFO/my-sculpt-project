@@ -53,6 +53,8 @@ export function initFlipperUI() {
         <p style="margin: 0 0 4px 0; font-weight: bold;">사용 방법:</p>
         <ol style="margin: 0; padding-left: 18px;">
           <li>Alt 키를 누른 상태에서 모델에 점을 찍어 플리퍼 영역을 표시하세요.</li>
+          <li>점 제거: 점을 클릭하면 삭제됩니다.</li>
+          <li>특정 점부터 다시 그리기: Alt+점 클릭으로 해당 점 이후를 제거하고 다시 그립니다.</li>
           <li>영역을 닫으려면 첫 번째 초록색 점을 클릭하세요.</li>
           <li>두께를 조절한 후, 플리퍼 생성 버튼을 클릭하세요.</li>
         </ol>
