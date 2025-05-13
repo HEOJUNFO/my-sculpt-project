@@ -898,3 +898,40 @@ export function updateFlipperInfoText(text) {
     infoElement.textContent = text;
   }
 }
+
+/**
+ * 플리퍼 메시만 초기화하는 함수
+ * 점과 선은 그대로 유지합니다.
+ */
+export function resetFlipperMeshOnly() {
+  // 플리퍼 메쉬가 있다면 제거
+  if (flipperMesh && flipperMesh.parent) {
+    refs.scene.remove(flipperMesh);
+    flipperMesh.geometry.dispose();
+    flipperMesh.material.dispose();
+    flipperMesh = null;
+  }
+  
+  // 영역이 완료된 상태라면 생성 버튼 활성화
+  if (selectedAreaPoints.length > 0) {
+    const generateBtn = document.getElementById('btn-generate-flipper');
+    if (generateBtn) {
+      generateBtn.disabled = false;
+      generateBtn.classList.add('active');
+      generateBtn.innerHTML = '<span style="display: flex; align-items: center; justify-content: center;"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 8px;"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>플리퍼 생성</span>';
+      generateBtn.style.background = '#555';
+    }
+  }
+  
+  // 완료 버튼 비활성화
+  const completeBtn = document.getElementById('btn-flipper-complete');
+  if (completeBtn) {
+    completeBtn.disabled = true;
+    completeBtn.classList.remove('active');
+  }
+  
+  // 상태 메시지 업데이트
+  updateFlipperInfoText('플리퍼 메시가 초기화되었습니다. 원하는 경우 "플리퍼 생성" 버튼을 다시 클릭하세요.');
+  
+  return true;
+}
