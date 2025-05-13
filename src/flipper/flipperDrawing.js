@@ -248,6 +248,52 @@ function onFlipperPointerDown(event) {
   // 대상 메시와의 교차점 확인
   const intersects = raycaster.intersectObject(refs.targetMesh, true);
   
+  // 마커 인터섹션 체크
+  const markerIntersects = raycaster.intersectObjects(pointMarkers);
+  if (markerIntersects.length > 0) {
+    // 클릭된 마커
+    const clickedMarker = markerIntersects[0].object;
+    const markerIndex = pointMarkers.indexOf(clickedMarker);
+    if (markerIndex !== -1) {
+      // Alt 키를 누른 상태로 마커 클릭: 해당 점 이후의 모든 점 제거
+      if (event.altKey) {
+        // 해당 점 이후의 모든 점과 곡선 제거
+        removePointsAfter(markerIndex);
+        // 상태 메시지 업데이트
+        updateFlipperInfoText(`${markerIndex + 1}번 점 이후의 모든 점을 제거했습니다. 계속해서 그리세요.`);
+        return;
+      }
+      
+      // Alt 키 없이 마커 클릭: 기존 동작 - 마커 제거
+      refs.scene.remove(clickedMarker);
+      clickedMarker.geometry.dispose();
+      clickedMarker.material.dispose();
+      pointMarkers.splice(markerIndex, 1);
+      drawingPoints.splice(markerIndex, 1);
+      
+      // 제거된 점에 연결된 곡선 업데이트
+      updateCurvesAfterPointRemoval(markerIndex);
+      
+      // UI 업데이트
+      const isMolar = [17, 27, 37, 47].includes(parseInt(window.selectedToothId));
+      const needed  = isMolar ? 1 : 2;
+      const instr   = document.getElementById('placement-instructions');
+      const confirmBtn = document.getElementById('btn-flipper-complete');
+      
+      confirmBtn.disabled = pointMarkers.length < needed;
+      
+      if (pointMarkers.length === 0) {
+        instr.textContent = isMolar
+          ? `${window.selectedToothId}번 치아 배치: 위치를 클릭하세요`
+          : '두 지점을 클릭하세요 (중앙에 배치됩니다)';
+      } else if (!isMolar && pointMarkers.length === 1) {
+        instr.textContent = '두 번째 지점을 클릭하세요.';
+      }
+      
+      return;
+    }
+  }
+  
   if (intersects.length > 0) {
     // 그리기 모드 활성화
     isDrawing = true;
@@ -264,6 +310,92 @@ function onFlipperPointerDown(event) {
     
     // 커서 스타일 변경
     refs.renderer.domElement.style.cursor = 'crosshair';
+  }
+}
+
+/**
+ * 특정 인덱스 이후의 모든 점과 곡선 제거
+ * @param {number} index - 유지할 마지막 점의 인덱스
+ */
+function removePointsAfter(index) {
+  // 인덱스가 유효한지 확인
+  if (index < 0 || index >= drawingPoints.length - 1) return;
+  
+  // 해당 인덱스 이후의 모든 점 제거
+  for (let i = drawingPoints.length - 1; i > index; i--) {
+    // 마커 제거
+    const marker = pointMarkers[i];  // placementMarkers를 pointMarkers로 수정
+    if (marker && marker.parent) {
+      refs.scene.remove(marker);
+      marker.geometry.dispose();
+      marker.material.dispose();
+    }
+    
+    // 배열에서 제거
+    pointMarkers.pop();  // placementMarkers를 pointMarkers로 수정
+    drawingPoints.pop();
+  }
+  
+  // 곡선 업데이트
+  for (let i = curveLines.length - 1; i >= index; i--) {
+    const curveLine = curveLines[i];
+    if (curveLine && curveLine.parent) {
+      refs.scene.remove(curveLine);
+      curveLine.geometry.dispose();
+      curveLine.material.dispose();
+    }
+    curveLines.pop();
+  }
+  
+  // 그리기 상태 재설정 - 계속 그릴 수 있도록
+  isDrawing = true;
+  selectedAreaPoints = []; // 닫힌 영역 초기화
+
+  // 버튼 상태 업데이트
+  const completeBtn = document.getElementById('btn-flipper-complete');
+  const generateBtn = document.getElementById('btn-generate-flipper');
+  if (completeBtn) completeBtn.disabled = true;
+  if (generateBtn) generateBtn.disabled = true;
+}
+
+/**
+ * 점 제거 후 연결된 곡선 업데이트
+ * @param {number} removedIndex - 제거된 점의 인덱스
+ */
+function updateCurvesAfterPointRemoval(removedIndex) {
+  // 제거해야 할 곡선들
+  const curvesToRemove = [];
+  
+  // 제거된 점에 연결된 곡선 찾기 (앞/뒤)
+  if (removedIndex > 0) {
+    curvesToRemove.push(removedIndex - 1);
+  }
+  if (removedIndex < curveLines.length) {
+    curvesToRemove.push(removedIndex);
+  }
+  
+  // 곡선 제거 (인덱스가 큰 것부터 제거하여 인덱스 변경 방지)
+  curvesToRemove.sort((a, b) => b - a).forEach(curveIndex => {
+    if (curveLines[curveIndex] && curveLines[curveIndex].parent) {
+      refs.scene.remove(curveLines[curveIndex]);
+      curveLines[curveIndex].geometry.dispose();
+      curveLines[curveIndex].material.dispose();
+    }
+    curveLines.splice(curveIndex, 1);
+  });
+  
+  // 남은 점이 2개 이상이고 삭제된 점이 중간에 있다면 새 곡선 생성
+  if (drawingPoints.length >= 2 && removedIndex > 0 && removedIndex < drawingPoints.length) {
+    const prevPointIndex = removedIndex - 1;
+    const nextPointIndex = removedIndex; // 삭제 후 인덱스가 조정됨
+    
+    if (prevPointIndex >= 0 && nextPointIndex < drawingPoints.length) {
+      const prevPoint = drawingPoints[prevPointIndex];
+      const nextPoint = drawingPoints[nextPointIndex];
+      
+      const newCurve = createCurveBetweenPoints(prevPoint, nextPoint);
+      curveLines.splice(prevPointIndex, 0, newCurve);
+    }
   }
 }
 
