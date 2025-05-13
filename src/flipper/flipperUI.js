@@ -81,11 +81,11 @@ export function initFlipperUI() {
             min="0.2" 
             max="5" 
             step="0.1" 
-            value="1.5"
+            value="1.0"
             class="custom-slider"
             style="flex: 1; margin-right: 8px;"
           />
-          <span id="thickness-value" style="color: #000; font-weight: bold;">1.5mm</span>
+          <span id="thickness-value" style="color: #000; font-weight: bold;">1.0mm</span>
         </div>
       </div>
       

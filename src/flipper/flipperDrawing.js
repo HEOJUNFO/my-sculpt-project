@@ -9,7 +9,7 @@ let drawingPoints = [];
 let pointMarkers = [];
 let curveLines = [];
 let selectedAreaPoints = [];
-let flipperThickness = 1.5; // 기본 두께 (mm)
+let flipperThickness = 1.0; // 기본 두께 (mm)
 let curveQuality = 20; // 곡선 품질
 let flipperMesh = null;
 
