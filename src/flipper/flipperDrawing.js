@@ -606,10 +606,9 @@ function updatePointPosition(index, intersection) {
   let normal = intersection.face.normal.clone();
   normal.transformDirection(refs.targetMesh.matrixWorld).normalize();
   
-  // Z-fighting 방지를 위해 노멀 방향으로 약간 오프셋
   position.addScaledVector(normal, 0.001);
   
-  // 점 데이터 업데이트
+  // drawingPoints 업데이트
   const pointData = drawingPoints[index];
   pointData.position.copy(position);
   pointData.normal.copy(normal);
@@ -622,8 +621,11 @@ function updatePointPosition(index, intersection) {
   // 연결된 곡선 업데이트
   updateConnectedCurves(index);
   
-  // 추가: selectedAreaPoints 배열도 업데이트
-  if (selectedAreaPoints.length > 0 && index < selectedAreaPoints.length) {
+  // selectedAreaPoints 업데이트 - 필요시 확장
+  if (selectedAreaPoints.length > 0) {
+    while (index >= selectedAreaPoints.length) {
+      selectedAreaPoints.push(new THREE.Vector3());
+    }
     selectedAreaPoints[index] = position.clone();
   }
 }
@@ -841,7 +843,13 @@ function updateFlipperMesh() {
     // 로딩 메시지 표시
     updateFlipperInfoText('플리퍼를 업데이트하는 중...');
     
-    // 약간의 지연 후 플리퍼 재생성 (UI 업데이트를 위해)
+    // 이 부분이 누락됨: 기존 플리퍼 제거
+    refs.scene.remove(flipperMesh);
+    flipperMesh.geometry.dispose();
+    flipperMesh.material.dispose();
+    flipperMesh = null;
+    
+    // 약간의 지연 후 플리퍼 재생성
     setTimeout(() => {
       generateFlipper();
     }, 100);
