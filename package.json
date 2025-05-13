@@ -12,6 +12,7 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "earcut": "^3.0.1",
     "three": "^0.172.0",
     "three-mesh-bvh": "^0.8.3",
     "three-subdivide": "^1.1.5"
