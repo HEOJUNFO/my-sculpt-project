@@ -491,7 +491,7 @@ function onFlipperPointerMove(event) {
 /**
  * 포인터 업 이벤트 핸들러
  */
-function onFlipperPointerUp(event) {
+function onPointerUp(event) {
   // 점 드래깅 종료
   if (isDraggingPoint) {
     isDraggingPoint = false;
@@ -533,6 +533,13 @@ function onFlipperClick(event) {
     completeFlipperArea();
     return;
   }
+}
+
+/**
+ * 플리퍼 포인터 업 이벤트 핸들러
+ */
+function onFlipperPointerUp(event) {
+  onPointerUp(event);
 }
 
 /**
@@ -614,6 +621,11 @@ function updatePointPosition(index, intersection) {
   
   // 연결된 곡선 업데이트
   updateConnectedCurves(index);
+  
+  // 추가: selectedAreaPoints 배열도 업데이트
+  if (selectedAreaPoints.length > 0 && index < selectedAreaPoints.length) {
+    selectedAreaPoints[index] = position.clone();
+  }
 }
 
 /**
@@ -814,7 +826,13 @@ export function setFlipperThickness(thickness) {
 function updateFlipperMesh() {
   // 이미 생성된 플리퍼가 있다면 업데이트
   if (flipperMesh && flipperMesh.parent) {
-    generateFlipper();
+    // 로딩 메시지 표시
+    updateFlipperInfoText('플리퍼를 업데이트하는 중...');
+    
+    // 약간의 지연 후 플리퍼 재생성 (UI 업데이트를 위해)
+    setTimeout(() => {
+      generateFlipper();
+    }, 100);
   }
 }
 
