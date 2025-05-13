@@ -811,14 +811,26 @@ function completeFlipperArea() {
  * 플리퍼 두께 설정
  */
 export function setFlipperThickness(thickness) {
+  // 이전 두께와 현재 두께 저장
+  const previousThickness = flipperThickness;
   flipperThickness = thickness;
-  console.log(`플리퍼 두께: ${thickness}mm`);
+  console.log(`플리퍼 두께: ${thickness}mm (이전: ${previousThickness}mm)`);
   
   // 플리퍼가 이미 생성되어 있다면 업데이트
   if (flipperMesh && flipperMesh.parent) {
-    generateFlipper();
+    // 기존 메시 제거
+    refs.scene.remove(flipperMesh);
+    flipperMesh.geometry.dispose();
+    flipperMesh.material.dispose();
+    flipperMesh = null;
+    
+    // 약간의 지연 후 재생성 (UI 업데이트를 위해)
+    setTimeout(() => {
+      generateFlipper();
+    }, 50);
   }
 }
+
 
 /**
  * 플리퍼 메시 업데이트
