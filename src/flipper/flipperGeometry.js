@@ -407,6 +407,10 @@ export function generateFlipper() {
     
     // 부드러운 음영을 위한 정점 노멀 계산
     geometry.computeVertexNormals();
+
+    geometry.attributes.position.setUsage(THREE.DynamicDrawUsage);
+    geometry.attributes.normal.setUsage(THREE.DynamicDrawUsage);
+    geometry.computeBoundsTree({ setBoundingBox: false });
     
     // 원래 모델과 유사한 재질 생성
     const surfaceMaterial = new THREE.MeshMatcapMaterial({
@@ -418,6 +422,8 @@ export function generateFlipper() {
     // 메시 생성
     const surfaceMesh = new THREE.Mesh(geometry, surfaceMaterial);
     surfaceMesh.userData.isFlipperMesh = true;
+    surfaceMesh.userData.canSculpt = true;
+    surfaceMesh.frustumCulled = false;
     refs.scene.add(surfaceMesh);
     
     // 참조 저장

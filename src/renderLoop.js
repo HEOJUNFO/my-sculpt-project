@@ -52,6 +52,8 @@ export function startRenderLoop(renderer, scene, camera, stats) {
 
     // 라이브러리 완료 단계 확인 (단계 6)
     const isLibraryCompleted = getCurrentStep() === 6;
+    // 플리퍼 완료 단계 확인 (단계 8)
+    const isFlipperCompleted = getCurrentStep() === 8;
 
     // 브러시 표시 여부 - 라이브러리/플리퍼 모드에서는 스컬프 비활성화
     if (
@@ -79,7 +81,23 @@ export function startRenderLoop(renderer, scene, camera, stats) {
       // 레이캐스팅 대상을 결정
       let hit;
       
-      if (isLibraryCompleted) {
+      if (isFlipperCompleted) {
+        // 플리퍼 완료 단계에서는 플리퍼 메쉬만 대상으로 레이캐스팅 수행
+        const flipperMesh = scene.children.find(obj => 
+          obj.isMesh && obj.userData && obj.userData.isFlipperMesh);
+        
+        if (flipperMesh) {
+          const intersects = raycaster.intersectObject(flipperMesh);
+          hit = intersects[0]; // 가장 가까운 교차점
+          
+          if (hit) {
+            // 선택된 플리퍼 메쉬를 targetMesh로 설정
+            if (refs.targetMesh !== hit.object) {
+              refs.targetMesh = hit.object;
+            }
+          }
+        }
+      } else if (isLibraryCompleted) {
         // 라이브러리 완료 단계에서는 치아 모델만 대상으로 레이캐스팅 수행
         const toothModels = scene.children.filter(obj => 
           obj.isMesh && obj.userData && obj.userData.isLibraryTooth);
@@ -102,6 +120,15 @@ export function startRenderLoop(renderer, scene, camera, stats) {
       }
       
       if (hit) {
+        // 플리퍼 완료 단계에서 플리퍼가 아닌 경우 스컬프 비활성화
+        if (isFlipperCompleted && (!hit.object.userData || !hit.object.userData.isFlipperMesh)) {
+          if (refs.brush) {
+            refs.brush.visible = false;
+          }
+          lastCastPose.setScalar(Infinity);
+          return;
+        }
+        
         // 라이브러리 완료 단계에서 치아가 아닌 경우 스컬프 비활성화
         if (isLibraryCompleted && (!hit.object.userData || !hit.object.userData.isLibraryTooth)) {
           if (refs.brush) {
@@ -133,8 +160,8 @@ export function startRenderLoop(renderer, scene, camera, stats) {
           return;
         }
 
-        // 타겟 메시 결정 (일반 단계에서는 refs.targetMesh, 라이브러리 완료 후에는 hit.object)
-        const targetObject = isLibraryCompleted ? hit.object : refs.targetMesh;
+        // 타겟 메시 결정 (일반 단계에서는 refs.targetMesh, 플리퍼/라이브러리 완료 후에는 hit.object)
+        const targetObject = isFlipperCompleted || isLibraryCompleted ? hit.object : refs.targetMesh;
 
         if (!(mouseState || lastMouseState)) {
           // 브러시 첫 클릭
