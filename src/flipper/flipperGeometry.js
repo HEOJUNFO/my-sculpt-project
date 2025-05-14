@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { refs } from '../modelManager.js';
 import { getFlipperState, setFlipperMesh, updateFlipperInfoText } from './flipperDrawing.js';
+import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
 /**
  * 플리퍼 생성
@@ -79,7 +80,7 @@ export function generateFlipper() {
     }
     
     // 고밀도 삼각형 그리드 사용
-    let triangles = createDenseTriangleGrid(cleanBoundary2D, 80);
+    let triangles = createDenseTriangleGrid(cleanBoundary2D, 160);
     
     // 6. 삼각분할을 위한 3D 정점 생성 (개선된 레이캐스트)
     const frontPositions = new Float32Array(triangles.length * 3);
@@ -401,11 +402,12 @@ export function generateFlipper() {
     const normals = new Float32Array(normalArray);
     
     // 지오메트리 생성
-    const geometry = new THREE.BufferGeometry();
+    let geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
     geometry.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
     
     // 부드러운 음영을 위한 정점 노멀 계산
+    geometry = BufferGeometryUtils.mergeVertices(geometry);
     geometry.computeVertexNormals();
 
     geometry.attributes.position.setUsage(THREE.DynamicDrawUsage);
@@ -451,7 +453,7 @@ export function generateFlipper() {
 /**
  * 고밀도 삼각형 그리드 생성 함수
  */
-function createDenseTriangleGrid(boundaryPoints, gridSize = 80) {
+function createDenseTriangleGrid(boundaryPoints, gridSize = 160) {
   // 경계 상자 찾기
   const minX = Math.min(...boundaryPoints.map(p => p.x));
   const maxX = Math.max(...boundaryPoints.map(p => p.x));
