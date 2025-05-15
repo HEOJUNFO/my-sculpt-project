@@ -187,9 +187,14 @@ function applyBlockout() {
     return;
   }
   
-  // Convert to non-indexed geometry if needed
-  if (refs.targetMesh.geometry.index !== null) {
-    refs.targetMesh.geometry = refs.targetMesh.geometry.toNonIndexed();
+  // 언더컷(복사) 위치에서 사용할 재질 얻기 - 타겟 메쉬와 동일하게
+  let blockoutMaterial;
+  if (Array.isArray(refs.targetMesh.material)) {
+    // 다중 재질인 경우 첫 번째 재질 복사
+    blockoutMaterial = refs.targetMesh.material[0].clone();
+  } else {
+    // 단일 재질 복사
+    blockoutMaterial = refs.targetMesh.material.clone();
   }
   
   // Get blockout distance from slider if available
@@ -257,38 +262,27 @@ function applyBlockout() {
   }
   
   if (blockoutGeometries.length > 0) {
-    // Merge all blockout geometries
+    // 이 부분이 수정된 부분: 병합하지 않고 별도 메쉬로 생성
+    
+    // 모든 블록아웃 지오메트리 통합
     const mergedBlockoutGeometry = BufferGeometryUtils.mergeGeometries(blockoutGeometries, false);
+    mergedBlockoutGeometry.computeVertexNormals();
+    mergedBlockoutGeometry.computeBoundingSphere();
     
-    // Merge with target mesh
-    let mergedGeometry = BufferGeometryUtils.mergeGeometries(
-      [refs.targetMesh.geometry, mergedBlockoutGeometry],
-      false
-    );
+    // 블록아웃 메쉬 생성 (별도 메쉬)
+    const blockoutMesh = new THREE.Mesh(mergedBlockoutGeometry, blockoutMaterial);
+    blockoutMesh.name = 'BlockoutMesh';
+    blockoutMesh.userData = {
+      type: 'blockout',
+      createdAt: new Date().toISOString()
+    };
     
-    // Clean up geometry
-    mergedGeometry = BufferGeometryUtils.mergeVertices(mergedGeometry, 1e-5);
-    mergedGeometry.computeVertexNormals();
-    mergedGeometry.computeBoundingSphere();
-
-    mergedGeometry.attributes.position.setUsage(THREE.DynamicDrawUsage);
-    mergedGeometry.attributes.normal.setUsage(THREE.DynamicDrawUsage);
+    // 씬에 별도로 추가
+    refs.scene.add(blockoutMesh);
     
-    // Update target mesh with new geometry
-    refs.targetMesh.geometry.dispose();
-    refs.targetMesh.geometry = mergedGeometry;
+    console.log(`블록아웃 메쉬 생성 완료: ${triangleCount}개 언더컷 영역 처리됨`);
     
-    // Compute BVH for the new geometry
-    refs.targetMesh.geometry.computeBoundsTree?.({ setBoundingBox: false });
-    
-    // Update BVH helper if it exists
-    if (refs.bvhHelper && refs.bvhHelper.parent) {
-      refs.bvhHelper.update();
-    }
-    
-    console.log(`Applied blockout to ${triangleCount} undercut areas`);
-    
-    // Clean up undercut visualization
+    // 언더컷 시각화 제거
     if (undercutMesh && undercutMesh.parent) {
       refs.scene.remove(undercutMesh);
       undercutMesh.geometry.dispose();
