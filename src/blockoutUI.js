@@ -260,28 +260,33 @@ function applyBlockout() {
     // Merge all blockout geometries
     const mergedBlockoutGeometry = BufferGeometryUtils.mergeGeometries(blockoutGeometries, false);
     
+    // Merge with target mesh
+    let mergedGeometry = BufferGeometryUtils.mergeGeometries(
+      [refs.targetMesh.geometry, mergedBlockoutGeometry],
+      false
+    );
+    
     // Clean up geometry
-    const cleanBlockoutGeometry = BufferGeometryUtils.mergeVertices(mergedBlockoutGeometry, 1e-5);
-    cleanBlockoutGeometry.computeVertexNormals();
-    cleanBlockoutGeometry.computeBoundingSphere();
+    mergedGeometry = BufferGeometryUtils.mergeVertices(mergedGeometry, 1e-5);
+    mergedGeometry.computeVertexNormals();
+    mergedGeometry.computeBoundingSphere();
 
-    cleanBlockoutGeometry.attributes.position.setUsage(THREE.DynamicDrawUsage);
-    cleanBlockoutGeometry.attributes.normal.setUsage(THREE.DynamicDrawUsage);
+    mergedGeometry.attributes.position.setUsage(THREE.DynamicDrawUsage);
+    mergedGeometry.attributes.normal.setUsage(THREE.DynamicDrawUsage);
     
-    // Create a new blockout mesh using the same material as target mesh
-    const blockoutMesh = new THREE.Mesh(cleanBlockoutGeometry, refs.targetMesh.material);
-    blockoutMesh.userData.isBlockoutMesh = true; // Mark this as a blockout mesh for identification
+    // Update target mesh with new geometry
+    refs.targetMesh.geometry.dispose();
+    refs.targetMesh.geometry = mergedGeometry;
     
-    // Add the blockout mesh to the scene
-    refs.scene.add(blockoutMesh);
+    // Compute BVH for the new geometry
+    refs.targetMesh.geometry.computeBoundsTree?.({ setBoundingBox: false });
     
-    // Store the blockout mesh reference in refs for later use if needed
-    refs.blockoutMesh = blockoutMesh;
+    // Update BVH helper if it exists
+    if (refs.bvhHelper && refs.bvhHelper.parent) {
+      refs.bvhHelper.update();
+    }
     
-    // Compute BVH for the new geometry for better performance
-    blockoutMesh.geometry.computeBoundsTree?.({ setBoundingBox: false });
-    
-    console.log(`Applied blockout to ${triangleCount} undercut areas as a separate mesh`);
+    console.log(`Applied blockout to ${triangleCount} undercut areas`);
     
     // Clean up undercut visualization
     if (undercutMesh && undercutMesh.parent) {
