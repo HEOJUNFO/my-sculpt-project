@@ -751,6 +751,17 @@ function createCurveBetweenPoints(pointA, pointB) {
   // Catmull-Rom 곡선 생성
   const curve = new THREE.CatmullRomCurve3(simplifiedPoints);
   const curvePoints = curve.getPoints(50);
+  
+  // 평균 노멀 계산 (Z-fighting 방지용)
+  const averageNormal = new THREE.Vector3()
+    .addVectors(normalA, normalB)
+    .normalize();
+  
+  // 모든 점을 노멀 방향으로 약간 오프셋
+  for (let i = 0; i < curvePoints.length; i++) {
+    curvePoints[i].addScaledVector(averageNormal, 0.001);
+  }
+  
   const curveGeometry = new THREE.BufferGeometry().setFromPoints(curvePoints);
   
   // 선 색상은 일반적인 경계선은 빨간색, 닫힌 영역 완성선은 초록색
@@ -758,10 +769,19 @@ function createCurveBetweenPoints(pointA, pointB) {
                    pointB === drawingPoints[0];
                    
   const lineMaterial = new THREE.LineBasicMaterial({
-    color: isClosing ? 0x00ff00 : 0xff0000
+    color: isClosing ? 0x00ff00 : 0xff0000,
+    depthTest: false,    // 깊이 테스트 비활성화
+    depthWrite: false,   // 깊이 버퍼에 쓰지 않음
+    transparent: true,   // 투명도 활성화
+    opacity: 0.8,        // 마커와 유사한 투명도
+    linewidth: 2         // 더 두꺼운 선 (일부 브라우저에서 제한될 수 있음)
   });
   
   const curveLine = new THREE.Line(curveGeometry, lineMaterial);
+  
+  // 높은 렌더링 순서 설정 (마커와 동일)
+  curveLine.renderOrder = 9999;
+  
   refs.scene.add(curveLine);
   
   return curveLine;
