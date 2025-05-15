@@ -276,8 +276,8 @@ function onFlipperPointerDown(event) {
       
       // UI 업데이트
       const isMolar = [17, 27, 37, 47].includes(parseInt(window.selectedToothId));
-      const needed = isMolar ? 1 : 2;
-      const instr = document.getElementById('placement-instructions');
+      const needed  = isMolar ? 1 : 2;
+      const instr   = document.getElementById('placement-instructions');
       const confirmBtn = document.getElementById('btn-flipper-complete');
       
       confirmBtn.disabled = pointMarkers.length < needed;
@@ -324,7 +324,7 @@ function removePointsAfter(index) {
   // 해당 인덱스 이후의 모든 점 제거
   for (let i = drawingPoints.length - 1; i > index; i--) {
     // 마커 제거
-    const marker = pointMarkers[i];
+    const marker = pointMarkers[i];  // placementMarkers를 pointMarkers로 수정
     if (marker && marker.parent) {
       refs.scene.remove(marker);
       marker.geometry.dispose();
@@ -332,7 +332,7 @@ function removePointsAfter(index) {
     }
     
     // 배열에서 제거
-    pointMarkers.pop();
+    pointMarkers.pop();  // placementMarkers를 pointMarkers로 수정
     drawingPoints.pop();
   }
   
@@ -552,7 +552,7 @@ function addFlipperPoint(intersect) {
   normal.transformDirection(refs.targetMesh.matrixWorld).normalize();
   
   // Z-fighting 방지를 위해 노멀 방향으로 약간 오프셋
-  position.addScaledVector(normal, 0.002);
+  position.addScaledVector(normal, 0.001);
   
   // 마커 생성 (첫 번째 점이면 초록색, 나머지는 빨간색)
   const isFirst = drawingPoints.length === 0;
@@ -560,17 +560,10 @@ function addFlipperPoint(intersect) {
   const markerColor = isFirst ? 0x00ff00 : 0xff0000;
   
   const markerGeometry = new THREE.SphereGeometry(markerSize, 8, 8);
-  const markerMaterial = new THREE.MeshBasicMaterial({ 
-    color: markerColor,
-    depthTest: false,    // 깊이 테스트 비활성화
-    transparent: true,
-    opacity: 0.9
-  });
+  const markerMaterial = new THREE.MeshBasicMaterial({ color: markerColor });
   const marker = new THREE.Mesh(markerGeometry, markerMaterial);
   
   marker.position.copy(position);
-  // Z-fighting 방지를 위한 설정 추가
-  marker.renderOrder = 9999;  // 높은 렌더링 순서
   refs.scene.add(marker);
   
   // 점 데이터 저장
@@ -613,7 +606,7 @@ function updatePointPosition(index, intersection) {
   let normal = intersection.face.normal.clone();
   normal.transformDirection(refs.targetMesh.matrixWorld).normalize();
   
-  position.addScaledVector(normal, 0.002);
+  position.addScaledVector(normal, 0.001);
   
   // drawingPoints 업데이트
   const pointData = drawingPoints[index];
@@ -733,11 +726,11 @@ function createCurveBetweenPoints(pointA, pointB) {
       let hitNormal = intersects[0].face.normal.clone();
       hitNormal.transformDirection(refs.targetMesh.matrixWorld);
       
-      pos = intersects[0].point.clone().addScaledVector(hitNormal, 0.002);
+      pos = intersects[0].point.clone().addScaledVector(hitNormal, 0.001);
       pointsOnSurface.push(pos);
     } else {
       // 레이캐스팅 실패 시 보간점 사용
-      pos.addScaledVector(normal, 0.002);
+      pos.addScaledVector(normal, 0.001);
       pointsOnSurface.push(pos);
     }
   }
@@ -765,26 +758,10 @@ function createCurveBetweenPoints(pointA, pointB) {
                    pointB === drawingPoints[0];
                    
   const lineMaterial = new THREE.LineBasicMaterial({
-    color: isClosing ? 0x00ff00 : 0xff0000,
-    transparent: true,
-    opacity: 0.9,
-    depthTest: false,    // 깊이 테스트 비활성화
-    linewidth: 2         // 선 두께 (일부 렌더러에서만 지원)
+    color: isClosing ? 0x00ff00 : 0xff0000
   });
   
   const curveLine = new THREE.Line(curveGeometry, lineMaterial);
-  // 렌더링 순서 높게 설정
-  curveLine.renderOrder = 9999;
-  
-  // 노멀 방향으로 약간 오프셋
-  const avgNormal = new THREE.Vector3()
-    .addVectors(pointA.normal || new THREE.Vector3(), 
-                pointB.normal || new THREE.Vector3())
-    .normalize();
-  if (avgNormal.lengthSq() > 0) {
-    curveLine.position.addScaledVector(avgNormal, 0.001);
-  }
-  
   refs.scene.add(curveLine);
   
   return curveLine;
