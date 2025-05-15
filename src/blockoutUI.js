@@ -182,5 +182,118 @@ function detectUndercuts() {
 }
 
 function applyBlockout() {
- 
+  if (!refs.targetMesh || !undercutMesh) {
+    console.warn('No target mesh or undercuts detected');
+    return;
+  }
+  
+  // Convert to non-indexed geometry if needed
+  if (refs.targetMesh.geometry.index !== null) {
+    refs.targetMesh.geometry = refs.targetMesh.geometry.toNonIndexed();
+  }
+  
+  // Get blockout distance from slider if available
+  let blockoutDistance = 0.1; // Default distance
+  const blockoutSlider = document.getElementById('blockoutDistanceRange');
+  if (blockoutSlider) {
+    blockoutDistance = parseFloat(blockoutSlider.value);
+  }
+  
+  const insertionDir = new THREE.Vector3();
+  
+  if (savedCameraState && savedCameraState.direction) {
+    insertionDir.copy(savedCameraState.direction);
+  } else {
+    refs.camera.getWorldDirection(insertionDir);
+  }
+  
+  const undercutPositions = undercutMesh.geometry.attributes.position.array;
+  const triangleCount = undercutPositions.length / 9;
+  const blockoutGeometries = [];
+  
+  for (let i = 0; i < triangleCount; i++) {
+    const a = new THREE.Vector3(
+      undercutPositions[i * 9],
+      undercutPositions[i * 9 + 1],
+      undercutPositions[i * 9 + 2]
+    );
+    const b = new THREE.Vector3(
+      undercutPositions[i * 9 + 3],
+      undercutPositions[i * 9 + 4],
+      undercutPositions[i * 9 + 5]
+    );
+    const c = new THREE.Vector3(
+      undercutPositions[i * 9 + 6],
+      undercutPositions[i * 9 + 7],
+      undercutPositions[i * 9 + 8]
+    );
+  
+    // Create extruded triangle (prism)
+    const a2 = a.clone().addScaledVector(insertionDir, blockoutDistance);
+    const b2 = b.clone().addScaledVector(insertionDir, blockoutDistance);
+    const c2 = c.clone().addScaledVector(insertionDir, blockoutDistance);
+  
+    const vertices = [];
+    // Top face
+    vertices.push(a2.x, a2.y, a2.z, b2.x, b2.y, b2.z, c2.x, c2.y, c2.z);
+    // Bottom face
+    vertices.push(a.x, a.y, a.z, c.x, c.y, c.z, b.x, b.y, b.z);
+    // Side 1
+    vertices.push(a.x, a.y, a.z, b.x, b.y, b.z, b2.x, b2.y, b2.z);
+    vertices.push(a.x, a.y, a.z, b2.x, b2.y, b2.z, a2.x, a2.y, a2.z);
+    // Side 2
+    vertices.push(b.x, b.y, b.z, c.x, c.y, c.z, c2.x, c2.y, c2.z);
+    vertices.push(b.x, b.y, b.z, c2.x, c2.y, c2.z, b2.x, b2.y, b2.z);
+    // Side 3
+    vertices.push(c.x, c.y, c.z, a.x, a.y, a.z, a2.x, a2.y, a2.z);
+    vertices.push(c.x, c.y, c.z, a2.x, a2.y, a2.z, c2.x, c2.y, c2.z);
+  
+    const prismGeometry = new THREE.BufferGeometry();
+    prismGeometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+    prismGeometry.computeVertexNormals();
+
+    const nonIndexedPrismGeometry = prismGeometry.index ? prismGeometry.toNonIndexed() : prismGeometry;
+    blockoutGeometries.push(nonIndexedPrismGeometry);
+  }
+  
+  if (blockoutGeometries.length > 0) {
+    // Merge all blockout geometries
+    const mergedBlockoutGeometry = BufferGeometryUtils.mergeGeometries(blockoutGeometries, false);
+    
+    // Merge with target mesh
+    let mergedGeometry = BufferGeometryUtils.mergeGeometries(
+      [refs.targetMesh.geometry, mergedBlockoutGeometry],
+      false
+    );
+    
+    // Clean up geometry
+    mergedGeometry = BufferGeometryUtils.mergeVertices(mergedGeometry, 1e-5);
+    mergedGeometry.computeVertexNormals();
+    mergedGeometry.computeBoundingSphere();
+
+    mergedGeometry.attributes.position.setUsage(THREE.DynamicDrawUsage);
+    mergedGeometry.attributes.normal.setUsage(THREE.DynamicDrawUsage);
+    
+    // Update target mesh with new geometry
+    refs.targetMesh.geometry.dispose();
+    refs.targetMesh.geometry = mergedGeometry;
+    
+    // Compute BVH for the new geometry
+    refs.targetMesh.geometry.computeBoundsTree?.({ setBoundingBox: false });
+    
+    // Update BVH helper if it exists
+    if (refs.bvhHelper && refs.bvhHelper.parent) {
+      refs.bvhHelper.update();
+    }
+    
+    console.log(`Applied blockout to ${triangleCount} undercut areas`);
+    
+    // Clean up undercut visualization
+    if (undercutMesh && undercutMesh.parent) {
+      refs.scene.remove(undercutMesh);
+      undercutMesh.geometry.dispose();
+      undercutMesh.material.dispose();
+      undercutMesh = null;
+    }
+  }
 }
