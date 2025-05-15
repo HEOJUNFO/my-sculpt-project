@@ -554,10 +554,24 @@ function createRotationHelper(position) {
 function createMarker(pos) {
   console.log('마커 생성:', pos);
   const geom = new THREE.SphereGeometry(0.025, 16, 16);
-  const mat  = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+  const mat = new THREE.MeshBasicMaterial({ 
+    color: 0xff0000,
+    depthTest: false,    // 깊이 테스트 비활성화
+    transparent: true,
+    opacity: 0.8
+  });
   const marker = new THREE.Mesh(geom, mat);
   marker.position.copy(pos);
-  scene.add(marker);
+  
+  // 노멀 방향으로 약간 오프셋 (점 생성 시 노멀 정보가 있다면)
+  if (pos.normal) {
+    marker.position.addScaledVector(pos.normal, 0.002);
+  }
+  
+  // 렌더링 순서 높게 설정
+  marker.renderOrder = 9999;
+  
+  refs.scene.add(marker);
   placementMarkers.push(marker);
 }
 
