@@ -183,6 +183,7 @@ export function initScene() {
   refs.matcaps = matcaps;
   refs.brush = brush;
   refs.transformControls = transformControls;
+  refs.renderer = currentRenderer; // 초기 렌더러 설정
 
   // dat.GUI
   let gui;
@@ -344,6 +345,7 @@ export function initScene() {
           webglRenderer.domElement.style.display = 'none';
           webgpuRenderer.domElement.style.display = '';
           currentRenderer = webgpuRenderer;
+          refs.renderer = webgpuRenderer; // 여기에 추가: refs.renderer 업데이트
 
           // Controls 재설정
           controls.dispose();
@@ -372,6 +374,7 @@ export function initScene() {
           webgpuRenderer.domElement.style.display = 'none';
           webglRenderer.domElement.style.display = '';
           currentRenderer = webglRenderer;
+          refs.renderer = webglRenderer; // 여기에 추가: refs.renderer 업데이트
 
           controls.dispose();
           const newControls = new TrackballControls(camera, webglRenderer.domElement);
