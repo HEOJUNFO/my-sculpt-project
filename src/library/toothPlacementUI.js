@@ -3,6 +3,7 @@
 import * as THREE from 'three';
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
 import { highlightSelectedTooth } from './dentalChartUI.js';
+import { refs } from '../modelManager.js';
 
 /**
  * Module-level state
