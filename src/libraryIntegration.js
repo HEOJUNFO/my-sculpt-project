@@ -19,10 +19,12 @@ let libraryModeActive = false;
  * @param {string} modelPath - STL 모델 경로
  * @param {THREE.Vector3} position - 배치 위치
  * @param {THREE.Euler} rotation - 회전값 (선택적)
+ * @param {number} markerDistance - 마커 사이의 거리 (비대구치 선택 시)
  */
-function placeToothModel(toothId, modelPath, position, rotation) {
+function placeToothModel(toothId, modelPath, position, rotation, markerDistance) {
   console.log(`치아 ${toothId} 배치 중, 위치:`, position);
   if (rotation) console.log(`회전값:`, rotation);
+  if (markerDistance) console.log(`마커 간 거리:`, markerDistance);
   
   const loader = new STLLoader();
   
@@ -66,10 +68,30 @@ function placeToothModel(toothId, modelPath, position, rotation) {
         newGeometry = BufferGeometryUtils.mergeVertices(newGeometry);
         newGeometry.computeVertexNormals();
         newGeometry.computeBoundingSphere();
+        
+        // 스케일 조정 로직 - 마커 거리에 기반하여 계산
+        let scaleFactor;
+        
+        if (markerDistance) {
+          
+          
+          // 마커 거리에 비례하는 스케일 계산 (마커 거리/2)
+          scaleFactor = (markerDistance / 1.2) 
+          console.log(`마커 거리: ${markerDistance}, 계산된 스케일: ${scaleFactor}`);
+        } else {
+          // 대구치나 기존 방식 (고정 스케일)
+          if (newGeometry.boundingSphere) {
+            const radius = newGeometry.boundingSphere.radius;
+            scaleFactor = 0.2;
+          }
+        }
+        
+        // 스케일 적용
         if (newGeometry.boundingSphere) {
           const radius = newGeometry.boundingSphere.radius;
-          newGeometry.scale(0.2 / radius, 0.2 / radius, 0.2 / radius);
+          newGeometry.scale(scaleFactor / radius, scaleFactor / radius, scaleFactor / radius);
         }
+        
         newGeometry.center();
         newGeometry.computeBoundingBox();
         
@@ -119,7 +141,8 @@ function placeToothModel(toothId, modelPath, position, rotation) {
           toothId, 
           modelPath,
           isLibraryTooth: true,  // 라이브러리에서 배치된 치아임을 표시
-          originalMatcap: matcapTexture // 나중에 참조할 수 있도록 원본 matcap 저장
+          originalMatcap: matcapTexture, // 나중에 참조할 수 있도록 원본 matcap 저장
+          markerDistance: markerDistance || null // 마커 거리 정보 저장
         };
         
         // 씬에 추가
@@ -155,6 +178,9 @@ function placeToothModel(toothId, modelPath, position, rotation) {
     }
   );
 }
+
+// 전역 객체에 함수 등록
+window.placeToothModel = placeToothModel;
 
 /**
  * 성공 메시지 표시
@@ -460,9 +486,6 @@ function handleToothSelection(event) {
     console.log("선택된 치아 없음");
   }
 }
-
-// 전역 객체에 함수 등록
-window.placeToothModel = placeToothModel;
 
 /**
  * Initialize the library mode UI

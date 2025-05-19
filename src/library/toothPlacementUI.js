@@ -1,4 +1,4 @@
-// toothPlacementUI.js
+// src/library/toothPlacementUI.js
 
 import * as THREE from 'three';
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
@@ -758,9 +758,9 @@ function confirmPlacement() {
     cleanupPreviewTooth();
     clearPlacementMarkers();
     
-    // 글로벌 배치 함수 호출
+    // 글로벌 배치 함수 호출 (스케일 정보 전달 안 함)
     if (window.placeToothModel) {
-      window.placeToothModel(window.selectedToothId, window.selectedModelPath, finalPosition, finalRotation); // 수정
+      window.placeToothModel(window.selectedToothId, window.selectedModelPath, finalPosition, finalRotation);
     }
   } 
   // 프리뷰가 없는 경우 (비대구치)
@@ -797,9 +797,12 @@ function confirmPlacement() {
     // 마커 제거
     clearPlacementMarkers();
     
-    // 글로벌 배치 함수 호출
+    // 두 마커 사이의 거리 계산 (스케일 기준으로 사용)
+    const markerDistance = placementPoints[0].distanceTo(placementPoints[1]);
+    
+    // 글로벌 배치 함수 호출 (markerDistance 추가)
     if (window.placeToothModel) {
-      window.placeToothModel(window.selectedToothId, window.selectedModelPath, midpoint, rotation); // 수정
+      window.placeToothModel(window.selectedToothId, window.selectedModelPath, midpoint, rotation, markerDistance);
     }
   }
   
