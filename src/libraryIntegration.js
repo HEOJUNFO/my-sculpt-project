@@ -76,7 +76,7 @@ function placeToothModel(toothId, modelPath, position, rotation, markerDistance)
           
           
           // 마커 거리에 비례하는 스케일 계산 (마커 거리/2)
-          scaleFactor = (markerDistance / 1.2) 
+          scaleFactor = (markerDistance / 1.15) 
           console.log(`마커 거리: ${markerDistance}, 계산된 스케일: ${scaleFactor}`);
         } else {
           // 대구치나 기존 방식 (고정 스케일)
