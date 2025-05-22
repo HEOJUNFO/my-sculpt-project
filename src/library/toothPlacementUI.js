@@ -28,6 +28,9 @@ let distalConfirmed = false; // 디스탈 포인트가 확정되었는지 여부
 let raycaster = new THREE.Raycaster();
 let mouse = new THREE.Vector2();
 
+// 스케일 정보 저장용 변수 추가
+let originalGeometryBounds = null; // 원본 지오메트리 크기 정보
+
 /**
  * Initialize tooth placement functionality
  * @param {THREE.Scene} sceneObj
@@ -224,6 +227,7 @@ function resetPlacementState() {
   currentDistalPoint = null;
   placementPhase = 'mesial';
   distalConfirmed = false; // 디스탈 확정 플래그 초기화
+  originalGeometryBounds = null; // 원본 지오메트리 정보 초기화
   
   // 기존 마커와 프리뷰 정리
   cleanupPlacementObjects();
@@ -382,6 +386,28 @@ function createMesialMarker(pos) {
 }
 
 /**
+ * 스케일 정보를 동일하게 계산하는 유틸리티 함수
+ */
+function calculateUniformScale(geometry, mesialToDistalDistance) {
+  // 지오메트리의 바운딩 박스 계산
+  geometry.computeBoundingBox();
+  const bbox = geometry.boundingBox;
+  const size = new THREE.Vector3();
+  bbox.getSize(size);
+  
+  // 가장 긴 축의 길이를 기준으로 스케일 계산
+  const maxDimension = Math.max(size.x, size.y, size.z);
+  
+  // 메지오-디스탈 거리에 비례하는 스케일 (조정 가능한 계수)
+  const targetSize = mesialToDistalDistance * 1.8; // 실제 치아 크기 비율
+  const scaleFactor = targetSize / maxDimension;
+  console.log(scaleFactor)
+  
+  // 최소/최대 스케일 제한
+  return Math.max(0.01, Math.min(1.0, scaleFactor));
+}
+
+/**
  * 프리뷰 치아 생성
  */
 function createPreviewTooth(mesialPosition) {
@@ -415,10 +441,17 @@ function createPreviewTooth(mesialPosition) {
         return;
       }
       
+      // 지오메트리 처리 (실제 배치와 동일한 방식)
       geometry.computeVertexNormals();
-      geometry.computeBoundingSphere();
       geometry.computeBoundingBox();
       geometry.center();
+      
+      // 원본 지오메트리 크기 정보 저장 (스케일 계산용)
+      originalGeometryBounds = {
+        boundingBox: geometry.boundingBox.clone(),
+        size: new THREE.Vector3()
+      };
+      geometry.boundingBox.getSize(originalGeometryBounds.size);
       
       // 프리뷰용 반투명 재질 생성
       previewMaterial = new THREE.MeshStandardMaterial({
@@ -435,39 +468,14 @@ function createPreviewTooth(mesialPosition) {
       previewTooth.userData = { 
         type: 'previewTooth', 
         toothId: window.selectedToothId,
-        boundingBox: geometry.boundingBox.clone() // 바운딩 박스 저장
+        originalBounds: originalGeometryBounds // 원본 크기 정보 저장
       };
-      
-      // 기본 크기 설정
-      const defaultScale = 0.1;
+
+      const defaultScale = 0.01; // 적당한 초기 크기
       previewTooth.scale.set(defaultScale, defaultScale, defaultScale);
       
-      // 메지오 위치에 정확히 배치하기 위한 오프셋 계산
-      // 치아 번호에 따라 메지오 방향 결정
-      const toothId = parseInt(window.selectedToothId);
-      let mesialOffset = new THREE.Vector3();
-      
-      // 바운딩 박스를 기준으로 메지오 방향 오프셋 계산
-      const bbox = geometry.boundingBox;
-      const toothLength = bbox.max.x - bbox.min.x; // X축을 치아 길이로 가정
-      
-      if (toothId >= 11 && toothId <= 18) {
-        // 우측 상악 - 메지오는 중앙선 쪽 (음의 X 방향)
-        mesialOffset.x = toothLength * defaultScale * 0.3;
-      } else if (toothId >= 21 && toothId <= 28) {
-        // 좌측 상악 - 메지오는 중앙선 쪽 (양의 X 방향)
-        mesialOffset.x = -toothLength * defaultScale * 0.3;
-      } else if (toothId >= 31 && toothId <= 38) {
-        // 좌측 하악 - 메지오는 중앙선 쪽 (양의 X 방향)
-        mesialOffset.x = -toothLength * defaultScale * 0.3;
-      } else if (toothId >= 41 && toothId <= 48) {
-        // 우측 하악 - 메지오는 중앙선 쪽 (음의 X 방향)
-        mesialOffset.x = toothLength * defaultScale * 0.3;
-      }
-      
-      // 메지오 위치에 치아의 메지오 부분이 오도록 위치 조정
+      // 초기 위치 설정 (메지오 위치)
       previewTooth.position.copy(mesialPosition);
-      previewTooth.position.add(mesialOffset);
       
       // 씬에 추가
       scene.add(previewTooth);
@@ -490,40 +498,35 @@ function createPreviewTooth(mesialPosition) {
  * 프리뷰 치아 업데이트 (메지오-디스탈 거리와 방향에 따라)
  */
 function updatePreviewTooth() {
-  if (!previewTooth || !mesialPoint || !currentDistalPoint) return;
-  
+  if (!previewTooth || !mesialPoint || !currentDistalPoint || !originalGeometryBounds) return;
   // 메지오-디스탈 벡터 계산
   const mesialToDistal = new THREE.Vector3().subVectors(currentDistalPoint, mesialPoint);
   const distance = mesialToDistal.length();
   
-  // 거리에 비례한 스케일 설정
-  const baseScale = 0.05; // 기본 스케일
-  const scaleMultiplier = Math.max(0.1, Math.min(1.0, distance )); // 거리에 비례, 최소/최대 제한
-  const finalScale = baseScale * scaleMultiplier;
-  previewTooth.scale.set(finalScale, finalScale, finalScale);
+  // 통일된 스케일 계산 방식 사용
+  const scaleFactor = calculateUniformScale(previewTooth.geometry, distance);
+  previewTooth.scale.set(scaleFactor, scaleFactor, scaleFactor);
   
-  // 메지오 위치 기준으로 오프셋 재계산 (스케일 변경에 따라)
+  // 메지오 위치 기준으로 오프셋 계산
   const toothId = parseInt(window.selectedToothId);
   let mesialOffset = new THREE.Vector3();
   
-  // 바운딩 박스를 기준으로 메지오 방향 오프셋 계산 (스케일 적용)
-  const bbox = previewTooth.userData.boundingBox;
-  if (bbox) {
-    const toothLength = bbox.max.x - bbox.min.x; // X축을 치아 길이로 가정
-    
-    if (toothId >= 11 && toothId <= 18) {
-      // 우측 상악 - 메지오는 중앙선 쪽 (음의 X 방향)
-      mesialOffset.x = toothLength * finalScale * 0.3;
-    } else if (toothId >= 21 && toothId <= 28) {
-      // 좌측 상악 - 메지오는 중앙선 쪽 (양의 X 방향)
-      mesialOffset.x = -toothLength * finalScale * 0.3;
-    } else if (toothId >= 31 && toothId <= 38) {
-      // 좌측 하악 - 메지오는 중앙선 쪽 (양의 X 방향)
-      mesialOffset.x = -toothLength * finalScale * 0.3;
-    } else if (toothId >= 41 && toothId <= 48) {
-      // 우측 하악 - 메지오는 중앙선 쪽 (음의 X 방향)
-      mesialOffset.x = toothLength * finalScale * 0.3;
-    }
+  // 치아 길이 계산 (스케일 적용)
+  const toothLength = originalGeometryBounds.size.x * scaleFactor;
+  
+  // 치아 번호에 따른 메지오 방향 오프셋 계산
+  if (toothId >= 11 && toothId <= 18) {
+    // 우측 상악 - 메지오는 중앙선 쪽 (음의 X 방향)
+    mesialOffset.x = toothLength * 0.3;
+  } else if (toothId >= 21 && toothId <= 28) {
+    // 좌측 상악 - 메지오는 중앙선 쪽 (양의 X 방향)
+    mesialOffset.x = -toothLength * 0.3;
+  } else if (toothId >= 31 && toothId <= 38) {
+    // 좌측 하악 - 메지오는 중앙선 쪽 (양의 X 방향)
+    mesialOffset.x = -toothLength * 0.3;
+  } else if (toothId >= 41 && toothId <= 48) {
+    // 우측 하악 - 메지오는 중앙선 쪽 (음의 X 방향)
+    mesialOffset.x = toothLength * 0.3;
   }
   
   // 치아 위치 설정 - 메지오 마커 위치에 메지오 부분이 오도록 조정
@@ -608,10 +611,18 @@ function confirmPlacement() {
   // 메지오-디스탈 거리 계산
   const mesialToDistalDistance = mesialPoint.distanceTo(currentDistalPoint);
   
+  // 프리뷰와 동일한 스케일 정보 전달
+  const scaleInfo = {
+    scaleFactor: finalScale,
+    mesialToDistalDistance: mesialToDistalDistance,
+    originalBounds: originalGeometryBounds,
+    usePreviewScale: true // 프리뷰 스케일을 우선 사용하도록 플래그 설정
+  };
+  
   // 프리뷰 및 마커 제거
   cleanupPlacementObjects();
   
-  // 글로벌 배치 함수 호출
+  // 글로벌 배치 함수 호출 (스케일 정보 추가)
   if (window.placeToothModel) {
     window.placeToothModel(
       window.selectedToothId, 
@@ -619,7 +630,7 @@ function confirmPlacement() {
       finalPosition, 
       finalRotation, 
       mesialToDistalDistance,
-      finalScale // 스케일 정보 추가
+      scaleInfo // 상세한 스케일 정보 전달
     );
   }
   
@@ -666,7 +677,6 @@ export function isPlacementActive() {
  * Optionally track placed tooth meshes
  * @param {THREE.Mesh} toothMesh 
  */
-
 export function addPlacedTooth(toothMesh) {
   placedTeeth.push(toothMesh);
   console.log("추가된 치아:", toothMesh.userData?.toothId, "총 개수:", placedTeeth.length);
