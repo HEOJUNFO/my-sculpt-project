@@ -544,6 +544,7 @@ function createPreviewTooth(mesialPosition) {
 
 /**
  * 프리뷰 치아 업데이트 (메지오-디스탈 거리와 방향에 따라)
+ * 메지오 기준으로 마우스 위치에 따라 rotation.z 값 변경 추가
  */
 function updatePreviewTooth() {
   if (!previewTooth || !mesialPoint || !currentDistalPoint || !originalGeometryBounds) return;
@@ -582,29 +583,60 @@ function updatePreviewTooth() {
   previewTooth.position.copy(mesialPoint);
   previewTooth.position.add(mesialOffset);
   
- 
-    previewTooth.rotation.set(0, 0, 0);
-    
-    // 치아 번호에 따른 기본 회전 보정
-    let baseRotation = 0;
-    if (toothId >= 11 && toothId <= 18) {
-      // 우측 상악
-      baseRotation = Math.PI;
-    } else if (toothId >= 21 && toothId <= 28) {
-      // 좌측 상악
-      baseRotation = -0.25;
-    } else if (toothId >= 31 && toothId <= 38) {
-      // 좌측 하악
-      baseRotation = 0;
-    } else if (toothId >= 41 && toothId <= 48) {
-      // 우측 하악
-      baseRotation = Math.PI;
-    }
-    
+  // 회전 초기화
+  previewTooth.rotation.set(0, 0, 0);
+  
+  // 치아 번호에 따른 기본 회전 보정
+  let baseRotation = 0;
+  if (toothId >= 11 && toothId <= 18) {
+    // 우측 상악
+    baseRotation = Math.PI;
+  } else if (toothId >= 21 && toothId <= 28) {
+    // 좌측 상악
+    baseRotation = -0.25;
+  } else if (toothId >= 31 && toothId <= 38) {
+    // 좌측 하악
+    baseRotation = 0;
+  } else if (toothId >= 41 && toothId <= 48) {
+    // 우측 하악
+    baseRotation = Math.PI;
+  }
+  
   previewTooth.rotation.x = baseRotation;
   
+  // 🚀 메지오 기준으로 마우스 위치에 따른 rotation.z 계산
+  // 메지오에서 디스탈로의 2D 벡터 계산 (XY 평면에서)
+  const mesialToDistal2D = new THREE.Vector2(
+    currentDistalPoint.x - mesialPoint.x,
+    currentDistalPoint.y - mesialPoint.y
+  );
+  
+  // 벡터의 각도 계산 (atan2 사용)
+  // atan2는 -π ~ π 범위의 값을 반환
+  let rotationZ = Math.atan2(-mesialToDistal2D.y, -mesialToDistal2D.x) * 0.8;
+  
+  // 치아 번호에 따른 회전 보정 (필요시)
+  // 각 사분면별로 다른 기준각을 적용할 수 있음
+  if (toothId >= 11 && toothId <= 18) {
+    // 우측 상악 - 추가 보정이 필요한 경우
+    // rotationZ += Math.PI; // 예시: 180도 추가 회전
+  } else if (toothId >= 21 && toothId <= 28) {
+    // 좌측 상악
+    // rotationZ += 0; // 기본값 유지
+  } else if (toothId >= 31 && toothId <= 38) {
+    // 좌측 하악
+    // rotationZ += 0; // 기본값 유지
+  } else if (toothId >= 41 && toothId <= 48) {
+    // 우측 하악
+    // rotationZ += Math.PI; // 예시: 180도 추가 회전
+  }
+  
+  // rotation.z 적용
+  previewTooth.rotation.z = rotationZ;
+  
+  // 디버깅용 로그 (필요시 주석 해제)
+  console.log(`치아 ${toothId} - 메지오-디스탈 각도: ${(rotationZ * 180 / Math.PI).toFixed(1)}도`);
 }
-
 /**
  * 배치 객체들 정리
  */
