@@ -166,7 +166,8 @@ export function initToothPlacement(sceneObj, cameraObj, rendererObj, controlsObj
     
     <div class="control-hint">
       메지오 클릭 후 마우스를 움직여 크기와 방향을 조절하고<br>
-      디스탈 위치를 클릭하여 최종 배치하세요
+      디스탈 위치를 클릭하여 최종 배치하세요<br>
+      <strong>✨ 마우스가 어디에 있든 크기 조절 가능합니다</strong>
     </div>
   `;
   document.body.appendChild(placementUI);
@@ -335,7 +336,7 @@ function setDistalPoint(point) {
 }
 
 /**
- * 마우스 이동 핸들러 - 디스탈이 확정되지 않은 경우에만 프리뷰 업데이트
+ * 개선된 마우스 이동 핸들러 - 허공에서도 메지오 포인트와의 거리 기준으로 크기 조절
  */
 function onMouseMove(event) {
   // 디스탈이 확정된 후에는 마우스 이동에 따른 프리뷰 업데이트를 중지
@@ -350,14 +351,58 @@ function onMouseMove(event) {
   
   raycaster.setFromCamera(mouse, camera);
   
-  // Find intersection with jaw
+  // 🚀 개선된 부분: 마우스가 어디에 있든 3D 포인트 계산
+  let newDistalPoint = null;
+  
+  // 1단계: 먼저 턱뼈 표면과의 교차점 시도 (가장 정확함)
   const jaw = scene.children.find(c => c.isMesh && !c.userData.type);
   if (jaw) {
     const hits = raycaster.intersectObject(jaw);
     if (hits.length > 0) {
-      currentDistalPoint = hits[0].point.clone();
-      updatePreviewTooth();
+      newDistalPoint = hits[0].point.clone();
+      console.log("턱뼈 표면 사용");
     }
+  }
+  
+  // 2단계: 턱뼈 교차점이 없으면 메지오 포인트 기준 가상 평면 사용
+  if (!newDistalPoint && mesialPoint) {
+    // 메지오 포인트를 지나고 카메라 방향에 수직인 평면 생성
+    const cameraDirection = new THREE.Vector3();
+    camera.getWorldDirection(cameraDirection);
+    cameraDirection.negate(); // 카메라에서 바라보는 방향의 반대
+    
+    const plane = new THREE.Plane();
+    plane.setFromNormalAndCoplanarPoint(cameraDirection, mesialPoint);
+    
+    // 마우스 레이와 평면의 교차점 계산
+    const intersectionPoint = new THREE.Vector3();
+    const intersected = raycaster.ray.intersectPlane(plane, intersectionPoint);
+    
+    if (intersected) {
+      newDistalPoint = intersectionPoint;
+      console.log("가상 평면 사용 - 메지오와의 거리:", mesialPoint.distanceTo(newDistalPoint).toFixed(3));
+    }
+  }
+  
+  // 3단계: 그래도 없으면 카메라-메지오 거리 기준으로 투영
+  if (!newDistalPoint && mesialPoint) {
+    // 카메라에서 메지오 포인트까지의 거리 계산
+    const distanceToMesial = camera.position.distanceTo(mesialPoint);
+    
+    // 마우스 레이 방향으로 같은 거리만큼 이동한 점 계산
+    const direction = new THREE.Vector3();
+    raycaster.ray.direction.normalize();
+    
+    newDistalPoint = camera.position.clone()
+      .add(direction.multiplyScalar(distanceToMesial));
+      
+    console.log("카메라 거리 기준 투영 사용");
+  }
+  
+  // 새로운 디스탈 포인트로 업데이트
+  if (newDistalPoint) {
+    currentDistalPoint = newDistalPoint;
+    updatePreviewTooth();
   }
 }
 
@@ -399,9 +444,9 @@ function calculateUniformScale(geometry, mesialToDistalDistance) {
   const maxDimension = Math.max(size.x, size.y, size.z);
   
   // 메지오-디스탈 거리에 비례하는 스케일 (조정 가능한 계수)
-  const targetSize = mesialToDistalDistance * 1.8; // 실제 치아 크기 비율
+  const targetSize = mesialToDistalDistance * 1.6; // 실제 치아 크기 비율
   const scaleFactor = targetSize / maxDimension;
-  console.log(scaleFactor)
+  console.log("스케일 계산 - 거리:", mesialToDistalDistance.toFixed(3), "스케일:", scaleFactor.toFixed(3));
   
   // 최소/최대 스케일 제한
   return Math.max(0.01, Math.min(1.0, scaleFactor));
@@ -499,6 +544,7 @@ function createPreviewTooth(mesialPosition) {
  */
 function updatePreviewTooth() {
   if (!previewTooth || !mesialPoint || !currentDistalPoint || !originalGeometryBounds) return;
+  
   // 메지오-디스탈 벡터 계산
   const mesialToDistal = new THREE.Vector3().subVectors(currentDistalPoint, mesialPoint);
   const distance = mesialToDistal.length();
@@ -517,52 +563,26 @@ function updatePreviewTooth() {
   // 치아 번호에 따른 메지오 방향 오프셋 계산
   if (toothId >= 11 && toothId <= 18) {
     // 우측 상악 - 메지오는 중앙선 쪽 (음의 X 방향)
-    mesialOffset.x = toothLength * 0.3;
+    mesialOffset.x = toothLength * 0.45;
   } else if (toothId >= 21 && toothId <= 28) {
     // 좌측 상악 - 메지오는 중앙선 쪽 (양의 X 방향)
-    mesialOffset.x = -toothLength * 0.3;
+    mesialOffset.x = -toothLength * 0.45;
   } else if (toothId >= 31 && toothId <= 38) {
     // 좌측 하악 - 메지오는 중앙선 쪽 (양의 X 방향)
-    mesialOffset.x = -toothLength * 0.3;
+    mesialOffset.x = -toothLength * 0.45;
   } else if (toothId >= 41 && toothId <= 48) {
     // 우측 하악 - 메지오는 중앙선 쪽 (음의 X 방향)
-    mesialOffset.x = toothLength * 0.3;
+    mesialOffset.x = toothLength * 0.45;
   }
   
   // 치아 위치 설정 - 메지오 마커 위치에 메지오 부분이 오도록 조정
   previewTooth.position.copy(mesialPoint);
   previewTooth.position.add(mesialOffset);
   
-  // Z축 기준 회전만 적용 (메지오에서 디스탈로의 방향)
-  if (distance > 0.001) { // 거리가 충분히 클 때만 회전 적용
-    // 메지오-디스탈 벡터를 XY 평면에 투영 (Z축 회전을 위해)
-    const direction2D = new THREE.Vector2(mesialToDistal.x, mesialToDistal.y);
-    direction2D.normalize();
-    
-    // Z축 기준 회전각 계산
-    const zRotationAngle = Math.atan2(direction2D.y, direction2D.x);
-    
-    // 기존 회전값 초기화 후 Z축 회전만 적용
+  if (distance > 0.001) {
+
     previewTooth.rotation.set(0, 0, 0);
     
-    // 치아 번호에 따른 기본 회전 보정
-    let baseRotation = 0;
-    if (toothId >= 11 && toothId <= 18) {
-      // 우측 상악
-      baseRotation = Math.PI;
-    } else if (toothId >= 21 && toothId <= 28) {
-      // 좌측 상악
-      baseRotation = 0;
-    } else if (toothId >= 31 && toothId <= 38) {
-      // 좌측 하악
-      baseRotation = 0;
-    } else if (toothId >= 41 && toothId <= 48) {
-      // 우측 하악
-      baseRotation = Math.PI;
-    }
-    
-    // Z축 회전 적용 (메지오-디스탈 방향 + 기본 회전)
-    previewTooth.rotation.z = zRotationAngle + baseRotation;
   }
 }
 
