@@ -16,18 +16,16 @@ let selectedToothId = null;
 window.selectedToothId = null; // 전역 객체에 추가
 let selectedModelPath = null;
 window.selectedModelPath = null; // 전역 객체에 추가
-let placementPoints = [];
-let placementMarkers = [];
-let placedTeeth = [];
+
+// 새로운 메지오-디스탈 배치 관련 변수들
+let mesialPoint = null; // 메지오 위치 (첫 번째 클릭)
+let currentDistalPoint = null; // 현재 디스탈 위치 (마우스 따라다님)
+let mesialMarker = null; // 메지오 마커
+let previewTooth = null; // 프리뷰 치아
+let previewMaterial = null;
+let placementPhase = 'mesial'; // 'mesial' 또는 'distal'
 let raycaster = new THREE.Raycaster();
 let mouse = new THREE.Vector2();
-let previewTooth = null;
-let previewMaterial = null;
-let rotationHelper = null;
-let isDragging = false;
-let isRotating = false;
-let startRotation = 0;
-let rotationPlane = new THREE.Plane();
 
 /**
  * Initialize tooth placement functionality
@@ -56,7 +54,7 @@ export function initToothPlacement(sceneObj, cameraObj, rendererObj, controlsObj
       padding: 15px;
       z-index: 1200;
       display: none;
-      width: 350px;
+      width: 400px;
     }
     #placement-status {
       margin-bottom: 10px;
@@ -68,6 +66,7 @@ export function initToothPlacement(sceneObj, cameraObj, rendererObj, controlsObj
       margin-bottom: 15px;
       text-align: center;
       color: #555;
+      min-height: 40px;
     }
     .placement-buttons {
       display: flex;
@@ -100,28 +99,39 @@ export function initToothPlacement(sceneObj, cameraObj, rendererObj, controlsObj
     #cancel-placement-btn:hover {
       background-color: #e0e0e0;
     }
-    #rotation-slider-container {
-      margin-top: 15px;
-      display: none;
-    }
-    #rotation-slider {
-      width: 100%;
-      margin-top: 5px;
-    }
-    .slider-label {
+    .phase-indicator {
       display: flex;
-      justify-content: space-between;
-      margin-bottom: 5px;
+      justify-content: center;
+      margin-bottom: 15px;
+      gap: 20px;
     }
-    .slider-value {
+    .phase-step {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 5px 10px;
+      border-radius: 15px;
+      font-size: 12px;
       font-weight: bold;
-      color: #4691E0;
+    }
+    .phase-step.active {
+      background-color: #4691E0;
+      color: white;
+    }
+    .phase-step.inactive {
+      background-color: #f0f0f0;
+      color: #666;
+    }
+    .phase-step.completed {
+      background-color: #4caf50;
+      color: white;
     }
     .control-hint {
       text-align: center;
       font-size: 12px;
       color: #666;
-      margin-top: 5px;
+      margin-top: 10px;
+      line-height: 1.4;
     }
   `;
   document.head.appendChild(styleEl);
@@ -131,20 +141,28 @@ export function initToothPlacement(sceneObj, cameraObj, rendererObj, controlsObj
   placementUI.id = 'placement-ui';
   placementUI.innerHTML = `
     <div id="placement-status">치아 위치 선정</div>
-    <div id="placement-instructions">치아를 배치할 위치를 클릭하세요</div>
     
-    <div id="rotation-slider-container">
-      <div class="slider-label">
-        <span>회전 각도:</span>
-        <span class="slider-value" id="rotation-value">0°</span>
+    <div class="phase-indicator">
+      <div class="phase-step active" id="mesial-phase">
+        <span>1</span>
+        <span>메지오 설정</span>
       </div>
-      <input type="range" id="rotation-slider" min="0" max="360" value="0">
-      <div class="control-hint">드래그로 위치 조정, 슬라이더로 회전 조정</div>
+      <div class="phase-step inactive" id="distal-phase">
+        <span>2</span>
+        <span>디스탈 설정</span>
+      </div>
     </div>
+    
+    <div id="placement-instructions">메지오(중앙선 쪽) 위치를 클릭하세요</div>
     
     <div class="placement-buttons">
       <button id="confirm-placement-btn" class="placement-button" disabled>확인</button>
       <button id="cancel-placement-btn"  class="placement-button">취소</button>
+    </div>
+    
+    <div class="control-hint">
+      메지오 클릭 후 마우스를 움직여 크기와 방향을 조절하고<br>
+      디스탈 위치를 클릭하여 최종 배치하세요
     </div>
   `;
   document.body.appendChild(placementUI);
@@ -152,24 +170,10 @@ export function initToothPlacement(sceneObj, cameraObj, rendererObj, controlsObj
   // Wire up buttons
   document.getElementById('confirm-placement-btn').addEventListener('click', confirmPlacement);
   document.getElementById('cancel-placement-btn').addEventListener('click', cancelPlacement);
-  
-  // Rotation slider
-  const rotationSlider = document.getElementById('rotation-slider');
-  rotationSlider.addEventListener('input', (e) => {
-    if (previewTooth) {
-      const angle = (parseInt(e.target.value) * Math.PI) / 180;
-      previewTooth.rotation.y = angle;
-      
-      // Update displayed value
-      document.getElementById('rotation-value').textContent = `${e.target.value}°`;
-    }
-  });
 
   // Listen for mouse events in the 3D canvas
   renderer.domElement.addEventListener('click', onMouseClick);
-  renderer.domElement.addEventListener('mousedown', onMouseDown);
   renderer.domElement.addEventListener('mousemove', onMouseMove);
-  renderer.domElement.addEventListener('mouseup', onMouseUp);
 }
 
 /**
@@ -179,68 +183,72 @@ export function initToothPlacement(sceneObj, cameraObj, rendererObj, controlsObj
  */
 export function startToothPlacement(toothId, modelPath) {
   placementActive = true;
-  window.placementActive = true; // 전역 변수도 true로 설정
+  window.placementActive = true;
   
   selectedToothId = toothId;
-  window.selectedToothId = toothId; // 전역 객체에 설정
+  window.selectedToothId = toothId;
   selectedModelPath = modelPath;
-  window.selectedModelPath = modelPath; // 전역 객체에 설정
+  window.selectedModelPath = modelPath;
   
-  console.log("위치 지정 모드 활성화:", placementActive, window.placementActive); // 디버깅용 로그 추가
-  console.log("선택된 치아 ID:", selectedToothId, window.selectedToothId); // 디버깅용 로그 추가
-  console.log("선택된 모델 경로:", selectedModelPath, window.selectedModelPath); // 디버깅용 로그 추가
+  console.log("메지오-디스탈 배치 모드 활성화:", placementActive);
+  console.log("선택된 치아 ID:", selectedToothId);
+  console.log("선택된 모델 경로:", selectedModelPath);
   
-  placementPoints = [];
-
-  clearPlacementMarkers();
-  cleanupPreviewTooth();
+  // 상태 초기화
+  resetPlacementState();
   highlightSelectedTooth(toothId);
 
   const ui = document.getElementById('placement-ui');
   const instr = document.getElementById('placement-instructions');
   const confirmBtn = document.getElementById('confirm-placement-btn');
-  const sliderContainer = document.getElementById('rotation-slider-container');
 
   ui.style.display = 'block';
-  sliderContainer.style.display = 'none';
   confirmBtn.disabled = true;
   
-  // 치아 번호에 따라 다른 안내 메시지
-  const isMolar = [17, 27, 37, 47].includes(parseInt(toothId));
-  
-  if (isMolar) {
-    const quadrant = getToothQuadrant(parseInt(toothId));
-    instr.textContent = `${toothId}번 치아 배치: ${quadrant} 위치를 클릭하세요`;
-  } else {
-    instr.textContent = '두 지점을 클릭하세요 (중앙에 배치됩니다)';
-  }
+  // 첫 번째 단계로 설정
+  placementPhase = 'mesial';
+  updatePhaseIndicator();
+  instr.textContent = `${toothId}번 치아의 메지오(중앙선 쪽) 위치를 클릭하세요`;
   
   // Disable orbit controls while placing
   if (controls) controls.enabled = true;
 }
 
 /**
- * Get the quadrant description for the tooth
+ * 배치 상태 초기화
  */
-function getToothQuadrant(toothId) {
-  // 치아 사분면 정보 반환
-  if (toothId >= 11 && toothId <= 18) return "우측 상악";
-  if (toothId >= 21 && toothId <= 28) return "좌측 상악";
-  if (toothId >= 31 && toothId <= 38) return "좌측 하악";
-  if (toothId >= 41 && toothId <= 48) return "우측 하악";
-  return "";
+function resetPlacementState() {
+  mesialPoint = null;
+  currentDistalPoint = null;
+  placementPhase = 'mesial';
+  
+  // 기존 마커와 프리뷰 정리
+  cleanupPlacementObjects();
+}
+
+/**
+ * 단계 표시기 업데이트
+ */
+function updatePhaseIndicator() {
+  const mesialPhase = document.getElementById('mesial-phase');
+  const distalPhase = document.getElementById('distal-phase');
+  
+  if (placementPhase === 'mesial') {
+    mesialPhase.className = 'phase-step active';
+    distalPhase.className = 'phase-step inactive';
+  } else if (placementPhase === 'distal') {
+    mesialPhase.className = 'phase-step completed';
+    distalPhase.className = 'phase-step active';
+  }
 }
 
 /**
  * Handle clicks in the Three.js canvas during placement
  */
 function onMouseClick(event) {
-  console.log("Mouse Click - placementActive:", window.placementActive); // 수정: window.placementActive 사용
-  if (!window.placementActive) return; // 수정: window.placementActive 사용
+  console.log("Mouse Click - placementActive:", window.placementActive, "phase:", placementPhase);
+  if (!window.placementActive) return;
   
-  // If we already have a preview tooth, ignore clicks
-  if (previewTooth) return;
-
   // Convert to normalized device coords
   const rect = renderer.domElement.getBoundingClientRect();
   mouse.x = ((event.clientX - rect.left)/rect.width)*2 - 1;
@@ -248,41 +256,21 @@ function onMouseClick(event) {
 
   raycaster.setFromCamera(mouse, camera);
 
-  // Check if click is on an existing marker
-  const markerIntersects = raycaster.intersectObjects(placementMarkers);
-  if (markerIntersects.length > 0) {
-    // Remove clicked marker
-    const clickedMarker = markerIntersects[0].object;
-    const markerIndex = placementMarkers.indexOf(clickedMarker);
-    if (markerIndex !== -1) {
-      // Remove from scene and arrays
-      scene.remove(clickedMarker);
-      clickedMarker.geometry.dispose();
-      clickedMarker.material.dispose();
-      placementMarkers.splice(markerIndex, 1);
-      placementPoints.splice(markerIndex, 1);
-      
-      // Update UI
-      const isMolar = [17, 27, 37, 47].includes(parseInt(window.selectedToothId)); // 수정
-      const needed  = isMolar ? 1 : 2;
-      const instr   = document.getElementById('placement-instructions');
-      const confirmBtn = document.getElementById('confirm-placement-btn');
-      
-      confirmBtn.disabled = placementPoints.length < needed;
-      
-      if (placementPoints.length === 0) {
-        instr.textContent = isMolar
-          ? `${window.selectedToothId}번 치아 배치: 위치를 클릭하세요` // 수정
-          : '두 지점을 클릭하세요 (중앙에 배치됩니다)';
-      } else if (!isMolar && placementPoints.length === 1) {
-        instr.textContent = '두 번째 지점을 클릭하세요.';
-      }
-      
+  // Check if click is on an existing marker (mesial marker removal)
+  if (mesialMarker && placementPhase === 'mesial') {
+    const markerIntersects = raycaster.intersectObject(mesialMarker);
+    if (markerIntersects.length > 0) {
+      // Remove mesial marker and reset
+      resetPlacementState();
+      document.getElementById('placement-instructions').textContent = 
+        `${window.selectedToothId}번 치아의 메지오(중앙선 쪽) 위치를 클릭하세요`;
+      document.getElementById('confirm-placement-btn').disabled = true;
+      updatePhaseIndicator();
       return;
     }
   }
 
-  // Find the jaw mesh (the root mesh without userData.type)
+  // Find the jaw mesh
   const jaw = scene.children.find(c => c.isMesh && !c.userData.type);
   if (!jaw) return;
 
@@ -291,113 +279,103 @@ function onMouseClick(event) {
 
   const point = hits[0].point.clone();
   
-  // 대구치 (17, 27, 37, 47)의 경우
-  const isMolar = [17, 27, 37, 47].includes(parseInt(window.selectedToothId)); // 수정
+  if (placementPhase === 'mesial') {
+    // 첫 번째 클릭: 메지오 위치 설정
+    setMesialPoint(point);
+  } else if (placementPhase === 'distal') {
+    // 두 번째 클릭: 디스탈 위치 설정하고 확정
+    setDistalPoint(point);
+  }
+}
+
+/**
+ * 메지오 포인트 설정
+ */
+function setMesialPoint(point) {
+  mesialPoint = point.clone();
   
-  if (isMolar) {
-    // 대구치는 즉시 프리뷰 생성 (드래그 및 회전 가능)
-    createPreviewTooth(point);
-  } else {
-    // 일반 치아는 두 지점 클릭으로 마커 생성
-    placementPoints.push(point);
-    createMarker(point);
-    
-    if (placementPoints.length === 2) {
-      // 비대구치는 프리뷰 없이 바로 확인 버튼만 활성화
-      document.getElementById('placement-instructions').textContent = 
-        '위치가 올바르면 확인 버튼을 클릭하세요';
-      document.getElementById('confirm-placement-btn').disabled = false;
-    } else {
-      document.getElementById('placement-instructions').textContent = '두 번째 지점을 클릭하세요.';
+  // 메지오 마커 생성
+  createMesialMarker(point);
+  
+  // 프리뷰 치아 생성 시작
+  createPreviewTooth(point);
+  
+  // 다음 단계로 진행
+  placementPhase = 'distal';
+  updatePhaseIndicator();
+  
+  document.getElementById('placement-instructions').textContent = 
+    '마우스를 움직여 크기와 방향을 조절하고 디스탈(먼 쪽) 위치를 클릭하세요';
+}
+
+/**
+ * 디스탈 포인트 설정
+ */
+function setDistalPoint(point) {
+  currentDistalPoint = point.clone();
+  
+  // 최종 배치 확인 버튼 활성화
+  document.getElementById('confirm-placement-btn').disabled = false;
+  document.getElementById('placement-instructions').textContent = 
+    '위치와 크기가 올바르면 확인 버튼을 클릭하세요';
+  
+  // 프리뷰 치아 최종 업데이트
+  updatePreviewTooth();
+}
+
+/**
+ * 마우스 이동 핸들러
+ */
+function onMouseMove(event) {
+  if (!window.placementActive || placementPhase !== 'distal' || !mesialPoint || !previewTooth) return;
+  
+  // Convert to normalized device coords
+  const rect = renderer.domElement.getBoundingClientRect();
+  mouse.x = ((event.clientX - rect.left)/rect.width)*2 - 1;
+  mouse.y = -((event.clientY - rect.top)/rect.height)*2 + 1;
+  
+  raycaster.setFromCamera(mouse, camera);
+  
+  // Find intersection with jaw
+  const jaw = scene.children.find(c => c.isMesh && !c.userData.type);
+  if (jaw) {
+    const hits = raycaster.intersectObject(jaw);
+    if (hits.length > 0) {
+      currentDistalPoint = hits[0].point.clone();
+      updatePreviewTooth();
     }
   }
 }
 
 /**
- * 비대구치를 위한 간단한 프리뷰 생성 (드래그, 회전 기능 없음)
+ * 메지오 마커 생성
  */
-function createSimplePreview(position) {
-  // 로딩 메시지 표시
-  const loadingMessage = document.createElement('div');
-  loadingMessage.id = 'preview-loading';
-  loadingMessage.style.cssText = `
-    position: fixed; top: 50%; left: 50%;
-    transform: translate(-50%, -50%);
-    background: rgba(0,0,0,0.7);
-    color: #fff; padding: 20px; border-radius: 10px;
-    z-index: 2000;
-  `;
-  loadingMessage.innerHTML = `
-    <div class="loading-spinner"></div>
-    <p>${window.selectedToothId}번 치아 미리보기를 생성 중입니다...</p>
-  `;
-  document.body.appendChild(loadingMessage);
+function createMesialMarker(pos) {
+  console.log('메지오 마커 생성:', pos);
+  const geom = new THREE.SphereGeometry(0.03, 16, 16);
+  const mat = new THREE.MeshBasicMaterial({ 
+    color: 0x00ff00, // 초록색 (메지오)
+    depthTest: false,
+    transparent: true,
+    opacity: 0.8
+  });
+  mesialMarker = new THREE.Mesh(geom, mat);
+  mesialMarker.position.copy(pos);
   
-  // STL 로드
-  const loader = new STLLoader();
-  loader.load(
-    window.selectedModelPath, // 수정
-    (geometry) => {
-      const posAttr = geometry.getAttribute('position');
-      if (!posAttr) {
-        console.error('No position attribute.');
-        loadingMessage.remove();
-        return;
-      }
-      
-      geometry.computeVertexNormals();
-      geometry.computeBoundingSphere();
-      if (geometry.boundingSphere) {
-        const radius = geometry.boundingSphere.radius;
-        geometry.scale(0.2 / radius, 0.2 / radius, 0.2 / radius);
-      }
-      geometry.center();
-      
-      // 프리뷰용 반투명 재질 생성
-      previewMaterial = new THREE.MeshStandardMaterial({
-        color: 0x3399ff,
-        transparent: true,
-        opacity: 0.7,
-        metalness: 0.1,
-        roughness: 0.8,
-        side: THREE.DoubleSide
-      });
-      
-      // 프리뷰 치아 생성
-      previewTooth = new THREE.Mesh(geometry, previewMaterial);
-      previewTooth.position.copy(position);
-      previewTooth.userData = { type: 'previewTooth', toothId: window.selectedToothId }; // 수정
-      
-      // 기본 회전 설정
-      setInitialRotation(previewTooth);
-      
-      // 씬에 추가
-      scene.add(previewTooth);
-      
-      // UI 업데이트 (슬라이더 없이)
-      document.getElementById('placement-instructions').textContent = 
-        '위치가 올바르면 확인 버튼을 클릭하세요';
-      document.getElementById('confirm-placement-btn').disabled = false;
-      
-      // 로딩 메시지 제거
-      loadingMessage.remove();
-    },
-    (xhr) => {
-      // 로딩 진행 상황
-    },
-    (error) => {
-      console.error('STL 로드 오류:', error);
-      loadingMessage.remove();
-      alert('치아 모델을 로드할 수 없습니다.');
-    }
-  );
+  // 약간 위로 오프셋
+  mesialMarker.position.y += 0.002;
+  
+  // 렌더링 순서 높게 설정
+  mesialMarker.renderOrder = 9999;
+  
+  scene.add(mesialMarker);
 }
 
 /**
- * Create a preview tooth at the specified position
+ * 프리뷰 치아 생성
  */
-function createPreviewTooth(position) {
-  // Preview tooth 생성 전 STL 로딩 시작
+function createPreviewTooth(mesialPosition) {
+  // 로딩 메시지 표시
   const loadingMessage = document.createElement('div');
   loadingMessage.id = 'preview-loading';
   loadingMessage.style.cssText = `
@@ -418,9 +396,8 @@ function createPreviewTooth(position) {
   
   // 모델 로드
   loader.load(
-    window.selectedModelPath, // 수정
+    window.selectedModelPath,
     (geometry) => {
-      /*** geometry processing ***/
       const posAttr = geometry.getAttribute('position');
       if (!posAttr) {
         console.error('No position attribute.');
@@ -430,17 +407,14 @@ function createPreviewTooth(position) {
       
       geometry.computeVertexNormals();
       geometry.computeBoundingSphere();
-      if (geometry.boundingSphere) {
-        const radius = geometry.boundingSphere.radius;
-        geometry.scale(0.2 / radius, 0.2 / radius, 0.2 / radius);
-      }
+      geometry.computeBoundingBox();
       geometry.center();
       
       // 프리뷰용 반투명 재질 생성
       previewMaterial = new THREE.MeshStandardMaterial({
         color: 0x3399ff,
         transparent: true,
-        opacity: 0.7,
+        opacity: 0.6,
         metalness: 0.1,
         roughness: 0.8,
         side: THREE.DoubleSide
@@ -448,35 +422,51 @@ function createPreviewTooth(position) {
       
       // 프리뷰 치아 생성
       previewTooth = new THREE.Mesh(geometry, previewMaterial);
-      previewTooth.position.copy(position);
-      previewTooth.userData = { type: 'previewTooth', toothId: window.selectedToothId }; // 수정
+      previewTooth.userData = { 
+        type: 'previewTooth', 
+        toothId: window.selectedToothId,
+        boundingBox: geometry.boundingBox.clone() // 바운딩 박스 저장
+      };
       
-      // 회전 설정 (치아 번호에 따른 기본 회전)
-      setInitialRotation(previewTooth);
+      // 기본 크기 설정
+      const defaultScale = 0.1;
+      previewTooth.scale.set(defaultScale, defaultScale, defaultScale);
+      
+      // 메지오 위치에 정확히 배치하기 위한 오프셋 계산
+      // 치아 번호에 따라 메지오 방향 결정
+      const toothId = parseInt(window.selectedToothId);
+      let mesialOffset = new THREE.Vector3();
+      
+      // 바운딩 박스를 기준으로 메지오 방향 오프셋 계산
+      const bbox = geometry.boundingBox;
+      const toothLength = bbox.max.x - bbox.min.x; // X축을 치아 길이로 가정
+      
+      if (toothId >= 11 && toothId <= 18) {
+        // 우측 상악 - 메지오는 중앙선 쪽 (음의 X 방향)
+        mesialOffset.x = toothLength * defaultScale * 0.3;
+      } else if (toothId >= 21 && toothId <= 28) {
+        // 좌측 상악 - 메지오는 중앙선 쪽 (양의 X 방향)
+        mesialOffset.x = -toothLength * defaultScale * 0.3;
+      } else if (toothId >= 31 && toothId <= 38) {
+        // 좌측 하악 - 메지오는 중앙선 쪽 (양의 X 방향)
+        mesialOffset.x = -toothLength * defaultScale * 0.3;
+      } else if (toothId >= 41 && toothId <= 48) {
+        // 우측 하악 - 메지오는 중앙선 쪽 (음의 X 방향)
+        mesialOffset.x = toothLength * defaultScale * 0.3;
+      }
+      
+      // 메지오 위치에 치아의 메지오 부분이 오도록 위치 조정
+      previewTooth.position.copy(mesialPosition);
+      previewTooth.position.add(mesialOffset);
       
       // 씬에 추가
       scene.add(previewTooth);
-      
-      // 회전 가이드 생성
-      createRotationHelper(position);
-      
-      // UI 업데이트
-      document.getElementById('placement-instructions').textContent = 
-        '위치와 각도를 조정한 후 확인 버튼을 클릭하세요';
-      document.getElementById('confirm-placement-btn').disabled = false;
-      document.getElementById('rotation-slider-container').style.display = 'block';
-      
-      // 슬라이더 초기값 설정 (현재 Y축 회전값을 기준으로)
-      const degrees = (previewTooth.rotation.y * 180 / Math.PI) % 360;
-      const normalizedDegrees = degrees >= 0 ? degrees : degrees + 360;
-      document.getElementById('rotation-slider').value = normalizedDegrees.toFixed(0);
-      document.getElementById('rotation-value').textContent = `${normalizedDegrees.toFixed(0)}°`;
       
       // 로딩 메시지 제거
       loadingMessage.remove();
     },
     (xhr) => {
-      // 로딩 진행 상황 표시 가능
+      // 로딩 진행 상황
     },
     (error) => {
       console.error('STL 로드 오류:', error);
@@ -487,124 +477,100 @@ function createPreviewTooth(position) {
 }
 
 /**
- * Set the initial rotation based on tooth ID
+ * 프리뷰 치아 업데이트 (메지오-디스탈 거리와 방향에 따라)
  */
-function setInitialRotation(tooth) {
-  const toothId = parseInt(window.selectedToothId); // 수정
+function updatePreviewTooth() {
+  if (!previewTooth || !mesialPoint || !currentDistalPoint) return;
   
-  // Y축 기준으로 회전값 설정
-  let yRotation = 0;
+  // 메지오-디스탈 벡터 계산
+  const mesialToDistal = new THREE.Vector3().subVectors(currentDistalPoint, mesialPoint);
+  const distance = mesialToDistal.length();
   
-  // 치아 번호에 따른 기본 회전각 설정
-  if (toothId >= 11 && toothId <= 18) {
-    // 우측 상악
-    yRotation = Math.PI;
-  } else if (toothId >= 21 && toothId <= 28) {
-    // 좌측 상악
-    yRotation = 0;
-  } else if (toothId >= 31 && toothId <= 38) {
-    // 좌측 하악
-    yRotation = 0;
-  } else if (toothId >= 41 && toothId <= 48) {
-    // 우측 하악
-    yRotation = Math.PI;
+  // 거리에 비례한 스케일 설정
+  const baseScale = 0.05; // 기본 스케일
+  const scaleMultiplier = Math.max(0.1, Math.min(1.0, distance )); // 거리에 비례, 최소/최대 제한
+  const finalScale = baseScale * scaleMultiplier;
+  previewTooth.scale.set(finalScale, finalScale, finalScale);
+  
+  // 메지오 위치 기준으로 오프셋 재계산 (스케일 변경에 따라)
+  const toothId = parseInt(window.selectedToothId);
+  let mesialOffset = new THREE.Vector3();
+  
+  // 바운딩 박스를 기준으로 메지오 방향 오프셋 계산 (스케일 적용)
+  const bbox = previewTooth.userData.boundingBox;
+  if (bbox) {
+    const toothLength = bbox.max.x - bbox.min.x; // X축을 치아 길이로 가정
+    
+    if (toothId >= 11 && toothId <= 18) {
+      // 우측 상악 - 메지오는 중앙선 쪽 (음의 X 방향)
+      mesialOffset.x = toothLength * finalScale * 0.3;
+    } else if (toothId >= 21 && toothId <= 28) {
+      // 좌측 상악 - 메지오는 중앙선 쪽 (양의 X 방향)
+      mesialOffset.x = -toothLength * finalScale * 0.3;
+    } else if (toothId >= 31 && toothId <= 38) {
+      // 좌측 하악 - 메지오는 중앙선 쪽 (양의 X 방향)
+      mesialOffset.x = -toothLength * finalScale * 0.3;
+    } else if (toothId >= 41 && toothId <= 48) {
+      // 우측 하악 - 메지오는 중앙선 쪽 (음의 X 방향)
+      mesialOffset.x = toothLength * finalScale * 0.3;
+    }
   }
   
-  // 대구치(17, 27, 37, 47)인 경우 추가 미세 조정
-  if ([17, 27, 37, 47].includes(toothId)) {
-    // 각 대구치별 미세 회전각 조정
-    if (toothId === 17) yRotation += Math.PI * 0.1;
-    if (toothId === 27) yRotation -= Math.PI * 0.1;
-    if (toothId === 37) yRotation += Math.PI * 0.1;
-    if (toothId === 47) yRotation -= Math.PI * 0.1;
-  }
+  // 치아 위치 설정 - 메지오 마커 위치에 메지오 부분이 오도록 조정
+  previewTooth.position.copy(mesialPoint);
+  previewTooth.position.add(mesialOffset);
   
-  tooth.rotation.set(0, yRotation, 0);
+  // Z축 기준 회전만 적용 (메지오에서 디스탈로의 방향)
+  if (distance > 0.001) { // 거리가 충분히 클 때만 회전 적용
+    // 메지오-디스탈 벡터를 XY 평면에 투영 (Z축 회전을 위해)
+    const direction2D = new THREE.Vector2(mesialToDistal.x, mesialToDistal.y);
+    direction2D.normalize();
+    
+    // Z축 기준 회전각 계산
+    const zRotationAngle = Math.atan2(direction2D.y, direction2D.x);
+    
+    // 기존 회전값 초기화 후 Z축 회전만 적용
+    previewTooth.rotation.set(0, 0, 0);
+    
+    // 치아 번호에 따른 기본 회전 보정
+    let baseRotation = 0;
+    if (toothId >= 11 && toothId <= 18) {
+      // 우측 상악
+      baseRotation = Math.PI;
+    } else if (toothId >= 21 && toothId <= 28) {
+      // 좌측 상악
+      baseRotation = 0;
+    } else if (toothId >= 31 && toothId <= 38) {
+      // 좌측 하악
+      baseRotation = 0;
+    } else if (toothId >= 41 && toothId <= 48) {
+      // 우측 하악
+      baseRotation = Math.PI;
+    }
+    
+    // Z축 회전 적용 (메지오-디스탈 방향 + 기본 회전)
+    previewTooth.rotation.z = zRotationAngle + baseRotation;
+  }
 }
 
 /**
- * Create a rotation helper object
+ * 배치 객체들 정리
  */
-function createRotationHelper(position) {
-  if (rotationHelper) {
-    scene.remove(rotationHelper);
+function cleanupPlacementObjects() {
+  // 메지오 마커 제거
+  if (mesialMarker) {
+    scene.remove(mesialMarker);
+    mesialMarker.geometry.dispose();
+    mesialMarker.material.dispose();
+    mesialMarker = null;
   }
   
-  // 회전 기준점 시각화를 위한 객체
-  const geometry = new THREE.RingGeometry(0.12, 0.15, 32);
-  const material = new THREE.MeshBasicMaterial({ 
-    color: 0x00aaff, 
-    transparent: true, 
-    opacity: 0.7,
-    side: THREE.DoubleSide
-  });
-  
-  rotationHelper = new THREE.Mesh(geometry, material);
-  rotationHelper.position.copy(position);
-  
-  // X축 방향으로 회전 (수평 평면에 놓기)
-  rotationHelper.rotation.x = Math.PI / 2;
-  
-  scene.add(rotationHelper);
-}
-
-/**
- * Create a small red sphere marker at the selected point
- * @param {THREE.Vector3} pos 
- */
-function createMarker(pos) {
-  console.log('마커 생성:', pos);
-  const geom = new THREE.SphereGeometry(0.025, 16, 16);
-  const mat = new THREE.MeshBasicMaterial({ 
-    color: 0xff0000,
-    depthTest: false,    // 깊이 테스트 비활성화
-    transparent: true,
-    opacity: 0.8
-  });
-  const marker = new THREE.Mesh(geom, mat);
-  marker.position.copy(pos);
-  
-  // 노멀 방향으로 약간 오프셋 (점 생성 시 노멀 정보가 있다면)
-  if (pos.normal) {
-    marker.position.addScaledVector(pos.normal, 0.002);
-  }
-  
-  // 렌더링 순서 높게 설정
-  marker.renderOrder = 9999;
-  
-  refs.scene.add(marker);
-  placementMarkers.push(marker);
-}
-
-/**
- * Remove all existing markers from the scene
- */
-function clearPlacementMarkers() {
-  placementMarkers.forEach(m => {
-    scene.remove(m);
-    m.geometry.dispose();
-    m.material.dispose();
-  });
-  placementMarkers = [];
-}
-
-/**
- * Clean up any preview tooth
- */
-function cleanupPreviewTooth() {
+  // 프리뷰 치아 제거
   if (previewTooth) {
     scene.remove(previewTooth);
     if (previewTooth.geometry) previewTooth.geometry.dispose();
     if (previewTooth.material) previewTooth.material.dispose();
     previewTooth = null;
-  }
-  
-  // 회전 헬퍼 제거
-  if (rotationHelper) {
-    scene.remove(rotationHelper);
-    rotationHelper.geometry.dispose();
-    rotationHelper.material.dispose();
-    rotationHelper = null;
   }
   
   // 프리뷰 재질 정리
@@ -615,195 +581,36 @@ function cleanupPreviewTooth() {
 }
 
 /**
- * Handle mouse down events
- */
-function onMouseDown(event) {
-  if (!window.placementActive || !previewTooth) return;
-  
-  // 대구치 (17, 27, 37, 47)인지 확인
-  const isMolar = [17, 27, 37, 47].includes(parseInt(window.selectedToothId)); // 수정
-  if (!isMolar) return; // 비대구치는 드래그/회전 불가
-  
-  // Convert to normalized device coords
-  const rect = renderer.domElement.getBoundingClientRect();
-  mouse.x = ((event.clientX - rect.left)/rect.width)*2 - 1;
-  mouse.y = -((event.clientY - rect.top)/rect.height)*2 + 1;
-  
-  raycaster.setFromCamera(mouse, camera);
-  
-  // Check if clicking on preview tooth (for dragging)
-  const toothIntersects = raycaster.intersectObject(previewTooth);
-  if (toothIntersects.length > 0) {
-    isDragging = true;
-    controls.enabled = false;
-    return;
-  }
-  
-  // Check if clicking on rotation helper (for rotation)
-  if (rotationHelper) {
-    const helperIntersects = raycaster.intersectObject(rotationHelper);
-    if (helperIntersects.length > 0) {
-      isRotating = true;
-      controls.enabled = false;
-      
-      // 회전 시작 각도 저장
-      const hitPoint = helperIntersects[0].point;
-      startRotation = Math.atan2(
-        hitPoint.z - previewTooth.position.z,
-        hitPoint.x - previewTooth.position.x
-      );
-      
-      // 회전 평면 설정
-      rotationPlane.setFromNormalAndCoplanarPoint(
-        new THREE.Vector3(0, 1, 0),
-        previewTooth.position
-      );
-      
-      return;
-    }
-  }
-}
-
-/**
- * Handle mouse move events
- */
-function onMouseMove(event) {
-  if (!window.placementActive || (!isDragging && !isRotating)) return;
-  
-  // 대구치 (17, 27, 37, 47)인지 확인
-  const isMolar = [17, 27, 37, 47].includes(parseInt(window.selectedToothId)); // 수정
-  if (!isMolar) return; // 비대구치는 드래그/회전 불가
-  
-  // Convert to normalized device coords
-  const rect = renderer.domElement.getBoundingClientRect();
-  mouse.x = ((event.clientX - rect.left)/rect.width)*2 - 1;
-  mouse.y = -((event.clientY - rect.top)/rect.height)*2 + 1;
-  
-  raycaster.setFromCamera(mouse, camera);
-  
-  if (isDragging && previewTooth) {
-    // Find intersection with jaw
-    const jaw = scene.children.find(c => c.isMesh && !c.userData.type);
-    if (jaw) {
-      const hits = raycaster.intersectObject(jaw);
-      if (hits.length > 0) {
-        const point = hits[0].point.clone();
-        
-        // 이동
-        previewTooth.position.copy(point);
-        
-        // 회전 헬퍼도 같이 이동
-        if (rotationHelper) {
-          rotationHelper.position.copy(point);
-        }
-      }
-    }
-  } else if (isRotating && previewTooth && rotationHelper) {
-    // 마우스 위치에서 회전 평면과의 교차점 계산
-    const ray = raycaster.ray;
-    const intersectionPoint = new THREE.Vector3();
-    ray.intersectPlane(rotationPlane, intersectionPoint);
-    
-    // 현재 각도 계산
-    const currentAngle = Math.atan2(
-      intersectionPoint.z - previewTooth.position.z,
-      intersectionPoint.x - previewTooth.position.x
-    );
-    
-    // 회전각 변화량 계산
-    const deltaAngle = currentAngle - startRotation;
-    
-    // Y축 기준 회전 적용
-    previewTooth.rotation.y += deltaAngle;
-    
-    startRotation = currentAngle;
-    
-    // 슬라이더 업데이트
-    const degrees = (previewTooth.rotation.y * 180 / Math.PI) % 360;
-    const normalizedDegrees = degrees >= 0 ? degrees : degrees + 360;
-    document.getElementById('rotation-slider').value = normalizedDegrees.toFixed(0);
-    document.getElementById('rotation-value').textContent = `${normalizedDegrees.toFixed(0)}°`;
-  }
-}
-
-/**
- * Handle mouse up events
- */
-function onMouseUp() {
-  isDragging = false;
-  isRotating = false;
-  
-  if (controls) {
-    controls.enabled = true;
-  }
-}
-
-/**
  * User confirms placement → calls global placeToothModel
  */
 function confirmPlacement() {
-  if (!window.placementActive) return;
+  if (!window.placementActive || !mesialPoint || !currentDistalPoint || !previewTooth) return;
 
-  const isMolar = [17, 27, 37, 47].includes(parseInt(window.selectedToothId)); // 수정
+  console.log("메지오-디스탈 배치 확인");
+  console.log("메지오 위치:", mesialPoint);
+  console.log("디스탈 위치:", currentDistalPoint);
   
-  console.log("확인 시 모델 경로:", window.selectedModelPath); // 수정
+  // 최종 위치와 회전값 계산
+  const finalPosition = previewTooth.position.clone();
+  const finalRotation = previewTooth.rotation.clone();
+  const finalScale = previewTooth.scale.x; // 균등 스케일이므로 x값만 사용
   
-  // 프리뷰가 있는 경우 (대구치)
-  if (previewTooth) {
-    // 최종 배치를 위해 프리뷰의 위치와 회전값 사용
-    const finalPosition = previewTooth.position.clone();
-    const finalRotation = previewTooth.rotation.clone();
-    
-    // 프리뷰 제거
-    cleanupPreviewTooth();
-    clearPlacementMarkers();
-    
-    // 글로벌 배치 함수 호출 (스케일 정보 전달 안 함)
-    if (window.placeToothModel) {
-      window.placeToothModel(window.selectedToothId, window.selectedModelPath, finalPosition, finalRotation);
-    }
-  } 
-  // 프리뷰가 없는 경우 (비대구치)
-  else if (placementPoints.length === 2) {
-    // 두 점의 중간 계산
-    const midpoint = new THREE.Vector3()
-      .addVectors(placementPoints[0], placementPoints[1])
-      .multiplyScalar(0.5);
-    
-    // 기본 회전값 계산
-    const rotation = new THREE.Euler();
-    const toothId = parseInt(window.selectedToothId); // 수정
-    
-    // Y축 기준으로 회전값 설정
-    let yRotation = 0;
-    
-    // 치아 번호에 따른 기본 회전각 설정
-    if (toothId >= 11 && toothId <= 18) {
-      // 우측 상악
-      yRotation = Math.PI;
-    } else if (toothId >= 21 && toothId <= 28) {
-      // 좌측 상악
-      yRotation = 0;
-    } else if (toothId >= 31 && toothId <= 38) {
-      // 좌측 하악
-      yRotation = 0;
-    } else if (toothId >= 41 && toothId <= 48) {
-      // 우측 하악
-      yRotation = Math.PI;
-    }
-    
-    rotation.set(0, yRotation, 0);
-    
-    // 마커 제거
-    clearPlacementMarkers();
-    
-    // 두 마커 사이의 거리 계산 (스케일 기준으로 사용)
-    const markerDistance = placementPoints[0].distanceTo(placementPoints[1]);
-    
-    // 글로벌 배치 함수 호출 (markerDistance 추가)
-    if (window.placeToothModel) {
-      window.placeToothModel(window.selectedToothId, window.selectedModelPath, midpoint, rotation, markerDistance);
-    }
+  // 메지오-디스탈 거리 계산
+  const mesialToDistalDistance = mesialPoint.distanceTo(currentDistalPoint);
+  
+  // 프리뷰 및 마커 제거
+  cleanupPlacementObjects();
+  
+  // 글로벌 배치 함수 호출
+  if (window.placeToothModel) {
+    window.placeToothModel(
+      window.selectedToothId, 
+      window.selectedModelPath, 
+      finalPosition, 
+      finalRotation, 
+      mesialToDistalDistance,
+      finalScale // 스케일 정보 추가
+    );
   }
   
   cleanupPlacement();
@@ -820,17 +627,17 @@ function cancelPlacement() {
  * Reset state and hide UI
  */
 function cleanupPlacement() {
-  cleanupPreviewTooth();
+  cleanupPlacementObjects();
+  resetPlacementState();
+  
   placementActive = false;
-  window.placementActive = false; // 전역 변수도 false로 설정
+  window.placementActive = false;
   selectedToothId = null;
-  window.selectedToothId = null; // 전역 객체 초기화
+  window.selectedToothId = null;
   selectedModelPath = null;
-  window.selectedModelPath = null; // 전역 객체 초기화
-  placementPoints = [];
-  clearPlacementMarkers();
+  window.selectedModelPath = null;
+  
   document.getElementById('placement-ui').style.display = 'none';
-  document.getElementById('rotation-slider-container').style.display = 'none';
   
   // Re-enable orbit controls
   if (controls) {
@@ -842,13 +649,15 @@ function cleanupPlacement() {
  * Utility to check if placement is active
  */
 export function isPlacementActive() {
-  return placementActive || window.placementActive; // 둘 중 하나라도 true면 활성 상태
+  return placementActive || window.placementActive;
 }
 
 /**
  * Optionally track placed tooth meshes
  * @param {THREE.Mesh} toothMesh 
  */
+
 export function addPlacedTooth(toothMesh) {
   placedTeeth.push(toothMesh);
+  console.log("추가된 치아:", toothMesh.userData?.toothId, "총 개수:", placedTeeth.length);
 }

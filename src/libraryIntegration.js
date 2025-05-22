@@ -14,17 +14,20 @@ let placedTeeth = []; // 배치된 치아 추적용 배열
 let libraryModeActive = false;
 
 /**
- * 치아 모델을 특정 위치에 배치하는 함수
+ * 치아 모델을 특정 위치에 배치하는 함수 (메지오-디스탈 방식)
  * @param {string} toothId - 치아 ID
  * @param {string} modelPath - STL 모델 경로
- * @param {THREE.Vector3} position - 배치 위치
- * @param {THREE.Euler} rotation - 회전값 (선택적)
- * @param {number} markerDistance - 마커 사이의 거리 (비대구치 선택 시)
+ * @param {THREE.Vector3} position - 배치 위치 (중심점)
+ * @param {THREE.Euler} rotation - 회전값
+ * @param {number} mesialToDistalDistance - 메지오-디스탈 거리
+ * @param {number} previewScale - 프리뷰에서 계산된 스케일 (선택적)
  */
-function placeToothModel(toothId, modelPath, position, rotation, markerDistance) {
-  console.log(`치아 ${toothId} 배치 중, 위치:`, position);
-  if (rotation) console.log(`회전값:`, rotation);
-  if (markerDistance) console.log(`마커 간 거리:`, markerDistance);
+function placeToothModel(toothId, modelPath, position, rotation, mesialToDistalDistance, previewScale) {
+  console.log(`치아 ${toothId} 메지오-디스탈 배치 중`);
+  console.log(`위치:`, position);
+  console.log(`회전값:`, rotation);
+  console.log(`메지오-디스탈 거리:`, mesialToDistalDistance);
+  console.log(`프리뷰 스케일:`, previewScale);
   
   const loader = new STLLoader();
   
@@ -68,31 +71,44 @@ function placeToothModel(toothId, modelPath, position, rotation, markerDistance)
         newGeometry = BufferGeometryUtils.mergeVertices(newGeometry);
         newGeometry.computeVertexNormals();
         newGeometry.computeBoundingSphere();
+        newGeometry.center();
         
-        // 스케일 조정 로직 - 마커 거리에 기반하여 계산
+        // 스케일 조정 로직 - 프리뷰 스케일 또는 메지오-디스탈 거리 기반
         let scaleFactor;
         
-        if (markerDistance) {
-          
-          
-          // 마커 거리에 비례하는 스케일 계산 (마커 거리/2)
-          scaleFactor = (markerDistance / 1.15) 
-          console.log(`마커 거리: ${markerDistance}, 계산된 스케일: ${scaleFactor}`);
-        } else {
-          // 대구치나 기존 방식 (고정 스케일)
+        if (previewScale) {
+          // 프리뷰에서 계산된 스케일 사용 (더 정확)
           if (newGeometry.boundingSphere) {
             const radius = newGeometry.boundingSphere.radius;
+            scaleFactor = previewScale / radius;
+          } else {
+            scaleFactor = previewScale;
+          }
+          console.log(`프리뷰 스케일 사용: ${previewScale}, 최종 스케일: ${scaleFactor}`);
+        } else if (mesialToDistalDistance) {
+          // 메지오-디스탈 거리에 비례하는 스케일 계산
+          if (newGeometry.boundingSphere) {
+            const radius = newGeometry.boundingSphere.radius;
+            // 거리에 비례한 스케일 계산 (조정 가능한 계수)
+            const distanceBasedScale = mesialToDistalDistance * 0.8;
+            scaleFactor = distanceBasedScale / radius;
+          } else {
+            scaleFactor = mesialToDistalDistance * 0.5;
+          }
+          console.log(`메지오-디스탈 거리 기반 스케일: ${mesialToDistalDistance}, 최종 스케일: ${scaleFactor}`);
+        } else {
+          // 기본 스케일 (기존 방식)
+          if (newGeometry.boundingSphere) {
+            const radius = newGeometry.boundingSphere.radius;
+            scaleFactor = 0.2 / radius;
+          } else {
             scaleFactor = 0.2;
           }
+          console.log(`기본 스케일 사용: ${scaleFactor}`);
         }
         
         // 스케일 적용
-        if (newGeometry.boundingSphere) {
-          const radius = newGeometry.boundingSphere.radius;
-          newGeometry.scale(scaleFactor / radius, scaleFactor / radius, scaleFactor / radius);
-        }
-        
-        newGeometry.center();
+        newGeometry.scale(scaleFactor, scaleFactor, scaleFactor);
         newGeometry.computeBoundingBox();
         
         // 스컬프 가능하도록 설정 추가 - 이 부분이 중요합니다!
@@ -142,7 +158,9 @@ function placeToothModel(toothId, modelPath, position, rotation, markerDistance)
           modelPath,
           isLibraryTooth: true,  // 라이브러리에서 배치된 치아임을 표시
           originalMatcap: matcapTexture, // 나중에 참조할 수 있도록 원본 matcap 저장
-          markerDistance: markerDistance || null // 마커 거리 정보 저장
+          mesialToDistalDistance: mesialToDistalDistance || null,
+          finalScale: scaleFactor, // 최종 스케일 정보 저장
+          placementMethod: 'mesial-distal' // 배치 방법 표시
         };
         
         // 씬에 추가
@@ -161,7 +179,7 @@ function placeToothModel(toothId, modelPath, position, rotation, markerDistance)
         loadingMessage.remove();
         
         // 성공 메시지 표시
-        showSuccessMessage(toothId);
+        showSuccessMessage(toothId, 'mesial-distal');
         
         // 자동으로 TransformControls 부착
         attachTransformControlsToTooth(toothMesh);
@@ -183,9 +201,10 @@ function placeToothModel(toothId, modelPath, position, rotation, markerDistance)
 window.placeToothModel = placeToothModel;
 
 /**
- * 성공 메시지 표시
+ * 성공 메시지 표시 (배치 방법 표시)
  */
-function showSuccessMessage(toothId) {
+function showSuccessMessage(toothId, method = 'standard') {
+  const methodText = method === 'mesial-distal' ? '메지오-디스탈 방식으로' : '';
   const msg = document.createElement('div');
   msg.style.cssText = `
     position: fixed; top: 20px; left: 50%;
@@ -195,7 +214,7 @@ function showSuccessMessage(toothId) {
     border-radius: 8px; font-weight: bold;
     z-index: 2000; transition: opacity 0.5s;
   `;
-  msg.textContent = `${toothId}번 치아가 성공적으로 배치되었습니다.`;
+  msg.textContent = `${toothId}번 치아가 ${methodText} 성공적으로 배치되었습니다.`;
   document.body.appendChild(msg);
   setTimeout(() => {
     msg.style.opacity = '0';
@@ -667,7 +686,8 @@ function createLibraryControlPanel() {
   panel.innerHTML = `
     <h3 style="margin: 0 0 10px 0;">라이브러리 모드</h3>
     <p style="font-size: 14px; margin: 0 0 15px 0;">
-      상악 또는 하악의 치아를 선택하여 모델을 배치하세요.
+      상악 또는 하악의 치아를 선택하여 모델을 배치하세요.<br>
+      <strong>메지오-디스탈 배치:</strong> 메지오(중앙선) → 디스탈(먼 쪽) 순서로 클릭
     </p>
     <button id="complete-library-btn" style="
       background: #7066FF;
@@ -742,6 +762,15 @@ export function cleanupLibraryMode() {
     libraryUIContainer.remove();
     libraryUIContainer = null;
   }
+}
+
+/**
+ * Add a placed tooth to the tracking array
+ * @param {THREE.Mesh} toothMesh 
+ */
+export function addPlacedTooth(toothMesh) {
+  placedTeeth.push(toothMesh);
+  console.log("추가된 치아:", toothMesh.userData?.toothId, "총 개수:", placedTeeth.length);
 }
 
 /**
