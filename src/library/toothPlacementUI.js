@@ -444,7 +444,7 @@ function calculateUniformScale(geometry, mesialToDistalDistance) {
   const maxDimension = Math.max(size.x, size.y, size.z);
   
   // 메지오-디스탈 거리에 비례하는 스케일 (조정 가능한 계수)
-  const targetSize = mesialToDistalDistance * 1.6; // 실제 치아 크기 비율
+  const targetSize = mesialToDistalDistance * 1.5; // 실제 치아 크기 비율
   const scaleFactor = targetSize / maxDimension;
   console.log("스케일 계산 - 거리:", mesialToDistalDistance.toFixed(3), "스케일:", scaleFactor.toFixed(3));
   
@@ -563,26 +563,44 @@ function updatePreviewTooth() {
   // 치아 번호에 따른 메지오 방향 오프셋 계산
   if (toothId >= 11 && toothId <= 18) {
     // 우측 상악 - 메지오는 중앙선 쪽 (음의 X 방향)
-    mesialOffset.x = toothLength * 0.45;
+    mesialOffset.x = toothLength * 0.5;
   } else if (toothId >= 21 && toothId <= 28) {
     // 좌측 상악 - 메지오는 중앙선 쪽 (양의 X 방향)
-    mesialOffset.x = -toothLength * 0.45;
+    mesialOffset.x = -toothLength * 0.5;
   } else if (toothId >= 31 && toothId <= 38) {
     // 좌측 하악 - 메지오는 중앙선 쪽 (양의 X 방향)
-    mesialOffset.x = -toothLength * 0.45;
+    mesialOffset.x = -toothLength * 0.5;
   } else if (toothId >= 41 && toothId <= 48) {
     // 우측 하악 - 메지오는 중앙선 쪽 (음의 X 방향)
-    mesialOffset.x = toothLength * 0.45;
+    mesialOffset.x = toothLength * 0.5;
   }
   
   // 치아 위치 설정 - 메지오 마커 위치에 메지오 부분이 오도록 조정
   previewTooth.position.copy(mesialPoint);
   previewTooth.position.add(mesialOffset);
   
-  if (distance > 0.001) {
-
+  if (distance > 0.001) { 
+    // 기존 회전값 초기화 후 Z축 회전만 적용
     previewTooth.rotation.set(0, 0, 0);
     
+    // 치아 번호에 따른 기본 회전 보정
+    let baseRotation = 0;
+    if (toothId >= 11 && toothId <= 18) {
+      // 우측 상악
+      baseRotation = Math.PI;
+    } else if (toothId >= 21 && toothId <= 28) {
+      // 좌측 상악
+      baseRotation = 0;
+    } else if (toothId >= 31 && toothId <= 38) {
+      // 좌측 하악
+      baseRotation = 0;
+    } else if (toothId >= 41 && toothId <= 48) {
+      // 우측 하악
+      baseRotation = Math.PI;
+    }
+    
+    // Z축 회전 적용 (메지오-디스탈 방향 + 기본 회전)
+    previewTooth.rotation.x = baseRotation;
   }
 }
 
