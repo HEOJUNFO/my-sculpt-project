@@ -24,6 +24,7 @@ let mesialMarker = null; // 메지오 마커
 let previewTooth = null; // 프리뷰 치아
 let previewMaterial = null;
 let placementPhase = 'mesial'; // 'mesial' 또는 'distal'
+let distalConfirmed = false; // 디스탈 포인트가 확정되었는지 여부
 let raycaster = new THREE.Raycaster();
 let mouse = new THREE.Vector2();
 
@@ -207,6 +208,7 @@ export function startToothPlacement(toothId, modelPath) {
   
   // 첫 번째 단계로 설정
   placementPhase = 'mesial';
+  distalConfirmed = false; // 디스탈 확정 플래그 초기화
   updatePhaseIndicator();
   instr.textContent = `${toothId}번 치아의 메지오(중앙선 쪽) 위치를 클릭하세요`;
   
@@ -221,6 +223,7 @@ function resetPlacementState() {
   mesialPoint = null;
   currentDistalPoint = null;
   placementPhase = 'mesial';
+  distalConfirmed = false; // 디스탈 확정 플래그 초기화
   
   // 기존 마커와 프리뷰 정리
   cleanupPlacementObjects();
@@ -246,7 +249,7 @@ function updatePhaseIndicator() {
  * Handle clicks in the Three.js canvas during placement
  */
 function onMouseClick(event) {
-  console.log("Mouse Click - placementActive:", window.placementActive, "phase:", placementPhase);
+  console.log("Mouse Click - placementActive:", window.placementActive, "phase:", placementPhase, "distalConfirmed:", distalConfirmed);
   if (!window.placementActive) return;
   
   // Convert to normalized device coords
@@ -282,8 +285,8 @@ function onMouseClick(event) {
   if (placementPhase === 'mesial') {
     // 첫 번째 클릭: 메지오 위치 설정
     setMesialPoint(point);
-  } else if (placementPhase === 'distal') {
-    // 두 번째 클릭: 디스탈 위치 설정하고 확정
+  } else if (placementPhase === 'distal' && !distalConfirmed) {
+    // 두 번째 클릭: 디스탈 위치 설정하고 확정 (아직 확정되지 않은 경우에만)
     setDistalPoint(point);
   }
 }
@@ -302,6 +305,7 @@ function setMesialPoint(point) {
   
   // 다음 단계로 진행
   placementPhase = 'distal';
+  distalConfirmed = false; // 디스탈이 아직 확정되지 않음
   updatePhaseIndicator();
   
   document.getElementById('placement-instructions').textContent = 
@@ -313,6 +317,7 @@ function setMesialPoint(point) {
  */
 function setDistalPoint(point) {
   currentDistalPoint = point.clone();
+  distalConfirmed = true; // 디스탈 포인트 확정
   
   // 최종 배치 확인 버튼 활성화
   document.getElementById('confirm-placement-btn').disabled = false;
@@ -321,13 +326,18 @@ function setDistalPoint(point) {
   
   // 프리뷰 치아 최종 업데이트
   updatePreviewTooth();
+  
+  console.log("디스탈 포인트 확정됨 - 더 이상 프리뷰 변경되지 않음");
 }
 
 /**
- * 마우스 이동 핸들러
+ * 마우스 이동 핸들러 - 디스탈이 확정되지 않은 경우에만 프리뷰 업데이트
  */
 function onMouseMove(event) {
-  if (!window.placementActive || placementPhase !== 'distal' || !mesialPoint || !previewTooth) return;
+  // 디스탈이 확정된 후에는 마우스 이동에 따른 프리뷰 업데이트를 중지
+  if (!window.placementActive || placementPhase !== 'distal' || !mesialPoint || !previewTooth || distalConfirmed) {
+    return;
+  }
   
   // Convert to normalized device coords
   const rect = renderer.domElement.getBoundingClientRect();
