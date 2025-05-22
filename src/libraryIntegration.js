@@ -14,20 +14,41 @@ let placedTeeth = []; // 배치된 치아 추적용 배열
 let libraryModeActive = false;
 
 /**
+ * 스케일 정보를 동일하게 계산하는 유틸리티 함수 (toothPlacementUI.js와 동일)
+ */
+function calculateUniformScale(geometry, mesialToDistalDistance) {
+  // 지오메트리의 바운딩 박스 계산
+  geometry.computeBoundingBox();
+  const bbox = geometry.boundingBox;
+  const size = new THREE.Vector3();
+  bbox.getSize(size);
+  
+  // 가장 긴 축의 길이를 기준으로 스케일 계산
+  const maxDimension = Math.max(size.x, size.y, size.z);
+  
+  // 메지오-디스탈 거리에 비례하는 스케일 (조정 가능한 계수)
+  const targetSize = mesialToDistalDistance * 0.8; // 실제 치아 크기 비율
+  const scaleFactor = targetSize / maxDimension;
+  
+  // 최소/최대 스케일 제한
+  return Math.max(0.01, Math.min(2.0, scaleFactor));
+}
+
+/**
  * 치아 모델을 특정 위치에 배치하는 함수 (메지오-디스탈 방식)
  * @param {string} toothId - 치아 ID
  * @param {string} modelPath - STL 모델 경로
  * @param {THREE.Vector3} position - 배치 위치 (중심점)
  * @param {THREE.Euler} rotation - 회전값
  * @param {number} mesialToDistalDistance - 메지오-디스탈 거리
- * @param {number} previewScale - 프리뷰에서 계산된 스케일 (선택적)
+ * @param {Object} scaleInfo - 스케일 정보 객체 (선택적)
  */
-function placeToothModel(toothId, modelPath, position, rotation, mesialToDistalDistance, previewScale) {
+function placeToothModel(toothId, modelPath, position, rotation, mesialToDistalDistance, scaleInfo) {
   console.log(`치아 ${toothId} 메지오-디스탈 배치 중`);
   console.log(`위치:`, position);
   console.log(`회전값:`, rotation);
   console.log(`메지오-디스탈 거리:`, mesialToDistalDistance);
-  console.log(`프리뷰 스케일:`, previewScale);
+  console.log(`스케일 정보:`, scaleInfo);
   
   const loader = new STLLoader();
   
@@ -70,31 +91,19 @@ function placeToothModel(toothId, modelPath, position, rotation, mesialToDistalD
         newGeometry.deleteAttribute('uv');
         newGeometry = BufferGeometryUtils.mergeVertices(newGeometry);
         newGeometry.computeVertexNormals();
-        newGeometry.computeBoundingSphere();
-        newGeometry.center();
+        newGeometry.computeBoundingBox();
+        newGeometry.center(); // 프리뷰와 동일하게 중앙 정렬
         
-        // 스케일 조정 로직 - 프리뷰 스케일 또는 메지오-디스탈 거리 기반
+        // 스케일 조정 로직 - 프리뷰와 동일한 방식 사용
         let scaleFactor;
         
-        if (previewScale) {
-          // 프리뷰에서 계산된 스케일 사용 (더 정확)
-          if (newGeometry.boundingSphere) {
-            const radius = newGeometry.boundingSphere.radius;
-            scaleFactor = previewScale / radius;
-          } else {
-            scaleFactor = previewScale;
-          }
-          console.log(`프리뷰 스케일 사용: ${previewScale}, 최종 스케일: ${scaleFactor}`);
+        if (scaleInfo && scaleInfo.usePreviewScale && scaleInfo.scaleFactor) {
+          // 프리뷰에서 계산된 스케일을 그대로 사용 (가장 정확)
+          scaleFactor = scaleInfo.scaleFactor;
+          console.log(`프리뷰 스케일 직접 사용: ${scaleFactor}`);
         } else if (mesialToDistalDistance) {
-          // 메지오-디스탈 거리에 비례하는 스케일 계산
-          if (newGeometry.boundingSphere) {
-            const radius = newGeometry.boundingSphere.radius;
-            // 거리에 비례한 스케일 계산 (조정 가능한 계수)
-            const distanceBasedScale = mesialToDistalDistance * 0.8;
-            scaleFactor = distanceBasedScale / radius;
-          } else {
-            scaleFactor = mesialToDistalDistance * 0.5;
-          }
+          // 메지오-디스탈 거리 기반 스케일 계산 (프리뷰와 동일한 방식)
+          scaleFactor = calculateUniformScale(newGeometry, mesialToDistalDistance);
           console.log(`메지오-디스탈 거리 기반 스케일: ${mesialToDistalDistance}, 최종 스케일: ${scaleFactor}`);
         } else {
           // 기본 스케일 (기존 방식)
@@ -160,7 +169,8 @@ function placeToothModel(toothId, modelPath, position, rotation, mesialToDistalD
           originalMatcap: matcapTexture, // 나중에 참조할 수 있도록 원본 matcap 저장
           mesialToDistalDistance: mesialToDistalDistance || null,
           finalScale: scaleFactor, // 최종 스케일 정보 저장
-          placementMethod: 'mesial-distal' // 배치 방법 표시
+          placementMethod: 'mesial-distal', // 배치 방법 표시
+          scaleInfo: scaleInfo || null // 스케일 정보 저장
         };
         
         // 씬에 추가
@@ -169,6 +179,7 @@ function placeToothModel(toothId, modelPath, position, rotation, mesialToDistalD
         // 배치된 치아 추적 (중요)
         placedTeeth.push(toothMesh);
         console.log("배치된 치아 개수:", placedTeeth.length);
+        console.log("실제 적용된 스케일:", scaleFactor);
         
         // 설치된 치아 추적 (이 함수가 있다면)
         if (window.addPlacedTooth) {
