@@ -334,6 +334,16 @@ function setTargetMeshAsActive(mesh) {
     if (i === idx) {
       item.mesh.material = createActiveMaterial();
       item.mesh.material.opacity = userOp;
+      
+      // 와이어프레임 메시 복제
+      const wireframeMesh = item.mesh.clone();
+      wireframeMesh.material = new THREE.MeshBasicMaterial({
+        wireframe: true,
+        color: 0xffffff,
+        transparent: true,
+        opacity: 0.3
+      });
+      item.mesh.add(wireframeMesh);
     } else {
       item.mesh.material = createInactiveMaterial();
       item.mesh.material.opacity = userOp;
