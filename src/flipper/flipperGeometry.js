@@ -120,10 +120,14 @@ export function generateFlipper() {
      * 삼각형을 교차점으로 분할
      */
     function splitTriangleAtIntersection(triangleIndex, intersectionPoint, edge, intersectionPseudoDrawingPoint = null) {
+      const vertexIndices = [newIndices[triangleIndex*3], newIndices[triangleIndex*3+1], newIndices[triangleIndex*3+2]];
+      const otherVertexIndexIndex = vertexIndices.findIndex(idx => idx !== edge.startIndex && idx !== edge.endIndex);
       // 아래 3개가 삼각형의 정점 인덱스
-      const edgeStartIndex = edge.startIndex;
-      const edgeEndIndex = edge.endIndex;
-      const otherVertexIndex = [newIndices[triangleIndex*3], newIndices[triangleIndex*3+1], newIndices[triangleIndex*3+2]].find(idx => idx !== edgeStartIndex && idx !== edgeEndIndex);
+      const otherVertexIndex = vertexIndices[otherVertexIndexIndex];
+      const edgeStartIndex = vertexIndices[(otherVertexIndexIndex+1)%3];
+      const edgeEndIndex = vertexIndices[(otherVertexIndexIndex+2)%3];
+
+      
 
       let pseudoDrawingPoint;
       if (intersectionPseudoDrawingPoint !== null) {
@@ -539,8 +543,8 @@ export function generateFlipper() {
     newGeometry.setIndex(finalIndices);
 
     // 노말 다시 계산
-    // newGeometry = BufferGeometryUtils.mergeVertices(newGeometry);
-    newGeometry.computeVertexNormals();
+    newGeometry = BufferGeometryUtils.mergeVertices(newGeometry);
+    newGeometry.computeVertexNormals(true);
 
     newGeometry.attributes.position.setUsage(THREE.DynamicDrawUsage);
     newGeometry.attributes.normal.setUsage(THREE.DynamicDrawUsage);
