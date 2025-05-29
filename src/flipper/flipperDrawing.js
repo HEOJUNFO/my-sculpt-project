@@ -557,7 +557,7 @@ function addFlipperPoint(intersect) {
   
   // 마커 생성 (첫 번째 점이면 초록색, 나머지는 빨간색)
   const isFirst = drawingPoints.length === 0;
-  const markerSize = isFirst ? 0.002 : 0.001;
+  const markerSize = isFirst ? 0.005 : 0.003;
   const markerColor = isFirst ? 0x00ff00 : 0xff0000;
   
   const markerGeometry = new THREE.SphereGeometry(markerSize, 8, 8);
