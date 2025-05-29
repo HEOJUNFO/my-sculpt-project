@@ -155,7 +155,7 @@ export function createDentalChartUI() {
     #dental-chart-container {
       position: fixed;
       left: 0px;
-      top: 49%;
+      top: 35%;
       transform: translateY(-50%);
       width: 350px;
       background-color: white;

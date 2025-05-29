@@ -4,6 +4,12 @@ import { loadModuleExports } from './moduleLoader.js';
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
 import * as THREE from 'three';
 import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { 
+  initIntersectionDetection, 
+  toggleIntersectionVisualization, 
+  clearIntersectionVisualization,
+  isIntersectionDetectionActive 
+} from './intersectionDetection.js';
 
 // Global UI container for the library
 let libraryUIContainer = null;
@@ -630,6 +636,9 @@ export function initLibraryMode() {
  * 모듈 로드 후 라이브러리 UI 초기화
  */
 function initLibraryUI() {
+  // 교차점 검출 시스템 초기화
+  initIntersectionDetection();
+  
   // 치아 차트 UI 생성
   if (typeof window.createDentalChartUI === 'function') {
     window.createDentalChartUI();
@@ -692,14 +701,35 @@ function createLibraryControlPanel() {
     border-radius: 8px;
     box-shadow: 0 2px 10px rgba(0,0,0,0.1);
     z-index: 1100;
+    max-width: 300px;
   `;
   
   panel.innerHTML = `
-    <h3 style="margin: 0 0 10px 0;">라이브러리 모드</h3>
     <p style="font-size: 14px; margin: 0 0 15px 0;">
       상악 또는 하악의 치아를 선택하여 모델을 배치하세요.<br>
       <strong>메지오-디스탈 배치:</strong> 메지오(중앙선) → 디스탈(먼 쪽) 순서로 클릭
     </p>
+    
+    <!-- 교차점 표시 버튼 추가 -->
+    <div style="margin-bottom: 15px; padding: 10px; background: #f5f5f5; border-radius: 6px;">
+      <h4 style="margin: 0 0 8px 0; font-size: 14px; color: #333;">충돌 검사</h4>
+      <button id="toggle-intersection-btn" style="
+        background: #FF5722;
+        color: white;
+        border: none;
+        padding: 6px 12px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-weight: bold;
+        font-size: 13px;
+        width: 100%;
+        margin-bottom: 5px;
+      ">🔍 겹침 표시 ON/OFF</button>
+      <p style="font-size: 12px; margin: 0; color: #666;">
+        치아와 잇몸이 겹치는 부분을 빨간 점으로 표시합니다.
+      </p>
+    </div>
+    
     <button id="complete-library-btn" style="
       background: #7066FF;
       color: white;
@@ -708,15 +738,31 @@ function createLibraryControlPanel() {
       border-radius: 4px;
       cursor: pointer;
       font-weight: bold;
+      width: 100%;
     ">라이브러리 완료</button>
   `;
   
   document.body.appendChild(panel);
   
+  // 교차점 표시 버튼 이벤트 리스너
+  const toggleIntersectionBtn = document.getElementById('toggle-intersection-btn');
+  if (toggleIntersectionBtn) {
+    toggleIntersectionBtn.addEventListener('click', () => {
+      console.log('교차점 표시 버튼 클릭됨');
+      
+      const isActive = toggleIntersectionVisualization();
+      
+      // 버튼 스타일 업데이트는 toggleIntersectionVisualization 내부에서 처리됨
+    });
+  }
+  
   // 완료 버튼 이벤트 리스너 수정: completeSculpting() -> completeLibrary()
   document.getElementById('complete-library-btn').addEventListener('click', () => {
     // 라이브러리 모드 비활성화 플래그 설정
     libraryModeActive = false;
+    
+    // 교차점 시각화 정리
+    clearIntersectionVisualization();
     
     // 트랜스폼 컨트롤 UI 제거
     detachTransformControls();
@@ -741,6 +787,9 @@ export function cleanupLibraryMode() {
   
   // 라이브러리 모드 비활성화 플래그 설정
   libraryModeActive = false;
+  
+  // 교차점 시각화 정리
+  clearIntersectionVisualization();
   
   // Remove dental chart if it exists
   const dentalChart = document.getElementById('dental-chart-container');
