@@ -512,8 +512,6 @@ export function generateFlipper() {
       );
     }
 
-    console.log("vertexcount",finalVertices.length/3);
-
     // inflated 면 만들기
     const backFaceCount = finalIndices.length / 3;
     for(let i=0; i<backFaceCount; i++) {
