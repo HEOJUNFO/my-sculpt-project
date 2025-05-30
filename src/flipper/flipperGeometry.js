@@ -436,6 +436,20 @@ export function generateFlipper() {
       vertexEdgeMap[c].add(a); vertexEdgeMap[c].add(b);
     }
 
+    const twoHopVertexEdgeMap = Array.from({ length: vertexEdgeMap.length }, (_, i) => new Set(vertexEdgeMap[i]));
+
+    for (let i = 0; i < vertexEdgeMap.length; i++) {
+      // 2-hop 이웃 추가
+      for (const neighbor of vertexEdgeMap[i]) {
+        for (const neighbor2 of vertexEdgeMap[neighbor]) {
+          if (neighbor2 !== i) {
+            twoHopVertexEdgeMap[i].add(neighbor2);
+          }
+        }
+      }
+    }
+    
+
     const vertexPositions = Array.from({length: finalVertices.length / 3}, (_, i) => new THREE.Vector3(finalVertices[i*3], finalVertices[i*3+1], finalVertices[i*3+2]));
     const vertexNormals = Array.from({length: finalNormals.length / 3}, (_, i) => new THREE.Vector3(finalNormals[i*3], finalNormals[i*3+1], finalNormals[i*3+2]));
 
@@ -456,8 +470,8 @@ export function generateFlipper() {
 
     for(let i=0; i<backVertexCount; i++) {
       const normalizedDistance = borderDistances[i] / maxDistance;
-      const sigmoidValue = normalizedDistance / (0.1 + normalizedDistance);
-      const scaleFactor = sigmoidValue / (1 / (0.1 + 1));
+      const sigmoidValue = normalizedDistance / (0.3 + normalizedDistance);
+      const scaleFactor = sigmoidValue / (1 / (0.3 + 1));
       const extrusionAmount = (flipperThickness * 0.01) * scaleFactor;
       
       const position = vertexPositions[borderVertexCount + i].clone();
@@ -473,7 +487,7 @@ export function generateFlipper() {
     function computeSmoothedPositions(sourcePositions, lambda) {
       const smoothedPositions = [];
       for (let i = borderVertexCount; i < borderAndBackVertexCount; i++) {
-        const neighbors = vertexEdgeMap[i];
+        const neighbors = twoHopVertexEdgeMap[i];
         if(neighbors.size === 0) {
           smoothedPositions.push(sourcePositions[i].clone());
         }
@@ -497,7 +511,7 @@ export function generateFlipper() {
       return smoothedPositions;
     }
 
-    for (let cycle = 0; cycle < 15; cycle++) {
+    for (let cycle = 0; cycle < 100; cycle++) {
       const tempPositions = computeSmoothedPositions(inflatedPositions, lambda);
       inflatedPositions = computeSmoothedPositions(tempPositions, mu);
     }
