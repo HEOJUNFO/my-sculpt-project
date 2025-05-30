@@ -472,9 +472,11 @@ export function generateFlipper() {
 
     function computeSmoothedPositions(sourcePositions, lambda) {
       const smoothedPositions = [];
-      for (let i = 0; i < backVertexCount; i++) {
+      for (let i = borderVertexCount; i < borderAndBackVertexCount; i++) {
         const neighbors = vertexEdgeMap[i];
-        if(neighbors.size === 0) throw new Error('neighbors.size === 0');
+        if(neighbors.size === 0) {
+          smoothedPositions.push(sourcePositions[i].clone());
+        }
 
         const average = new THREE.Vector3();
         
@@ -488,17 +490,17 @@ export function generateFlipper() {
 
         average.divideScalar(neighbors.size);
 
-        const current = sourcePositions[i];
+        const current = sourcePositions[i-borderVertexCount];
         const diff = average.clone().sub(current).multiplyScalar(lambda);
         smoothedPositions.push(current.clone().add(diff));
       }
       return smoothedPositions;
     }
 
-    // for (let cycle = 0; cycle < 5; cycle++) {
-    //   const tempPositions = computeSmoothedPositions(inflatedPositions, lambda);
-    //   inflatedPositions = computeSmoothedPositions(tempPositions, mu);
-    // }
+    for (let cycle = 0; cycle < 15; cycle++) {
+      const tempPositions = computeSmoothedPositions(inflatedPositions, lambda);
+      inflatedPositions = computeSmoothedPositions(tempPositions, mu);
+    }
 
     // inflated 정점 만들기
     for(let i=0; i<backVertexCount; i++) {
