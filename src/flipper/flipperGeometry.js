@@ -422,34 +422,12 @@ export function generateFlipper() {
     }
 
     // 6. 부풀어오른 면 만들기
+    //  0~borderVertexCount: 경계 정점
+    //  borderVertexCount~borderAndBackVertexCount: 뒷면 정점
+    //  borderAndBackVertexCount~: 부풀어오른 면 정점. 그러나 vertexPositions에 없고 inflatedPositions에 있음
     const borderVertexCount = borderVertexIndices.length;
     const borderAndBackVertexCount = finalVertices.length / 3;
-    const backVertexCount = borderAndBackVertexCount - borderVertexCount;
-
-    const vertexEdgeMap = Array.from({ length: borderAndBackVertexCount }, () => new Set());
-    for (let i = 0; i < finalIndices.length / 3; i++) {
-      const a = finalIndices[i * 3];
-      const b = finalIndices[i * 3 + 1];
-      const c = finalIndices[i * 3 + 2];
-
-      vertexEdgeMap[a].add(b); vertexEdgeMap[a].add(c);
-      vertexEdgeMap[b].add(a); vertexEdgeMap[b].add(c);
-      vertexEdgeMap[c].add(a); vertexEdgeMap[c].add(b);
-    }
-
-    const twoHopVertexEdgeMap = Array.from({ length: vertexEdgeMap.length }, (_, i) => new Set(vertexEdgeMap[i]));
-
-    for (let i = 0; i < vertexEdgeMap.length; i++) {
-      // 2-hop 이웃 추가
-      for (const neighbor of vertexEdgeMap[i]) {
-        for (const neighbor2 of vertexEdgeMap[neighbor]) {
-          if (neighbor2 !== i) {
-            twoHopVertexEdgeMap[i].add(neighbor2);
-          }
-        }
-      }
-    }
-    
+    const innerVertexCount = borderAndBackVertexCount - borderVertexCount;   
 
     const vertexPositions = Array.from({length: finalVertices.length / 3}, (_, i) => new THREE.Vector3(finalVertices[i*3], finalVertices[i*3+1], finalVertices[i*3+2]));
     const vertexNormals = Array.from({length: finalNormals.length / 3}, (_, i) => new THREE.Vector3(finalNormals[i*3], finalNormals[i*3+1], finalNormals[i*3+2]));
@@ -464,12 +442,12 @@ export function generateFlipper() {
       return minDistance;
     }
 
-    const borderDistances = Array.from({length: backVertexCount}, (_, i) => getDistanceToBorder(vertexPositions[borderVertexCount + i]));
+    const borderDistances = Array.from({length: innerVertexCount}, (_, i) => getDistanceToBorder(vertexPositions[borderVertexCount + i]));
     const maxDistance = Math.max(...borderDistances);
 
     let inflatedPositions = [];
 
-    for(let i=0; i<backVertexCount; i++) {
+    for(let i=0; i<innerVertexCount; i++) {
       const normalizedDistance = borderDistances[i] / maxDistance;
       const sigmoidValue = normalizedDistance / (0.3 + normalizedDistance);
       const scaleFactor = sigmoidValue / (1 / (0.3 + 1));
@@ -482,15 +460,90 @@ export function generateFlipper() {
       inflatedPositions.push(position);
     }
 
-    const lambda = 0.5;
-    const mu = -0.53;
+    // inflated 면, vertexEdgeMap 만들기
+    const oneFaceCount = finalIndices.length / 3;
+    let inflatedFaces = []; // 제대로 된 면이 아니라, back face 기준의 인덱스임. 나중에 borderVertexCount 이상이면 backVertexCount 더해 front vertex 인덱스로 변환해야 함.
+    const vertexEdgeMap = Array.from({ length: borderAndBackVertexCount }, () => new Set());
+
+    for(let i=0; i<oneFaceCount; i++) {
+      const face = finalIndices.slice(i*3, i*3+3);
+      inflatedFaces.push(face);
+      vertexEdgeMap[face[0]].add(face[1]);
+      vertexEdgeMap[face[0]].add(face[2]);
+      vertexEdgeMap[face[1]].add(face[0]);
+      vertexEdgeMap[face[1]].add(face[2]);
+      vertexEdgeMap[face[2]].add(face[0]);
+      vertexEdgeMap[face[2]].add(face[1]);
+    }
+
+
+    console.log("start face", inflatedFaces.length);
+
+
+    function collapseShortEdges(){
+      let edgeLenSum = 0;
+      let edgeLenCount = 0;
+      for(let i=borderVertexCount; i<borderAndBackVertexCount; i++) { // front vertex 루프
+        const neighbors = vertexEdgeMap[i];
+        for (const n of neighbors) {
+          if (n < borderVertexCount) continue; // border는 건너뜀
+          const edgeLen = inflatedPositions[i - borderVertexCount].distanceTo(inflatedPositions[n - borderVertexCount]);
+          edgeLenSum += edgeLen;
+          edgeLenCount++;
+        }
+      }
+      const averageEdgeLen = edgeLenSum / edgeLenCount;
+      const threshold = averageEdgeLen * 0.7;
+      console.log('averageEdgeLen', averageEdgeLen);
+
+      for(let i=borderVertexCount; i<borderAndBackVertexCount; i++) { // front vertex 루프
+        const neighbors = vertexEdgeMap[i];
+        for (const n of neighbors) {
+          if(n === i) console.warn('n === i');
+          if (n < borderVertexCount || n < i) continue; // border거나 자기보다 작은 인덱스는 건너뜀
+          const edgeLen = inflatedPositions[i - borderVertexCount].distanceTo(inflatedPositions[n - borderVertexCount]);
+          if (edgeLen < threshold) {
+            console.log('edgeLen', edgeLen);
+            // 두 엣지가 들어있는 face들 제거
+            const count = inflatedFaces.length;
+            inflatedFaces = inflatedFaces.filter(face => !(face.includes(i) && face.includes(n)));
+            console.assert(inflatedFaces.length === count-2, 'inflatedFaces.length !== count-2');
+            // face의 작은 인덱스 큰 인덱스로 변경
+            for (const face of inflatedFaces) {
+              const idx = face.indexOf(i);
+              if (idx !== -1) {
+                face[idx] = n;
+              }
+            }
+            // 큰 인덱스를 평균위치로 변경
+            inflatedPositions[n-borderVertexCount] = inflatedPositions[i-borderVertexCount].clone().add(inflatedPositions[n-borderVertexCount]).multiplyScalar(0.5);
+
+            // 작은 인덱스 i가 사라질 예정. 작은 인덱스의 엣지들 큰 인덱스로 넘기고 작은 인덱스로 향하는 edge 제거
+            for (const m of vertexEdgeMap[i]) {
+              if(m===n) continue;
+              vertexEdgeMap[n].add(m);
+              vertexEdgeMap[m].add(n);
+              vertexEdgeMap[n].delete(i);
+              vertexEdgeMap[m].delete(i);
+            }
+            vertexEdgeMap[i] = new Set();
+            break;
+          }
+        }
+      }
+    }
+
+    const lambda = 0.60;
+    const mu = -0.64;
 
     function computeSmoothedPositions(sourcePositions, lambda) {
       const smoothedPositions = [];
       for (let i = borderVertexCount; i < borderAndBackVertexCount; i++) {
-        const neighbors = twoHopVertexEdgeMap[i];
+        const neighbors = vertexEdgeMap[i];
+
         if(neighbors.size === 0) {
-          smoothedPositions.push(sourcePositions[i].clone());
+          smoothedPositions.push(sourcePositions[i-borderVertexCount].clone());
+          continue;
         }
 
         const average = new THREE.Vector3();
@@ -500,6 +553,10 @@ export function generateFlipper() {
             ? vertexPositions[n]
             : sourcePositions[n - borderVertexCount];
           if(pos === undefined) throw new Error('pos === undefined');
+          if(isNaN(pos.x)) {
+            console.warn('pos is NaN', i, n, pos);
+            throw new Error('pos is NaN');
+          }
           average.add(pos);
         }
 
@@ -507,18 +564,25 @@ export function generateFlipper() {
 
         const current = sourcePositions[i-borderVertexCount];
         const diff = average.clone().sub(current).multiplyScalar(lambda);
+
         smoothedPositions.push(current.clone().add(diff));
       }
       return smoothedPositions;
     }
 
-    for (let cycle = 0; cycle < 100; cycle++) {
+    const smoothCount = 100;
+    for (let cycle = 0; cycle < smoothCount; cycle++) {
       const tempPositions = computeSmoothedPositions(inflatedPositions, lambda);
       inflatedPositions = computeSmoothedPositions(tempPositions, mu);
+      collapseShortEdges();
+      if(inflatedPositions.some(p => isNaN(p.x))) {
+        console.warn('inflatedPositions is NaN', inflatedPositions);
+        throw new Error('inflatedPositions is NaN');
+      }
     }
 
     // inflated 정점 만들기
-    for(let i=0; i<backVertexCount; i++) {
+    for(let i=0; i<innerVertexCount; i++) {
       const position = inflatedPositions[i];
       finalVertices.push(
         position.x,
@@ -533,18 +597,14 @@ export function generateFlipper() {
       );
     }
 
+    console.log("end face", inflatedFaces.length);
+
     // inflated 면 만들기
-    const backFaceCount = finalIndices.length / 3;
-    for(let i=0; i<backFaceCount; i++) {
-      for (let j=0; j<3; j++) {
-        const vertexIndex = finalIndices[i*3 + j];
-        if (vertexIndex < borderVertexCount) {
-          finalIndices.push(vertexIndex);
-        } else {
-          finalIndices.push(backVertexCount + vertexIndex );
-        }
-      }
+    for(const inflatedFace of inflatedFaces) {
+      const face = inflatedFace.map(v => v<borderVertexCount ? v : v+innerVertexCount);
+      finalIndices.push(...face);
     }
+
 
     // 뒷면 normal 반전
     const backVertexStart = borderVertexCount * 3;
