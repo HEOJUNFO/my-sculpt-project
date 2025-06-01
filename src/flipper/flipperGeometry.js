@@ -8,7 +8,8 @@ import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUti
  * 플리퍼 생성
  */
 export function generateFlipper() {
-  const { selectedAreaPoints, flipperThickness } = getFlipperState();
+  const { drawingPoints, flipperThickness } = getFlipperState();
+  const selectedAreaPoints = drawingPoints;
 
   if (selectedAreaPoints.length < 3) {
     console.warn('플리퍼 생성을 위한 영역이 정의되지 않았습니다.');

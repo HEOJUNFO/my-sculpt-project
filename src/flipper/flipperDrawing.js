@@ -8,7 +8,7 @@ import { generateFlipper } from './flipperGeometry.js';
 let drawingPoints = [];
 let pointMarkers = [];
 let curveLines = [];
-let selectedAreaPoints = [];
+let lineClosed = false;
 let flipperThickness = 1.0; // 기본 두께 (mm)
 let curveQuality = 20; // 곡선 품질
 let flipperMesh = null;
@@ -94,7 +94,7 @@ export function cleanupFlipperData(preserveFlipper = false) {
   drawingPoints = [];
   pointMarkers = [];
   curveLines = [];
-  selectedAreaPoints = [];
+  lineClosed = false;
   
   // 마우스 상태 초기화
   isDrawing = false;
@@ -213,7 +213,7 @@ function onFlipperKeyUp(event) {
  */
 function onFlipperPointerDown(event) {
   // 영역이 이미 닫혔다면 점 이동 처리
-  if (selectedAreaPoints.length > 0 && hoveredPointIndex !== -1) {
+  if (lineClosed && hoveredPointIndex !== -1) {
     event.preventDefault();
     
     refs.controls.enabled = false;
@@ -349,7 +349,7 @@ function removePointsAfter(index) {
   
   // 그리기 상태 재설정 - 계속 그릴 수 있도록
   isDrawing = true;
-  selectedAreaPoints = []; // 닫힌 영역 초기화
+  lineClosed = false;
 
   // 버튼 상태 업데이트
   const completeBtn = document.getElementById('btn-flipper-complete');
@@ -439,16 +439,16 @@ function onFlipperPointerMove(event) {
   
   // 호버링 상태 변경 시 커서 스타일 업데이트
   if (prevHoveredIndex !== hoveredPointIndex) {
-    if (hoveredPointIndex === 0 && drawingPoints.length > 2 && selectedAreaPoints.length === 0) {
+    if (hoveredPointIndex === 0 && drawingPoints.length > 2 && !lineClosed) {
       // 첫 번째 점에 호버링 - 영역 닫기 가능
       refs.renderer.domElement.style.cursor = 'pointer';
-    } else if (hoveredPointIndex !== -1 && selectedAreaPoints.length > 0) {
+    } else if (hoveredPointIndex !== -1 && lineClosed) {
       // 점에 호버링 - 이동 가능
       refs.renderer.domElement.style.cursor = 'move';
     } else if (isDrawing) {
       // 그리기 중
       refs.renderer.domElement.style.cursor = 'crosshair';
-    } else if (event.altKey && selectedAreaPoints.length === 0) {
+    } else if (event.altKey && !lineClosed) {
       // Alt 키 누른 상태에서 그리기 가능
       refs.renderer.domElement.style.cursor = 'crosshair';
     } else {
@@ -498,7 +498,7 @@ function onPointerUp(event) {
     selectedPointIndex = -1;
     
     // 영역이 닫혔다면 플리퍼 업데이트
-    if (selectedAreaPoints.length > 0) {
+    if (lineClosed) {
       updateFlipperMesh();
     }
     
@@ -526,7 +526,7 @@ function onFlipperClick(event) {
   if (isDraggingPoint) return;
   
   // Alt 키가 눌려있거나 이미 그리기 완료되었으면 무시
-  if (event.altKey || selectedAreaPoints.length > 0) return;
+  if (event.altKey || lineClosed) return;
   
   // 첫 번째 점 클릭으로 영역 닫기
   if (hoveredPointIndex === 0 && drawingPoints.length > 2) {
@@ -614,6 +614,7 @@ function updatePointPosition(index, intersection) {
   const pointData = drawingPoints[index];
   pointData.position.copy(position);
   pointData.normal.copy(normal);
+  pointData.faceIndex = intersection.faceIndex;
   
   // 마커 위치 업데이트
   if (pointData.marker) {
@@ -622,14 +623,6 @@ function updatePointPosition(index, intersection) {
   
   // 연결된 곡선 업데이트
   updateConnectedCurves(index);
-  
-  // selectedAreaPoints 업데이트 - 필요시 확장
-  if (selectedAreaPoints.length > 0) {
-    while (index >= selectedAreaPoints.length) {
-      selectedAreaPoints.push(new THREE.Vector3());
-    }
-    selectedAreaPoints[index] = position.clone();
-  }
 }
 
 /**
@@ -643,7 +636,7 @@ function updateConnectedCurves(index) {
   // 이전 점으로의 곡선 업데이트
   if (index > 0) {
     updateCurveBetweenPoints(index - 1, index);
-  } else if (selectedAreaPoints.length > 0) {
+  } else if (lineClosed) {
     // 첫 번째 점이면서 영역이 닫혔다면 마지막-첫번째 연결 곡선 업데이트
     updateCurveBetweenPoints(pointsCount - 1, 0);
   }
@@ -651,7 +644,7 @@ function updateConnectedCurves(index) {
   // 다음 점으로의 곡선 업데이트
   if (index < pointsCount - 1) {
     updateCurveBetweenPoints(index, index + 1);
-  } else if (selectedAreaPoints.length > 0) {
+  } else if (lineClosed) {
     // 마지막 점이면서 영역이 닫혔다면 마지막-첫번째 연결 곡선 업데이트
     updateCurveBetweenPoints(pointsCount - 1, 0);
   }
@@ -806,9 +799,8 @@ function completeFlipperArea() {
   // 마지막 점과 첫 점을 연결하는 곡선 생성
   const closingCurve = createCurveBetweenPoints(lastPoint, firstPoint);
   curveLines.push(closingCurve);
-  
-  // 경계 점 수집
-  selectedAreaPoints = drawingPoints; // TODO: clone 필요
+
+  lineClosed = true;
   
   // 상태 메시지 업데이트
   updateFlipperInfoText('플리퍼 영역이 설정되었습니다. 두께를 조절한 후 "플리퍼 생성" 버튼을 클릭하세요.');
@@ -898,7 +890,6 @@ export function getFlipperMesh() {
  */
 export function getFlipperState() {
   return {
-    selectedAreaPoints, 
     drawingPoints, 
     flipperThickness
   };
@@ -935,7 +926,7 @@ export function resetFlipperMeshOnly() {
   }
   
   // 영역이 완료된 상태라면 생성 버튼 활성화
-  if (selectedAreaPoints.length > 0) {
+  if (lineClosed) {
     const generateBtn = document.getElementById('btn-generate-flipper');
     if (generateBtn) {
       generateBtn.disabled = false;
