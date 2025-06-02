@@ -1,6 +1,6 @@
 // src/libraryIntegration.js
-import { refs } from '../../modelManager.js';
-import { loadModuleExports } from '../../moduleLoader.js';
+import { refs } from '../../models/modelManager.js';
+import { loadModuleExports } from '../../utils/moduleLoader.js';
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
 import * as THREE from 'three';
 import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUtils.js';
@@ -9,7 +9,7 @@ import {
   toggleIntersectionVisualization, 
   clearIntersectionVisualization,
   isIntersectionDetectionActive 
-} from '../../intersectionDetection.js';
+} from '../../utils/intersectionDetection.js';
 
 // Global UI container for the library
 let libraryUIContainer = null;

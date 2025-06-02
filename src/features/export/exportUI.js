@@ -1,6 +1,6 @@
 // src/exportUI.js
-import { exportCurrentModel } from '../../modelManager.js';
-import { refs } from '../../modelManager.js';
+import { exportCurrentModel } from '../../models/modelManager.js';
+import { refs } from '../../models/modelManager.js';
 import { STLExporter } from 'three/examples/jsm/exporters/STLExporter.js';
 import * as THREE from 'three';
 

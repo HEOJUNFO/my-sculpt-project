@@ -18,13 +18,13 @@ import {
 } from 'three-mesh-bvh';
 
 import { setupCustomSculptUI } from '../../features/sculpt/sculptUI.js'; 
-import { memos } from '../../memo.js'; 
+import { memos } from '../../features/memo/memo.js'; 
 import {
   refs,
   reset,
   placeGizmoAtMeshCenter,
   addModelToScene,
-} from '../../modelManager.js';
+} from '../../models/modelManager.js';
 import { fitCameraToObject } from '../controls/cameraHelpers.js';
 
 // three-mesh-bvh 프로토타입 확장

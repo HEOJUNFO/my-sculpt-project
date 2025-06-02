@@ -1,7 +1,7 @@
 // src/renderLoop.js
 
 import * as THREE from 'three';
-import { refs } from '../../modelManager.js';
+import { refs } from '../../models/modelManager.js';
 import { performStroke, updateNormals } from '../../features/sculpt/sculpt.js';
 import {
   mouse,
@@ -13,7 +13,7 @@ import {
   rightClick,
   someUpdateFunc,
 } from '../events/eventHandlers.js';
-import { isLibraryStep, isFlipperStep, canSculpt, getCurrentStep } from '../../processSteps.js';
+import { isLibraryStep, isFlipperStep, canSculpt, getCurrentStep } from '../../workflow/processSteps.js';
 
 let animationId = null; // 현재 렌더 루프의 requestAnimationFrame ID를 저장할 변수
 

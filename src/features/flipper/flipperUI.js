@@ -1,5 +1,5 @@
 // src/flipper/flipperUI.js
-import { completeFlipper } from '../../processSteps.js';
+import { completeFlipper } from '../../workflow/processSteps.js';
 import { 
   initFlipperDrawing, 
   setFlipperThickness, 
