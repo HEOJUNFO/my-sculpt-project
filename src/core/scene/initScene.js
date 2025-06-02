@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import Stats from 'three/examples/jsm/libs/stats.module.js';
 import * as dat from 'three/examples/jsm/libs/lil-gui.module.min.js'; 
-import { TrackballControls } from './TrackballControls.js';
+import { TrackballControls } from '../controls/TrackballControls.js';
 import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js';
 import WebGPURenderer from 'three/src/renderers/webgpu/WebGPURenderer.js';
 
@@ -17,15 +17,15 @@ import {
   disposeBoundsTree,
 } from 'three-mesh-bvh';
 
-import { setupCustomSculptUI } from './sculptUI.js'; 
-import { memos } from './memo.js'; 
+import { setupCustomSculptUI } from '../../sculptUI.js'; 
+import { memos } from '../../memo.js'; 
 import {
   refs,
   reset,
   placeGizmoAtMeshCenter,
   addModelToScene,
-} from './modelManager.js';
-import { fitCameraToObject } from './cameraHelpers.js';
+} from '../../modelManager.js';
+import { fitCameraToObject } from '../controls/cameraHelpers.js';
 
 // three-mesh-bvh 프로토타입 확장
 THREE.Mesh.prototype.raycast = acceleratedRaycast;

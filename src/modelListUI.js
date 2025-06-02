@@ -1,5 +1,5 @@
 // modelListUI.js
-import { isObjectInCameraViewFrustum, fitCameraToObject } from './cameraHelpers.js';
+import { isObjectInCameraViewFrustum, fitCameraToObject } from './core/controls/cameraHelpers.js';
 
 /**
  * 모델 리스트 UI를 갱신하는 함수

@@ -1,7 +1,7 @@
 // src/main.js
 
-import { initScene } from './initScene.js';
-import { startRenderLoop } from './renderLoop.js';
+import { initScene } from './core/scene/initScene.js';
+import { startRenderLoop } from './core/scene/renderLoop.js';
 import { refs } from './modelManager.js';
 // 이벤트 핸들러
 import {
@@ -11,7 +11,7 @@ import {
   onWheel,
   onWindowResize,
   onKeyDown
-} from './eventHandlers.js';
+} from './core/events/eventHandlers.js';
 
 // 모델 드래그&드롭 이벤트
 import { onDropSTL, onDragOver, importModel } from './modelManager.js';
