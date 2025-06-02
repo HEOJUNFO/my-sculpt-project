@@ -20,10 +20,10 @@ import { onDropSTL, onDragOver, importModel } from './modelManager.js';
 import { onMemoNewOkBtn, onMemoEditUpdateBtn, onMemoEditDeleteBtn, makeDraggable } from './memo.js';
 
 // Import the setupBlockoutUI function
-import { setupBlockoutUI } from './blockoutUI.js';
+import { setupBlockoutUI } from './features/blockout/blockoutUI.js';
 
 // Import library integration (new)
-import './libraryIntegration.js';
+import './features/library/libraryIntegration.js';
 
 // Import process steps module
 import { 
