@@ -1,8 +1,8 @@
 // src/sculptUI.js
 
-import { refs, importModel } from './modelManager.js'; 
-import { undo, redo, exportCurrentModel } from './modelManager.js';
-import { completeSculpting, completeUpload } from './processSteps.js'; // 프로세스 단계 관리 임포트
+import { refs, importModel } from '../../modelManager.js'; 
+import { undo, redo, exportCurrentModel } from '../../modelManager.js';
+import { completeSculpting, completeUpload } from '../../processSteps.js'; // 프로세스 단계 관리 임포트
 
 export function setupCustomSculptUI() {
   // 브러시 모드 버튼
