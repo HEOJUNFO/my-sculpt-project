@@ -6,7 +6,7 @@ import { loadStlFileAsGeometry } from './stlHelpers.js';
 import { centerAndScaleGeometry } from './geometryHelpers.js';
 import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { MeshBVHHelper } from 'three-mesh-bvh';
-import { fitCameraToObject } from './cameraHelpers.js';
+import { fitCameraToObject } from './core/controls/cameraHelpers.js';
 
 // 새로 분리한 UI 모듈 (UI 관련 코드 대부분 modelListUI.js로 이동)
 import { updateModelListUI } from './modelListUI.js';

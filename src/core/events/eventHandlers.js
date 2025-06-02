@@ -1,9 +1,9 @@
 // src/eventHandlers.js
 
 import * as THREE from 'three';
-import { pushUndoState, refs, redoStack, undo, redo } from './modelManager.js';
-import { memos, openEditMemoModal, openNewMemoModal } from './memo.js';
-import { isLibraryStep, isFlipperStep, canSculpt } from './processSteps.js';
+import { pushUndoState, refs, redoStack, undo, redo } from '../../modelManager.js';
+import { memos, openEditMemoModal, openNewMemoModal } from '../../memo.js';
+import { isLibraryStep, isFlipperStep, canSculpt } from '../../processSteps.js';
 
 export let mouse = new THREE.Vector2();
 export let lastMouse = new THREE.Vector2();
