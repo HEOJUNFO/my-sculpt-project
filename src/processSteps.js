@@ -2,9 +2,9 @@
 // 프로세스 단계를 숫자로 관리하는 모듈
 
 // Import UI module integration functions
-import { initLibraryMode, cleanupLibraryMode } from './libraryIntegration.js';
-import { initFlipperUI, cleanupFlipperUI } from './flipper/flipperUI.js';
-import { initExportUI, cleanupExportUI } from './exportUI.js';
+import { initLibraryMode, cleanupLibraryMode } from './features/library/libraryIntegration.js';
+import { initFlipperUI, cleanupFlipperUI } from './features/flipper/flipperUI.js';
+import { initExportUI, cleanupExportUI } from './features/export/exportUI.js';
 import { refs } from './modelManager.js';
 
 

@@ -1,6 +1,6 @@
 // src/libraryIntegration.js
-import { refs } from './modelManager.js';
-import { loadModuleExports } from './moduleLoader.js';
+import { refs } from '../../modelManager.js';
+import { loadModuleExports } from '../../moduleLoader.js';
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
 import * as THREE from 'three';
 import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUtils.js';
@@ -9,7 +9,7 @@ import {
   toggleIntersectionVisualization, 
   clearIntersectionVisualization,
   isIntersectionDetectionActive 
-} from './intersectionDetection.js';
+} from '../../intersectionDetection.js';
 
 // Global UI container for the library
 let libraryUIContainer = null;
@@ -560,20 +560,20 @@ export function initLibraryMode() {
     // 모듈 로드 및 초기화
     Promise.all([
       // dentalChartUI 모듈 로드
-      loadModuleExports('/src/library/dentalChartUI.js', [
+      loadModuleExports('/src/features/library/dentalChartUI.js', [
         'createDentalChartUI',
         'highlightSelectedTooth'
       ]),
       
       // modelSelectionUI 모듈 로드
-      loadModuleExports('/src/library/modelSelectionUI.js', [
+      loadModuleExports('/src/features/library/modelSelectionUI.js', [
         'initModelSelection',
         'loadSTLModel',
         'loadToothModel'
       ]),
       
       // toothPlacementUI 모듈 로드
-      loadModuleExports('/src/library/toothPlacementUI.js', [
+      loadModuleExports('/src/features/library/toothPlacementUI.js', [
         'initToothPlacement',
         'addPlacedTooth',
         'isPlacementActive',
