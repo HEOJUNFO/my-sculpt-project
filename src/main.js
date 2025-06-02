@@ -2,7 +2,7 @@
 
 import { initScene } from './core/scene/initScene.js';
 import { startRenderLoop } from './core/scene/renderLoop.js';
-import { refs } from './modelManager.js';
+import { refs } from './models/modelManager.js';
 // 이벤트 핸들러
 import {
   onPointerDown,
@@ -14,10 +14,10 @@ import {
 } from './core/events/eventHandlers.js';
 
 // 모델 드래그&드롭 이벤트
-import { onDropSTL, onDragOver, importModel } from './modelManager.js';
+import { onDropSTL, onDragOver, importModel } from './models/modelManager.js';
 
 // 메모 모달 관련
-import { onMemoNewOkBtn, onMemoEditUpdateBtn, onMemoEditDeleteBtn, makeDraggable } from './memo.js';
+import { onMemoNewOkBtn, onMemoEditUpdateBtn, onMemoEditDeleteBtn, makeDraggable } from './features/memo/memo.js';
 
 // Import the setupBlockoutUI function
 import { setupBlockoutUI } from './features/blockout/blockoutUI.js';
@@ -34,7 +34,7 @@ import {
   completeLibrary,
   completeFlipper,
   STEPS 
-} from './processSteps.js';
+} from './workflow/processSteps.js';
 
 /**
  * 프로그램 진입점

@@ -1,8 +1,8 @@
 // src/blockoutUI.js
 import * as THREE from 'three';
-import { refs } from '../../modelManager.js';
+import { refs } from '../../models/modelManager.js';
 import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { completeBlockout } from '../../processSteps.js'; // 프로세스 단계 관리 임포트
+import { completeBlockout } from '../../workflow/processSteps.js'; // 프로세스 단계 관리 임포트
 
 // Saved camera state for blockout operations
 let savedCameraState = null;

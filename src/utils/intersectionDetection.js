@@ -1,6 +1,6 @@
 // src/intersectionDetection.js
 import * as THREE from 'three';
-import { refs } from './modelManager.js';
+import { refs } from '../models/modelManager.js';
 
 // 교차점 표시 관련 변수들
 let intersectionMeshes = [];

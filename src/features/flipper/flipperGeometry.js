@@ -1,6 +1,6 @@
 // src/flipper/flipperGeometry.js
 import * as THREE from 'three';
-import { refs } from '../../modelManager.js';
+import { refs } from '../../models/modelManager.js';
 import { getFlipperState, setFlipperMesh, updateFlipperInfoText } from './flipperDrawing.js';
 import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
