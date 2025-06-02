@@ -2,7 +2,7 @@
 
 import * as THREE from 'three';
 import { refs } from '../../modelManager.js';
-import { performStroke, updateNormals } from '../../sculpt.js';
+import { performStroke, updateNormals } from '../../features/sculpt/sculpt.js';
 import {
   mouse,
   lastMouse,

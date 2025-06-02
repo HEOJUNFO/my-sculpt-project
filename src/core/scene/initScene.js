@@ -17,7 +17,7 @@ import {
   disposeBoundsTree,
 } from 'three-mesh-bvh';
 
-import { setupCustomSculptUI } from '../../sculptUI.js'; 
+import { setupCustomSculptUI } from '../../features/sculpt/sculptUI.js'; 
 import { memos } from '../../memo.js'; 
 import {
   refs,
