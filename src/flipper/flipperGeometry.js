@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { refs } from '../modelManager.js';
 import { getFlipperState, setFlipperMesh, updateFlipperInfoText } from './flipperDrawing.js';
 import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import earcut from 'earcut';
 
 /**
  * 플리퍼 생성
@@ -40,47 +41,120 @@ export function generateFlipper() {
     }
     const borderVertexIndices = [];
 
-    const splitTriangles = []; // 각 drawingPoint에 대해 쪼개진 삼각형들의 faceIndex 저장
-
     // 3. 각 점에 대해 면 분할
-    function mergeOrSplitPoint(point) {
-      const faceIndex = point.faceIndex;
-      const baseIndex = faceIndex * 3;
-      
-      // 면의 세 정점 인덱스
-      const vertexIndices = [indices[baseIndex], indices[baseIndex + 1], indices[baseIndex + 2]];
-
-      // 점이 면의 변에도 가깝지 않으면 면의 중심에서 분할
-      const a = vertexIndices[0];
-      const b = vertexIndices[1];
-      const c = vertexIndices[2];
-
-      // 새로운 점 추가
-      const newVertexIndex = newVertices.length / 3;
-      point.newVertexIndex = newVertexIndex;
-      newVertices.push(point.position.x, point.position.y, point.position.z);
-      newNormals.push(point.normal.x, point.normal.y, point.normal.z);
-      borderVertexIndices.push(newVertexIndex);
-
-      // 쪼개진 삼각형들의 faceIndex 저장
-      const splitFaceIndexes = [faceIndex, newIndices.length / 3, newIndices.length / 3 + 1]
-      splitTriangles.push(splitFaceIndexes);
-
-      // 기존 면을 첫 번째 삼각형으로 대체
-      newIndices.splice(baseIndex, 3, a, newVertexIndex, c);
-      vertexFaceMap[b]=vertexFaceMap[b].filter(face => face !== faceIndex);
-
-      // 두 개의 새로운 삼각형 추가
-      newIndices.push(newVertexIndex, b, c, a, b, newVertexIndex);
-
-      vertexFaceMap[c].push(splitFaceIndexes[1]);
-      vertexFaceMap[a].push(splitFaceIndexes[2]);
-      vertexFaceMap[b].push(splitFaceIndexes[1], splitFaceIndexes[2]);
-      vertexFaceMap[newVertexIndex] = [...splitFaceIndexes];
+    // 3.1 각 면에 속한 점들을 그룹화
+    const facePointsMap = new Map(); // faceIndex -> points[]
+    for (const point of selectedAreaPoints) {
+      if (!facePointsMap.has(point.faceIndex)) {
+        facePointsMap.set(point.faceIndex, []);
+      }
+      facePointsMap.get(point.faceIndex).push(point);
     }
 
-    for (let i = 0; i < selectedAreaPoints.length; i++) {
-      mergeOrSplitPoint(selectedAreaPoints[i]);
+    // 3.2 각 면에 대한 처리
+    for (const [faceIndex, points] of facePointsMap) {
+      // 면의 기하학적 정보 준비
+      const baseIndex = faceIndex * 3;
+      const vertexIndices = [indices[baseIndex], indices[baseIndex + 1], indices[baseIndex + 2]];
+      const vertices = [
+        new THREE.Vector3(newVertices[vertexIndices[0] * 3], newVertices[vertexIndices[0] * 3 + 1], newVertices[vertexIndices[0] * 3 + 2]),
+        new THREE.Vector3(newVertices[vertexIndices[1] * 3], newVertices[vertexIndices[1] * 3 + 1], newVertices[vertexIndices[1] * 3 + 2]),
+        new THREE.Vector3(newVertices[vertexIndices[2] * 3], newVertices[vertexIndices[2] * 3 + 1], newVertices[vertexIndices[2] * 3 + 2])
+      ];
+
+      // 로컬 좌표계 생성
+      const normal = new THREE.Vector3().crossVectors(
+        new THREE.Vector3().subVectors(vertices[1], vertices[0]),
+        new THREE.Vector3().subVectors(vertices[2], vertices[0])
+      ).normalize();
+      const xAxis = new THREE.Vector3().subVectors(vertices[1], vertices[0]).normalize();
+      const yAxis = new THREE.Vector3().crossVectors(normal, xAxis).normalize();
+
+      // 점들을 2D로 투영
+      const points2D = points.map(point => {
+        const v = new THREE.Vector3().subVectors(point.position, vertices[0]);
+        return {
+          x: v.dot(xAxis),
+          y: v.dot(yAxis),
+          originalPoint: point
+        };
+      });
+
+      // 새로운 정점 추가 및 인덱스 매핑
+      const newVertexIndices = new Map(); // originalPoint -> newVertexIndex
+      for (const point of points) {
+        const newVertexIndex = newVertices.length / 3;
+        newVertexIndices.set(point, newVertexIndex);
+        point.newVertexIndex = newVertexIndex;
+        
+        newVertices.push(point.position.x, point.position.y, point.position.z);
+        newNormals.push(point.normal.x, point.normal.y, point.normal.z);
+        borderVertexIndices.push(newVertexIndex);
+
+        // vertexFaceMap 확장
+        vertexFaceMap.push([]);
+      }
+
+      // Earcut을 위한 데이터 준비
+      const flatPoints = [];
+      // 원래 삼각형의 정점들도 포함
+      for (const vertex of vertices) {
+        const v = new THREE.Vector3().subVectors(vertex, vertices[0]);
+        flatPoints.push(v.dot(xAxis), v.dot(yAxis));
+      }
+      // 새로운 점들 추가
+      for (const p of points2D) {
+        flatPoints.push(p.x, p.y);
+      }
+
+      // Earcut으로 삼각분할
+      // holes는 null, dims는 2, 그리고 원래 삼각형의 정점 수를 전달
+      const triangles = earcut(flatPoints, [3], 2);
+
+      // 1. 분할된 면들의 vertexIndex 3개 쌍들의 배열 만들기
+      const newTriangles = [];
+      for (let i = 0; i < triangles.length; i += 3) {
+        const triangle = [
+          triangles[i],
+          triangles[i + 1],
+          triangles[i + 2]
+        ];
+        
+        const newTriangle = triangle.map(idx => {
+          if (idx < 3) { // 원래 면의 정점
+            return vertexIndices[idx];
+          } else { // 새로운 점
+            return newVertexIndices.get(points[idx - 3]);
+          }
+        });
+        newTriangles.push(newTriangle);
+      }
+
+      // 2. 기존 면을 vertexFaceMap에서 제거
+      for (const vertexIndex of vertexIndices) {
+        vertexFaceMap[vertexIndex] = vertexFaceMap[vertexIndex].filter(f => f !== faceIndex);
+      }
+
+      // 3. 첫 번째 면은 newIndices에서 splice로 대체
+      newIndices.splice(baseIndex, 3, ...newTriangles[0]);
+
+      // 4. 첫 번째 면 꼭짓점들의 vertexFaceMap에 첫 번째 면 추가
+      for (const vertexIndex of newTriangles[0]) {
+        vertexFaceMap[vertexIndex].push(faceIndex);
+      }
+
+      // 5. 나머지 면들은 원래 방식대로 새로운 삼각형 추가 및 vertexFaceMap 업데이트
+      for (let i = 1; i < newTriangles.length; i++) {
+        const newFaceIndex = newIndices.length / 3;
+        newIndices.push(...newTriangles[i]);
+        
+        for (const vertexIndex of newTriangles[i]) {
+          if (!vertexFaceMap[vertexIndex]) {
+            vertexFaceMap[vertexIndex] = [];
+          }
+          vertexFaceMap[vertexIndex].push(newFaceIndex);
+        }
+      }
     }
 
     /**
@@ -317,7 +391,7 @@ export function generateFlipper() {
     for (let i = 0; i < selectedAreaPoints.length; i++) {
       const startDrawingPoint = selectedAreaPoints[i];
       const endDrawingPoint = selectedAreaPoints[(i + 1) % selectedAreaPoints.length];
-      edgeBetweenSelectedAreaPoints(startDrawingPoint, endDrawingPoint, splitTriangles[i]);
+      edgeBetweenSelectedAreaPoints(startDrawingPoint, endDrawingPoint, vertexFaceMap[startDrawingPoint.newVertexIndex]);
     }
 
     //5. 경계 내의 면만 추출
@@ -477,9 +551,6 @@ export function generateFlipper() {
     }
 
 
-    console.log("start face", inflatedFaces.length);
-
-
     function collapseShortEdges(){
       let edgeLenSum = 0;
       let edgeLenCount = 0;
@@ -494,7 +565,6 @@ export function generateFlipper() {
       }
       const averageEdgeLen = edgeLenSum / edgeLenCount;
       const threshold = averageEdgeLen * 0.7;
-      console.log('averageEdgeLen', averageEdgeLen);
 
       for(let i=borderVertexCount; i<borderAndBackVertexCount; i++) { // front vertex 루프
         const neighbors = vertexEdgeMap[i];
@@ -503,7 +573,6 @@ export function generateFlipper() {
           if (n < borderVertexCount || n < i) continue; // border거나 자기보다 작은 인덱스는 건너뜀
           const edgeLen = inflatedPositions[i - borderVertexCount].distanceTo(inflatedPositions[n - borderVertexCount]);
           if (edgeLen < threshold) {
-            console.log('edgeLen', edgeLen);
             // 두 엣지가 들어있는 face들 제거
             const count = inflatedFaces.length;
             inflatedFaces = inflatedFaces.filter(face => !(face.includes(i) && face.includes(n)));
@@ -570,7 +639,7 @@ export function generateFlipper() {
       return smoothedPositions;
     }
 
-    const smoothCount = 100;
+    const smoothCount = 20;
     for (let cycle = 0; cycle < smoothCount; cycle++) {
       const tempPositions = computeSmoothedPositions(inflatedPositions, lambda);
       inflatedPositions = computeSmoothedPositions(tempPositions, mu);
@@ -596,8 +665,6 @@ export function generateFlipper() {
         normal.z
       );
     }
-
-    console.log("end face", inflatedFaces.length);
 
     // inflated 면 만들기
     for(const inflatedFace of inflatedFaces) {
