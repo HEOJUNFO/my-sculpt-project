@@ -15,7 +15,7 @@ let flipperMesh = null;
 
 // 마우스 관련 변수
 let isDrawing = false;
-let minDistanceBetweenPoints = 0.02; // 점이 같은 face에 여러개 들어가면 지금 버그있어 길게 잡았음. 나중에 고치면 줄여도 됨.
+let minDistanceBetweenPoints = 0.01;
 let lastMousePosition = new THREE.Vector2();
 let hoveredPointIndex = -1;
 
