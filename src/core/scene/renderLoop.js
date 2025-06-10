@@ -45,11 +45,6 @@ export function startRenderLoop(renderer, scene, camera, stats) {
 
     refs.controls.update();
 
-    // matcap 설정
-    if ( refs.targetMesh ) {
-      refs.targetMesh.material.matcap = refs.matcaps[ refs.params.matcap ];
-    }
-
     // 라이브러리 완료 단계 확인 (단계 6)
     const isLibraryCompleted = getCurrentStep() === 6;
     // 플리퍼 완료 단계 확인 (단계 8)
