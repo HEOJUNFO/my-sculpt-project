@@ -232,20 +232,6 @@ export function completeSculpting() {
     setStep(5);
   }
   else if (currentStep === 6) {
-    // 라이브러리 후 스컬프 완료 시: 플리퍼 UI로 가기 전에 타겟 메쉬를 원래 모델(잇몸)로 변경
-    
-    // 원래 모델(잇몸)을 찾아서 타겟 메쉬로 설정
-    const baseModel = findBaseModel();
-    if (baseModel) {
-      // 모델 매니저의 setTargetMeshAsActive 함수 호출
-      if (window.setTargetMeshAsActive) {
-        window.setTargetMeshAsActive(baseModel);
-      } else {
-        // 전역 함수가 없다면 직접 설정
-        refs.targetMesh = baseModel;
-      }
-    }
-    
     // 단계 7로 (플리퍼 UI)
     setStep(7);
   }
