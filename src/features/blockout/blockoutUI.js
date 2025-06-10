@@ -166,7 +166,7 @@ function detectUndercuts() {
   } else {
     refs.camera.getWorldDirection(offsetDirection);
   }
-  offsetDirection.negate();  // 카메라 방향의 반대 방향으로 오프셋
+
   undercutMesh.position.addScaledVector(offsetDirection, 0.001);
   
   refs.scene.add(undercutMesh);
