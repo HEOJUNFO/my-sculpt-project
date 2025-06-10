@@ -701,17 +701,6 @@ export function generateFlipper() {
       flatShading: false,
     });
 
-    // 디버깅용 재질
-    const debugMaterial = new THREE.MeshBasicMaterial({
-      color: 0x00ff00,
-      wireframe: true,
-      side: THREE.DoubleSide,
-      depthTest: false,
-      depthWrite: false,
-      transparent: true,
-      opacity: 0.8
-    })
-
     // 메시 생성
     const surfaceMesh = new THREE.Mesh(newGeometry, surfaceMaterial);
     surfaceMesh.userData.isFlipperMesh = true;
