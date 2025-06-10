@@ -131,30 +131,14 @@ function placeToothModel(toothId, modelPath, position, rotation, mesialToDistalD
         newGeometry.attributes.normal.setUsage(THREE.DynamicDrawUsage);
         newGeometry.computeBoundsTree({ setBoundingBox: false });
         
-        // 치아 재질 생성 - 치아 ID에 따라 다른 matcap 사용
-        let matcapTexture;
-        
-        // 치아 번호에 따라 다른 matcap 선택
-        if (parseInt(toothId) >= 11 && parseInt(toothId) <= 18) {
-          // 우측 상악 (밝은 색상)
-          matcapTexture = refs.matcaps['Pearl'] || refs.matcaps['White'];
-        } else if (parseInt(toothId) >= 21 && parseInt(toothId) <= 28) {
-          // 좌측 상악 (약간 다른 밝은 색상)
-          matcapTexture = refs.matcaps['White'] || refs.matcaps['Pearl'];
-        } else if (parseInt(toothId) >= 31 && parseInt(toothId) <= 38) {
-          // 좌측 하악 (다른 색조)
-          matcapTexture = refs.matcaps['Shiny Green'] || refs.matcaps['White'];
-        } else if (parseInt(toothId) >= 41 && parseInt(toothId) <= 48) {
-          // 우측 하악 (또 다른 색조)
-          matcapTexture = refs.matcaps['Red Wax'] || refs.matcaps['White'];
-        }
+        const matcapTexture = refs.matcaps['White'] || refs.matcaps['Pearl'];
         
         const toothMaterial = new THREE.MeshMatcapMaterial({
           flatShading: false,
           side: THREE.DoubleSide,
           matcap: matcapTexture || refs.matcaps['White'],
           transparent: true,
-          opacity: 0.9 // 치아는 약간 반투명하게
+          opacity: 0.95 // 치아는 약간 반투명하게
         });
         
         // 치아 메쉬 생성
