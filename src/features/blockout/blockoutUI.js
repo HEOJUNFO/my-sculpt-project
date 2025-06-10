@@ -13,6 +13,7 @@ export function setupBlockoutUI() {
   const btnDetectUndercuts = document.getElementById('btn-detect-undercuts');
   const btnApplyBlockout = document.getElementById('btn-apply-blockout');
   const btnRestoreCamera = document.getElementById('btn-restore-camera');
+  const btnResetBlockout = document.getElementById('btn-reset-blockout'); // 초기화 버튼
   const btnComplete = document.getElementById('btn-blockout-complete');
   const blockoutDistanceSlider = document.getElementById('blockoutDistanceRange');
 
@@ -20,13 +21,11 @@ export function setupBlockoutUI() {
   btnDetectUndercuts?.addEventListener('click', detectUndercuts);
   btnApplyBlockout?.addEventListener('click', applyBlockout);
   btnRestoreCamera?.addEventListener('click', restoreCamera);
+  btnResetBlockout?.addEventListener('click', resetBlockout); // 초기화 버튼 이벤트
   btnComplete?.addEventListener('click', () => {
-    // Clean up any undercut visualization
-    if (undercutMesh && undercutMesh.parent) {
-      refs.scene.remove(undercutMesh);
-      undercutMesh.geometry.dispose();
-      undercutMesh.material.dispose();
-      undercutMesh = null;
+    // Clean up any undercut visualization - 제거 대신 숨김
+    if (undercutMesh) {
+      undercutMesh.visible = false;
     }
     
     // 블록아웃 완료 처리
@@ -40,6 +39,50 @@ export function setupBlockoutUI() {
       const value = parseFloat(blockoutDistanceSlider.value);
       console.log(`Blockout distance set to: ${value}`);
     });
+  }
+}
+
+// 블록아웃 초기화 함수
+function resetBlockout() {
+  // 1. 블록아웃 메쉬 찾아서 제거
+  const blockoutMeshes = [];
+  refs.scene.traverse((child) => {
+    if (child.name === 'BlockoutMesh' || child.userData.type === 'blockout') {
+      blockoutMeshes.push(child);
+    }
+  });
+  
+  // 블록아웃 메쉬들 제거
+  blockoutMeshes.forEach(mesh => {
+    refs.scene.remove(mesh);
+    mesh.geometry.dispose();
+    if (mesh.material) {
+      if (Array.isArray(mesh.material)) {
+        mesh.material.forEach(mat => mat.dispose());
+      } else {
+        mesh.material.dispose();
+      }
+    }
+  });
+  
+  // 2. 언더컷 시각화 다시 표시
+  if (undercutMesh) {
+    undercutMesh.visible = true;
+  }
+  
+  console.log(`블록아웃 초기화 완료: ${blockoutMeshes.length}개의 블록아웃 메쉬 제거됨`);
+  
+  // 사용자에게 알림
+  const messageElement = document.getElementById('blockout-message');
+  if (messageElement) {
+    messageElement.textContent = `블록아웃이 초기화되었습니다. (${blockoutMeshes.length}개 제거)`;
+    messageElement.style.opacity = '1';
+    setTimeout(() => {
+      messageElement.style.opacity = '0';
+      setTimeout(() => {
+        messageElement.textContent = '';
+      }, 300);
+    }, 3000);
   }
 }
 
@@ -84,7 +127,7 @@ function detectUndercuts() {
   }
   
   // Clean up previous undercut mesh if it exists
-  if (undercutMesh && undercutMesh.parent) {
+  if (undercutMesh) {
     refs.scene.remove(undercutMesh);
     undercutMesh.geometry.dispose();
     undercutMesh.material.dispose();
@@ -282,12 +325,9 @@ function applyBlockout() {
     
     console.log(`블록아웃 메쉬 생성 완료: ${triangleCount}개 언더컷 영역 처리됨`);
     
-    // 언더컷 시각화 제거
-    if (undercutMesh && undercutMesh.parent) {
-      refs.scene.remove(undercutMesh);
-      undercutMesh.geometry.dispose();
-      undercutMesh.material.dispose();
-      undercutMesh = null;
+    // 언더컷 시각화를 제거하는 대신 숨김
+    if (undercutMesh) {
+      undercutMesh.visible = false;
     }
   }
 }
