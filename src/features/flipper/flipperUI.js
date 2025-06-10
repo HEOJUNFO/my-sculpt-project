@@ -81,8 +81,8 @@ export function initFlipperUI() {
           <input 
             type="range" 
             id="flipperThicknessRange" 
-            min="0.2" 
-            max="5" 
+            min="1" 
+            max="10" 
             step="0.1" 
             value="1.0"
             class="custom-slider"
