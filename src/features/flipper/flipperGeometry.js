@@ -696,7 +696,7 @@ export function generateFlipper() {
 
     // 원래 모델과 유사한 재질 생성
     const surfaceMaterial = new THREE.MeshMatcapMaterial({
-      matcap: refs.matcaps['Red Wax'],
+      matcap: refs.matcaps['Red'],
       side: THREE.DoubleSide,
       flatShading: false,
     });
