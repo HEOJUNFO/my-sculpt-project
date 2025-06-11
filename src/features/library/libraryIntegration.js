@@ -8,7 +8,6 @@ import {
   initIntersectionDetection, 
   toggleIntersectionVisualization, 
   clearIntersectionVisualization,
-  isIntersectionDetectionActive 
 } from '../../utils/intersectionDetection.js';
 
 // Global UI container for the library
@@ -325,6 +324,15 @@ function setupTransformUIEvents() {
       object.userData.initialScale = object.scale.clone();
     }
     originalScale = object.userData.initialScale.clone();
+    
+    // 현재 스케일 계산 (초기 스케일 대비 현재 스케일의 비율)
+    currentScale = object.scale.x / originalScale.x;
+    
+    // UI 초기값 설정
+    const scaleValue = document.getElementById('scale-value');
+    const scaleSlider = document.getElementById('scale-slider');
+    if (scaleValue) scaleValue.textContent = currentScale.toFixed(2);
+    if (scaleSlider) scaleSlider.value = currentScale;
   }
   
   // 이동 모드 버튼
