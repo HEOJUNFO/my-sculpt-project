@@ -123,7 +123,15 @@ function detectUndercuts() {
   
   // Save camera state if not already saved
   if (!savedCameraState) {
-    saveCameraState();
+    const direction = new THREE.Vector3();
+    refs.camera.getWorldDirection(direction);
+    savedCameraState = {
+      position: refs.camera.position.clone(),
+      target: refs.controls.target.clone(),
+      quaternion: refs.camera.quaternion.clone(),
+      direction: direction.clone()
+    };
+    console.log('Camera state saved:', savedCameraState);
   }
   
   // Clean up previous undercut mesh if it exists
@@ -144,8 +152,8 @@ function detectUndercuts() {
   const undercutPositions = [];
   const undercutNormals = [];
   
-  // Use a small threshold to detect faces facing away from camera
-  const threshold = 0.01;
+  // threshold를 0.1로 변경 (기존 0.01에서 변경)
+  const threshold = 0.1;
   const triangleCount = indexAttr ? indexAttr.count / 3 : posAttr.count / 3;
   
   for (let i = 0; i < triangleCount; i++) {
@@ -195,23 +203,10 @@ function detectUndercuts() {
     side: THREE.DoubleSide,
     transparent: true,
     opacity: 0.5,
-    depthTest: true,      // 깊이 테스트 비활성화
-    depthWrite: false      // 깊이 버퍼에 쓰지 않음
   });
   
   undercutMesh = new THREE.Mesh(undercutGeometry, redMaterial);
-  undercutMesh.renderOrder = 9999;  // 높은 렌더링 순서 설정
-  
-  // 미세하게 오프셋을 주어 Z-fighting 방지
-  const offsetDirection = new THREE.Vector3();
-  if (savedCameraState && savedCameraState.direction) {
-    offsetDirection.copy(savedCameraState.direction);
-  } else {
-    refs.camera.getWorldDirection(offsetDirection);
-  }
-
-  undercutMesh.position.addScaledVector(offsetDirection, 0.001);
-  
+  undercutMesh.renderOrder = 999;  
   refs.scene.add(undercutMesh);
   
   const undercutCount = undercutPositions.length / 9; // Each triangle has 3 vertices, each vertex has 3 coordinates
@@ -230,15 +225,11 @@ function applyBlockout() {
     return;
   }
   
-  // 언더컷(복사) 위치에서 사용할 재질 얻기 - 타겟 메쉬와 동일하게
-  let blockoutMaterial;
-  if (Array.isArray(refs.targetMesh.material)) {
-    // 다중 재질인 경우 첫 번째 재질 복사
-    blockoutMaterial = refs.targetMesh.material[0].clone();
-  } else {
-    // 단일 재질 복사
-    blockoutMaterial = refs.targetMesh.material.clone();
-  }
+  const blockoutMaterial = new THREE.MeshMatcapMaterial({
+    matcap: refs.matcaps['sky'],
+    side: THREE.DoubleSide,
+    flatShading: false,
+  });
   
   // Get blockout distance from slider if available
   let blockoutDistance = 0.1; // Default distance
