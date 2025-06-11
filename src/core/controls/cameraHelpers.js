@@ -62,9 +62,9 @@ export function fitCameraToObject(camera, object, controls, offset = 1.5) {
   
   controls.target.copy(center);
   
-  controls.rotateSpeed = 3.0;
-  controls.zoomSpeed = 1.2;
-  controls.panSpeed = 0.8;
+  controls.rotateSpeed = 20.0;
+  controls.zoomSpeed = 2.0;
+  controls.panSpeed = 1.2;
   controls.noPan = false;
   controls.noZoom = false;
   controls.noRotate = false;

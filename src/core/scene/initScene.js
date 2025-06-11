@@ -100,7 +100,7 @@ export function initScene() {
   scene.add(new THREE.AmbientLight(0xffffff, 0.0));
 
   const camera = new THREE.PerspectiveCamera(
-    75,
+    50,
     window.innerWidth / window.innerHeight,
     0.1,
     50
