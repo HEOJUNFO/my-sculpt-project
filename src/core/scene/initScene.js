@@ -128,6 +128,7 @@ export function initScene() {
   matcaps['Red Wax']     = new THREE.TextureLoader().load('textures/763C39_431510_210504_55241C-256px.png');
   matcaps['Normal']      = new THREE.TextureLoader().load('textures/7877EE_D87FC5_75D9C7_1C78C0-256px.png');
   matcaps['Red']      = new THREE.TextureLoader().load('textures/red7.png');
+  matcaps['sky']      = new THREE.TextureLoader().load('textures/blockout.png');
   
   // Brush
   const brushMat = new THREE.LineBasicMaterial({
