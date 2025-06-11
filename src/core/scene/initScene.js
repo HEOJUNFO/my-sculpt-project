@@ -122,16 +122,12 @@ export function initScene() {
   matcaps['Clay']        = new THREE.TextureLoader().load('textures/clay.jpg');
   matcaps['Clay2']       = new THREE.TextureLoader().load('textures/B67F6B_4B2E2A_6C3A34_F3DBC6-256px.png');
   matcaps['Red Clay']    = new THREE.TextureLoader().load('textures/redClay.jpg');
-  matcaps['Green']       = new THREE.TextureLoader().load('textures/green.jpg');
   matcaps['White']       = new THREE.TextureLoader().load('textures/white.jpg');
   matcaps['MatcapFV']    = new THREE.TextureLoader().load('textures/matcapFV.jpg');
   matcaps['Pearl']       = new THREE.TextureLoader().load('textures/pearl.jpg');
-  matcaps['Skin']        = new THREE.TextureLoader().load('textures/skin.jpg');
-  matcaps['SkinHazardousarts']  = new THREE.TextureLoader().load('textures/skinhazardousarts.jpg');
-  matcaps['SkinHazardousarts2'] = new THREE.TextureLoader().load('textures/skinhazardousarts2.jpg');
   matcaps['Red Wax']     = new THREE.TextureLoader().load('textures/763C39_431510_210504_55241C-256px.png');
-  matcaps['Shiny Green'] = new THREE.TextureLoader().load('textures/3B6E10_E3F2C3_88AC2E_99CE51-256px.png');
   matcaps['Normal']      = new THREE.TextureLoader().load('textures/7877EE_D87FC5_75D9C7_1C78C0-256px.png');
+  matcaps['Red']      = new THREE.TextureLoader().load('textures/red7.png');
   
   // Brush
   const brushMat = new THREE.LineBasicMaterial({
