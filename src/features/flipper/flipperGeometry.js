@@ -777,37 +777,3 @@ function findEdgeIntersection(p1, p2, p3, p4) {
 
   return intersection;
 }
-
-function debugDrawPoint(point, {size = 0.0002, color = 0xffff00, opacity = 0.5} = {}) {
-  const sphereGeometry = new THREE.SphereGeometry(size, 8, 8);
-  const sphereMaterial = new THREE.MeshBasicMaterial({ color, transparent: true, opacity });
-  const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
-  sphere.position.copy(point);
-  refs.scene.add(sphere);
-  return sphere;
-}
-
-function debugDrawLine(startPoint, endPoint, {width = 0.0002, color = 0xffff00, opacity = 0.5} = {}) {
-     // 두 점 사이의 거리 계산
-    const distance = startPoint.distanceTo(endPoint);
-    
-    // 실린더 생성
-    const cylinderGeometry = new THREE.CylinderGeometry(width, width, distance, 8);
-    const cylinderMaterial = new THREE.MeshBasicMaterial({ color, transparent: true, opacity });
-    const cylinder = new THREE.Mesh(cylinderGeometry, cylinderMaterial);
-    
-    // 실린더 위치 및 회전 설정
-    const midPoint = new THREE.Vector3().addVectors(startPoint, endPoint).multiplyScalar(0.5);
-    cylinder.position.copy(midPoint);
-    
-    // 실린더를 두 점을 잇는 방향으로 회전
-    const direction = new THREE.Vector3().subVectors(endPoint, startPoint).normalize();
-    const quaternion = new THREE.Quaternion().setFromUnitVectors(
-      new THREE.Vector3(0, 1, 0),
-      direction
-    );
-    cylinder.quaternion.copy(quaternion);
-    
-    refs.scene.add(cylinder);
-    return cylinder;
-}
