@@ -299,7 +299,7 @@ function onMouseClick(event) {
  */
 function setMesialPoint(point) {
   mesialPoint = point.clone();
-  mesialPoint.z +=0.2
+  mesialPoint.z +=0.18
   mesialPoint.y -=0.1
 
   // 메지오 마커 생성
@@ -546,16 +546,16 @@ function updatePreviewTooth() {
   // 치아 번호에 따른 메지오 방향 오프셋 계산
   if (toothId >= 11 && toothId <= 18) {
     // 우측 상악 - 메지오는 중앙선 쪽 (음의 X 방향)
-    mesialOffset.x = toothLength * 0.4;
+    mesialOffset.x = toothLength * 0.39;
   } else if (toothId >= 21 && toothId <= 28) {
     // 좌측 상악 - 메지오는 중앙선 쪽 (양의 X 방향)
-    mesialOffset.x = -toothLength * 0.4;
+    mesialOffset.x = -toothLength * 0.39;
   } else if (toothId >= 31 && toothId <= 38) {
     // 좌측 하악 - 메지오는 중앙선 쪽 (양의 X 방향)
-    mesialOffset.x = -toothLength * 0.4;
+    mesialOffset.x = -toothLength * 0.39;
   } else if (toothId >= 41 && toothId <= 48) {
     // 우측 하악 - 메지오는 중앙선 쪽 (음의 X 방향)
-    mesialOffset.x = toothLength * 0.4;
+    mesialOffset.x = toothLength * 0.39;
   }
 
   mesialOffset.y = Math.max(0, Math.min(0.1, -1/3 * toothLength + 4/30));
