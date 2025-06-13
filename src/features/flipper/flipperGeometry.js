@@ -523,8 +523,8 @@ export function generateFlipper() {
 
     for(let i=0; i<innerVertexCount; i++) {
       const normalizedDistance = borderDistances[i] / maxDistance;
-      const sigmoidValue = normalizedDistance / (0.1 + normalizedDistance);
-      const scaleFactor = sigmoidValue / (1 / (0.1 + 1));
+      const sigmoidValue = normalizedDistance / (0.05 + normalizedDistance);
+      const scaleFactor = sigmoidValue / (1 / (0.05 + 1));
       const extrusionAmount = (flipperThickness * 0.01) * (0.5 + 0.5 * scaleFactor);
       
       const position = vertexPositions[borderVertexCount + i].clone();
