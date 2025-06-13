@@ -94,10 +94,10 @@ export function initScene() {
   const scene = new THREE.Scene();
   // scene.fog = new THREE.Fog(0x263238 / 2, 20, 60);
 
-  const light = new THREE.DirectionalLight(0xffffff, 0.0);
+  const light = new THREE.DirectionalLight(0xffffff, 1.0);
   light.position.set(1, 1, 1);
   scene.add(light);
-  scene.add(new THREE.AmbientLight(0xffffff, 0.0));
+  scene.add(new THREE.AmbientLight(0xffffff, 1.0));
 
   const camera = new THREE.PerspectiveCamera(
     50,

@@ -247,6 +247,16 @@ function attachTransformControlsToTooth(toothMesh) {
   if (refs.transformControls) {
     refs.transformControls.attach(toothMesh);
     refs.scene.add(refs.transformControls.getHelper());
+
+    const handleChange = () => {
+      console.log(`치아 ${toothMesh.userData.toothId} 현재 위치:`, {
+        y: toothMesh.position.y.toFixed(3),
+        z: toothMesh.position.z.toFixed(3)
+      });
+    };
+    
+    // change 이벤트 리스너 추가
+    refs.transformControls.addEventListener('change', handleChange);
     
     // UI 생성
     createTransformUI();
