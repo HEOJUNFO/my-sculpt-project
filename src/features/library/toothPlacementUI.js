@@ -299,7 +299,7 @@ function onMouseClick(event) {
  */
 function setMesialPoint(point) {
   mesialPoint = point.clone();
-  mesialPoint.z +=0.18
+  mesialPoint.z +=0.175
   mesialPoint.y -=0.1
 
   // 메지오 마커 생성
