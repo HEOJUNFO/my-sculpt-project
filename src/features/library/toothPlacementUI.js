@@ -302,7 +302,7 @@ function setMesialPoint(point) {
   mesialPoint = point.clone();
   mesialPoint.z +=0.15
   mesialPoint.y -=0.1
-  
+
   // 메지오 마커 생성
   createMesialMarker(point);
   
@@ -361,7 +361,6 @@ function onMouseMove(event) {
     const hits = raycaster.intersectObject(jaw);
     if (hits.length > 0) {
       newDistalPoint = hits[0].point.clone();
-      console.log("턱뼈 표면 사용");
     }
   }
   
@@ -557,6 +556,10 @@ function updatePreviewTooth() {
     // 우측 하악 - 메지오는 중앙선 쪽 (음의 X 방향)
     mesialOffset.x = toothLength * 0.4;
   }
+
+  // mesialOffset.z = 1.75 * toothLength - 0.375;
+  console.log(mesialOffset.y,mesialOffset.z)
+  
   
   // 치아 위치 설정 - 메지오 마커 위치에 메지오 부분이 오도록 조정
   previewTooth.position.copy(mesialPoint);
@@ -612,9 +615,7 @@ function updatePreviewTooth() {
   
   // rotation.z 적용
   previewTooth.rotation.z = rotationZ;
-  
-  // 디버깅용 로그 (필요시 주석 해제)
-  console.log(`치아 ${toothId} - 메지오-디스탈 각도: ${(rotationZ * 180 / Math.PI).toFixed(1)}도`);
+
 }
 /**
  * 배치 객체들 정리
