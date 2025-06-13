@@ -34,7 +34,6 @@ function calculateUniformScale(geometry, mesialToDistalDistance) {
   // 메지오-디스탈 거리에 비례하는 스케일 (조정 가능한 계수)
   const targetSize = mesialToDistalDistance * 1.3; // 실제 치아 크기 비율 (toothPlacementUI와 동일하게 수정)
   const scaleFactor = targetSize / maxDimension;
-  console.log("스케일 계산 - 거리:", mesialToDistalDistance.toFixed(3), "스케일:", scaleFactor.toFixed(3));
   
   // 최소/최대 스케일 제한
   return Math.max(0.01, Math.min(2.0, scaleFactor)); // 최대값을 2.0으로 통일
