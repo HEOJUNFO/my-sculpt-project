@@ -500,7 +500,7 @@ function createPreviewTooth(mesialPosition) {
       geometry.boundingBox.getSize(originalGeometryBounds.size);
       
       // 프리뷰용 반투명 재질 생성
-      previewMaterial = new THREE.MeshStandardMaterial({
+      previewMaterial = new THREE.MeshBasicMaterial({
         color: 0x3399ff,
         transparent: true,
         opacity: 0.6,
@@ -566,16 +566,16 @@ function updatePreviewTooth() {
   // 치아 번호에 따른 메지오 방향 오프셋 계산
   if (toothId >= 11 && toothId <= 18) {
     // 우측 상악 - 메지오는 중앙선 쪽 (음의 X 방향)
-    mesialOffset.x = toothLength * 0.35;
+    mesialOffset.x = toothLength * 0.4;
   } else if (toothId >= 21 && toothId <= 28) {
     // 좌측 상악 - 메지오는 중앙선 쪽 (양의 X 방향)
-    mesialOffset.x = -toothLength * 0.35;
+    mesialOffset.x = -toothLength * 0.4;
   } else if (toothId >= 31 && toothId <= 38) {
     // 좌측 하악 - 메지오는 중앙선 쪽 (양의 X 방향)
-    mesialOffset.x = -toothLength * 0.35;
+    mesialOffset.x = -toothLength * 0.4;
   } else if (toothId >= 41 && toothId <= 48) {
     // 우측 하악 - 메지오는 중앙선 쪽 (음의 X 방향)
-    mesialOffset.x = toothLength * 0.35;
+    mesialOffset.x = toothLength * 0.4;
   }
   
   // 치아 위치 설정 - 메지오 마커 위치에 메지오 부분이 오도록 조정
