@@ -253,7 +253,6 @@ function updatePhaseIndicator() {
  * Handle clicks in the Three.js canvas during placement
  */
 function onMouseClick(event) {
-  console.log("Mouse Click - placementActive:", window.placementActive, "phase:", placementPhase, "distalConfirmed:", distalConfirmed);
   if (!window.placementActive) return;
   
   // Convert to normalized device coords
@@ -557,7 +556,8 @@ function updatePreviewTooth() {
     mesialOffset.x = toothLength * 0.4;
   }
 
-  // mesialOffset.z = 1.75 * toothLength - 0.375;
+  mesialOffset.y = 0
+  mesialOffset.z = 0
   console.log(mesialOffset.y,mesialOffset.z)
   
   

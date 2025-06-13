@@ -245,7 +245,6 @@ function attachTransformControlsToTooth(toothMesh) {
   
   // TransformControls 설정 및 부착
   if (refs.transformControls) {
-    console.log("새 TransformControls 부착");
     refs.transformControls.attach(toothMesh);
     refs.scene.add(refs.transformControls.getHelper());
     
@@ -453,7 +452,6 @@ function handleToothSelection(event) {
     return;
   }
   
-  console.log("치아 선택 클릭 이벤트 발생", event, "placedTeeth:", placedTeeth.length);
   
   // 마우스 좌표 계산
   const rect = refs.renderer.domElement.getBoundingClientRect();
@@ -465,14 +463,10 @@ function handleToothSelection(event) {
   // 레이캐스터 생성
   const raycaster = new THREE.Raycaster();
   raycaster.setFromCamera(mouse, refs.camera);
-  
-  // 수정 5: 배치된 치아 목록 재확인
-  console.log("배치된 치아 목록 검사:", placedTeeth.map(t => t.userData?.toothId || "unknown"));
+
   
   // 배치된 치아와 교차 확인 
   const intersects = raycaster.intersectObjects(placedTeeth, true); // true 추가: 자식 객체도 검사
-  
-  console.log("intersects 결과:", intersects.length);
   
   // 치아를 클릭한 경우
   if (intersects.length > 0) {
@@ -513,9 +507,7 @@ function handleToothSelection(event) {
       msg.style.opacity = '0';
       setTimeout(() => msg.remove(), 500);
     }, 3000);
-  } else {
-    console.log("선택된 치아 없음");
-  }
+  } 
 }
 
 /**
