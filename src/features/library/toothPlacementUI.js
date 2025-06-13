@@ -299,7 +299,7 @@ function onMouseClick(event) {
  */
 function setMesialPoint(point) {
   mesialPoint = point.clone();
-  mesialPoint.z +=0.15
+  mesialPoint.z +=0.2
   mesialPoint.y -=0.1
 
   // 메지오 마커 생성
@@ -478,7 +478,7 @@ function createPreviewTooth(mesialPosition) {
       geometry.boundingBox.getSize(originalGeometryBounds.size);
       
       // 프리뷰용 반투명 재질 생성
-      previewMaterial = new THREE.MeshBasicMaterial({
+      previewMaterial = new THREE.MeshStandardMaterial({
         color: 0x3399ff,
         transparent: true,
         opacity: 0.6,
@@ -501,6 +501,8 @@ function createPreviewTooth(mesialPosition) {
       // 초기 위치 설정 (메지오 위치)
       previewTooth.position.copy(mesialPosition);
       console.log(previewTooth.rotation)
+
+      previewTooth.renderOrder=999;
       
       // 씬에 추가
       scene.add(previewTooth);
@@ -556,9 +558,9 @@ function updatePreviewTooth() {
     mesialOffset.x = toothLength * 0.4;
   }
 
-  mesialOffset.y = 0
-  mesialOffset.z = 0
-  console.log(mesialOffset.y,mesialOffset.z)
+  mesialOffset.y = Math.max(0, Math.min(0.1, -1/3 * toothLength + 4/30));
+  mesialOffset.z = Math.max(-0.15, Math.min(0, 0.5 * toothLength - 0.2));
+  console.log(toothLength,mesialOffset.z)
   
   
   // 치아 위치 설정 - 메지오 마커 위치에 메지오 부분이 오도록 조정
