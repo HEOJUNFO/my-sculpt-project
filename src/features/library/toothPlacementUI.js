@@ -431,27 +431,7 @@ function createMesialMarker(pos) {
   scene.add(mesialMarker);
 }
 
-/**
- * 스케일 정보를 동일하게 계산하는 유틸리티 함수
- */
-function calculateUniformScale(geometry, mesialToDistalDistance) {
-  // 지오메트리의 바운딩 박스 계산
-  geometry.computeBoundingBox();
-  const bbox = geometry.boundingBox;
-  const size = new THREE.Vector3();
-  bbox.getSize(size);
-  
-  // 가장 긴 축의 길이를 기준으로 스케일 계산
-  const maxDimension = Math.max(size.x, size.y, size.z);
-  
-  // 메지오-디스탈 거리에 비례하는 스케일 (조정 가능한 계수)
-  const targetSize = mesialToDistalDistance * 1.3; // 실제 치아 크기 비율
-  const scaleFactor = targetSize / maxDimension;
-  console.log("스케일 계산 - 거리:", mesialToDistalDistance.toFixed(3), "스케일:", scaleFactor.toFixed(3));
-  
-  // 최소/최대 스케일 제한
-  return Math.max(0.01, Math.min(1.0, scaleFactor));
-}
+
 
 /**
  * 프리뷰 치아 생성
@@ -553,7 +533,7 @@ function updatePreviewTooth() {
   const distance = mesialToDistal.length();
   
   // 통일된 스케일 계산 방식 사용
-  const scaleFactor = calculateUniformScale(previewTooth.geometry, distance);
+  const scaleFactor = window.calculateUniformScale(previewTooth.geometry, distance);
   previewTooth.scale.set(scaleFactor, scaleFactor, scaleFactor);
   
   // 메지오 위치 기준으로 오프셋 계산
@@ -741,13 +721,4 @@ function cleanupPlacement() {
  */
 export function isPlacementActive() {
   return placementActive || window.placementActive;
-}
-
-/**
- * Optionally track placed tooth meshes
- * @param {THREE.Mesh} toothMesh 
- */
-export function addPlacedTooth(toothMesh) {
-  placedTeeth.push(toothMesh);
-  console.log("추가된 치아:", toothMesh.userData?.toothId, "총 개수:", placedTeeth.length);
 }

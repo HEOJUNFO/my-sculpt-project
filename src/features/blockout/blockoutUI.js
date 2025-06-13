@@ -225,14 +225,27 @@ function applyBlockout() {
     return;
   }
   
-  const blockoutMaterial = new THREE.MeshMatcapMaterial({
+  // 두 개의 마테리얼 준비
+  const skyMaterial = new THREE.MeshMatcapMaterial({
     matcap: refs.matcaps['sky'],
     side: THREE.DoubleSide,
     flatShading: false,
   });
   
+  // 타겟 메쉬의 마테리얼 복사
+  let targetMaterial;
+  if (refs.targetMesh.material) {
+    targetMaterial = refs.targetMesh.material.clone();
+    targetMaterial.side = THREE.DoubleSide;
+  } else {
+    targetMaterial = new THREE.MeshStandardMaterial({
+      color: 0x808080,
+      side: THREE.DoubleSide,
+    });
+  }
+  
   // Get blockout distance from slider if available
-  let blockoutDistance = 0.1; // Default distance
+  let blockoutDistance = 0.1;
   const blockoutSlider = document.getElementById('blockoutDistanceRange');
   if (blockoutSlider) {
     blockoutDistance = parseFloat(blockoutSlider.value);
@@ -248,7 +261,12 @@ function applyBlockout() {
   
   const undercutPositions = undercutMesh.geometry.attributes.position.array;
   const triangleCount = undercutPositions.length / 9;
-  const blockoutGeometries = [];
+  
+  // 상단과 하단을 위한 별도 지오메트리 배열
+  const topGeometries = [];
+  const bottomGeometries = [];
+  
+  const halfDistance = blockoutDistance * 0.01;
   
   for (let i = 0; i < triangleCount; i++) {
     const a = new THREE.Vector3(
@@ -267,54 +285,80 @@ function applyBlockout() {
       undercutPositions[i * 9 + 8]
     );
   
-    // Create extruded triangle (prism)
+    // Create extruded points
     const a2 = a.clone().addScaledVector(insertionDir, blockoutDistance);
     const b2 = b.clone().addScaledVector(insertionDir, blockoutDistance);
     const c2 = c.clone().addScaledVector(insertionDir, blockoutDistance);
+    
+    // 중간점
+    const aMid = a.clone().addScaledVector(insertionDir, halfDistance);
+    const bMid = b.clone().addScaledVector(insertionDir, halfDistance);
+    const cMid = c.clone().addScaledVector(insertionDir, halfDistance);
   
-    const vertices = [];
+    // 상단 부분 (하늘색)
+    const topVertices = [];
     // Top face
-    vertices.push(a2.x, a2.y, a2.z, b2.x, b2.y, b2.z, c2.x, c2.y, c2.z);
-    // Bottom face
-    vertices.push(a.x, a.y, a.z, c.x, c.y, c.z, b.x, b.y, b.z);
-    // Side 1
-    vertices.push(a.x, a.y, a.z, b.x, b.y, b.z, b2.x, b2.y, b2.z);
-    vertices.push(a.x, a.y, a.z, b2.x, b2.y, b2.z, a2.x, a2.y, a2.z);
-    // Side 2
-    vertices.push(b.x, b.y, b.z, c.x, c.y, c.z, c2.x, c2.y, c2.z);
-    vertices.push(b.x, b.y, b.z, c2.x, c2.y, c2.z, b2.x, b2.y, b2.z);
-    // Side 3
-    vertices.push(c.x, c.y, c.z, a.x, a.y, a.z, a2.x, a2.y, a2.z);
-    vertices.push(c.x, c.y, c.z, a2.x, a2.y, a2.z, c2.x, c2.y, c2.z);
+    topVertices.push(a2.x, a2.y, a2.z, b2.x, b2.y, b2.z, c2.x, c2.y, c2.z);
+    // Side faces - upper half
+    topVertices.push(aMid.x, aMid.y, aMid.z, bMid.x, bMid.y, bMid.z, b2.x, b2.y, b2.z);
+    topVertices.push(aMid.x, aMid.y, aMid.z, b2.x, b2.y, b2.z, a2.x, a2.y, a2.z);
+    topVertices.push(bMid.x, bMid.y, bMid.z, cMid.x, cMid.y, cMid.z, c2.x, c2.y, c2.z);
+    topVertices.push(bMid.x, bMid.y, bMid.z, c2.x, c2.y, c2.z, b2.x, b2.y, b2.z);
+    topVertices.push(cMid.x, cMid.y, cMid.z, aMid.x, aMid.y, aMid.z, a2.x, a2.y, a2.z);
+    topVertices.push(cMid.x, cMid.y, cMid.z, a2.x, a2.y, a2.z, c2.x, c2.y, c2.z);
+    
+    const topGeometry = new THREE.BufferGeometry();
+    topGeometry.setAttribute('position', new THREE.Float32BufferAttribute(topVertices, 3));
+    topGeometries.push(topGeometry);
   
-    const prismGeometry = new THREE.BufferGeometry();
-    prismGeometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
-    prismGeometry.computeVertexNormals();
-
-    const nonIndexedPrismGeometry = prismGeometry.index ? prismGeometry.toNonIndexed() : prismGeometry;
-    blockoutGeometries.push(nonIndexedPrismGeometry);
+    // 하단 부분 (타겟 메쉬 마테리얼)
+    const bottomVertices = [];
+    // Bottom face
+    bottomVertices.push(a.x, a.y, a.z, c.x, c.y, c.z, b.x, b.y, b.z);
+    // Side faces - lower half
+    bottomVertices.push(a.x, a.y, a.z, b.x, b.y, b.z, bMid.x, bMid.y, bMid.z);
+    bottomVertices.push(a.x, a.y, a.z, bMid.x, bMid.y, bMid.z, aMid.x, aMid.y, aMid.z);
+    bottomVertices.push(b.x, b.y, b.z, c.x, c.y, c.z, cMid.x, cMid.y, cMid.z);
+    bottomVertices.push(b.x, b.y, b.z, cMid.x, cMid.y, cMid.z, bMid.x, bMid.y, bMid.z);
+    bottomVertices.push(c.x, c.y, c.z, a.x, a.y, a.z, aMid.x, aMid.y, aMid.z);
+    bottomVertices.push(c.x, c.y, c.z, aMid.x, aMid.y, aMid.z, cMid.x, cMid.y, cMid.z);
+    
+    const bottomGeometry = new THREE.BufferGeometry();
+    bottomGeometry.setAttribute('position', new THREE.Float32BufferAttribute(bottomVertices, 3));
+    bottomGeometries.push(bottomGeometry);
   }
   
-  if (blockoutGeometries.length > 0) {
-    // 이 부분이 수정된 부분: 병합하지 않고 별도 메쉬로 생성
+  // 상단과 하단을 각각 병합
+  if (topGeometries.length > 0 && bottomGeometries.length > 0) {
+    const mergedTopGeometry = BufferGeometryUtils.mergeGeometries(topGeometries, false);
+    mergedTopGeometry.computeVertexNormals();
     
-    // 모든 블록아웃 지오메트리 통합
-    const mergedBlockoutGeometry = BufferGeometryUtils.mergeGeometries(blockoutGeometries, false);
-    mergedBlockoutGeometry.computeVertexNormals();
-    mergedBlockoutGeometry.computeBoundingSphere();
+    const mergedBottomGeometry = BufferGeometryUtils.mergeGeometries(bottomGeometries, false);
+    mergedBottomGeometry.computeVertexNormals();
     
-    // 블록아웃 메쉬 생성 (별도 메쉬)
-    const blockoutMesh = new THREE.Mesh(mergedBlockoutGeometry, blockoutMaterial);
-    blockoutMesh.name = 'BlockoutMesh';
-    blockoutMesh.userData = {
+    // 두 개의 메쉬 생성
+    const topMesh = new THREE.Mesh(mergedTopGeometry, skyMaterial);
+    topMesh.name = 'BlockoutMeshTop';
+    topMesh.userData = { type: 'blockout', part: 'top' };
+    
+    const bottomMesh = new THREE.Mesh(mergedBottomGeometry, targetMaterial);
+    bottomMesh.name = 'BlockoutMeshBottom';
+    bottomMesh.userData = { type: 'blockout', part: 'bottom' };
+    
+    // 그룹으로 묶어서 씬에 추가
+    const blockoutGroup = new THREE.Group();
+    blockoutGroup.name = 'BlockoutMesh';
+    blockoutGroup.userData = {
       type: 'blockout',
       createdAt: new Date().toISOString()
     };
+    blockoutGroup.add(topMesh);
+    blockoutGroup.add(bottomMesh);
     
-    // 씬에 별도로 추가
-    refs.scene.add(blockoutMesh);
+    refs.scene.add(blockoutGroup);
     
     console.log(`블록아웃 메쉬 생성 완료: ${triangleCount}개 언더컷 영역 처리됨`);
+    console.log(`상단: 하늘색 마테리얼, 하단: 타겟 메쉬 마테리얼`);
     
     // 언더컷 시각화를 제거하는 대신 숨김
     if (undercutMesh) {

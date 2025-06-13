@@ -19,7 +19,7 @@ let placedTeeth = []; // 배치된 치아 추적용 배열
 let libraryModeActive = false;
 
 /**
- * 스케일 정보를 동일하게 계산하는 유틸리티 함수 (toothPlacementUI.js와 동일)
+ * 스케일 정보를 동일하게 계산하는 유틸리티 함수
  */
 function calculateUniformScale(geometry, mesialToDistalDistance) {
   // 지오메트리의 바운딩 박스 계산
@@ -32,12 +32,16 @@ function calculateUniformScale(geometry, mesialToDistalDistance) {
   const maxDimension = Math.max(size.x, size.y, size.z);
   
   // 메지오-디스탈 거리에 비례하는 스케일 (조정 가능한 계수)
-  const targetSize = mesialToDistalDistance * 0.8; // 실제 치아 크기 비율
+  const targetSize = mesialToDistalDistance * 1.3; // 실제 치아 크기 비율 (toothPlacementUI와 동일하게 수정)
   const scaleFactor = targetSize / maxDimension;
+  console.log("스케일 계산 - 거리:", mesialToDistalDistance.toFixed(3), "스케일:", scaleFactor.toFixed(3));
   
   // 최소/최대 스케일 제한
-  return Math.max(0.01, Math.min(2.0, scaleFactor));
+  return Math.max(0.01, Math.min(2.0, scaleFactor)); // 최대값을 2.0으로 통일
 }
+
+// 전역으로 노출하여 다른 모듈에서 사용 가능하도록 함
+window.calculateUniformScale = calculateUniformScale;
 
 /**
  * 치아 모델을 특정 위치에 배치하는 함수 (메지오-디스탈 방식)
@@ -108,7 +112,7 @@ function placeToothModel(toothId, modelPath, position, rotation, mesialToDistalD
           console.log(`프리뷰 스케일 직접 사용: ${scaleFactor}`);
         } else if (mesialToDistalDistance) {
           // 메지오-디스탈 거리 기반 스케일 계산 (프리뷰와 동일한 방식)
-          scaleFactor = calculateUniformScale(newGeometry, mesialToDistalDistance);
+          scaleFactor = window.calculateUniformScale(newGeometry, mesialToDistalDistance);
           console.log(`메지오-디스탈 거리 기반 스케일: ${mesialToDistalDistance}, 최종 스케일: ${scaleFactor}`);
         } else {
           // 기본 스케일 (기존 방식)
@@ -567,7 +571,6 @@ export function initLibraryMode() {
       // toothPlacementUI 모듈 로드
       loadModuleExports('/src/features/library/toothPlacementUI.js', [
         'initToothPlacement',
-        'addPlacedTooth',
         'isPlacementActive',
         'startToothPlacement'
       ])
@@ -837,3 +840,5 @@ function getPlacedTeeth() {
 window.placedTeeth = placedTeeth;
 window.appLib = window.appLib || {};
 window.appLib.getPlacedTeeth = getPlacedTeeth;
+// toothPlacementUI.js에서 제거한 addPlacedTooth를 전역으로 등록
+window.addPlacedTooth = addPlacedTooth;
