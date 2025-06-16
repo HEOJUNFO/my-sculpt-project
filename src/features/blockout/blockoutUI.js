@@ -265,8 +265,8 @@ function applyBlockout() {
   // 상단과 하단을 위한 별도 지오메트리 배열
   const topGeometries = [];
   const bottomGeometries = [];
-  
-  const halfDistance = blockoutDistance * 0.01;
+
+  const halfDistance = blockoutDistance * 0.05;
   
   for (let i = 0; i < triangleCount; i++) {
     const a = new THREE.Vector3(
