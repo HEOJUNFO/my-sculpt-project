@@ -103,7 +103,7 @@ export function initExportUI() {
         </p>
       </div>
       
-      <div style="display: flex; gap: 10px; justify-content: center;">
+      <div style="display: flex; gap: 10px; justify-content: center; margin-bottom: 15px;">
         <button id="btn-export-model" style="
           padding: 12px 24px;
           background: #7066FF;
@@ -114,7 +114,7 @@ export function initExportUI() {
           font-weight: bold;
           cursor: pointer;
         ">
-          내보내기
+          전체 내보내기
         </button>
         
         <button id="btn-cancel-export" style="
@@ -130,6 +130,45 @@ export function initExportUI() {
           취소
         </button>
       </div>
+      
+      <!-- 플리퍼 메쉬 내보내기 버튼 추가 -->
+      <div id="flipper-export-section" style="
+        display: none;
+        background-color: #fff3cd;
+        padding: 15px;
+        border-radius: 8px;
+        margin-top: 15px;
+        border: 1px solid #ffeeba;
+      ">
+        <h4 style="margin: 0 0 10px 0; font-size: 16px; color: #856404;">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 8px; vertical-align: -3px;">
+            <path d="M12 20h9"></path>
+            <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+          </svg>
+          플리퍼 메쉬
+        </h4>
+        <p style="margin: 0 0 10px 0; font-size: 14px; color: #666;">
+          플리퍼 메쉬가 감지되었습니다. 별도로 내보낼 수 있습니다.
+        </p>
+        <button id="btn-export-flipper" style="
+          width: 100%;
+          padding: 10px 20px;
+          background: #ffc107;
+          color: #333;
+          border: none;
+          border-radius: 4px;
+          font-size: 14px;
+          font-weight: bold;
+          cursor: pointer;
+        ">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 8px; vertical-align: -3px;">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="7 10 12 15 17 10"></polyline>
+            <line x1="12" y1="15" x2="12" y2="3"></line>
+          </svg>
+          플리퍼만 내보내기 (STL)
+        </button>
+      </div>
     `;
     
     document.body.appendChild(exportUIContainer);
@@ -137,6 +176,9 @@ export function initExportUI() {
     // Add event listeners
     setupExportEvents();
   }
+  
+  // 플리퍼 메쉬 확인 및 UI 표시
+  checkAndShowFlipperExport();
 }
 
 /**
@@ -162,6 +204,108 @@ function setupExportEvents() {
       cleanupExportUI();
     });
   }
+  
+  // 플리퍼 내보내기 버튼
+  const exportFlipperBtn = document.getElementById('btn-export-flipper');
+  if (exportFlipperBtn) {
+    exportFlipperBtn.addEventListener('click', () => {
+      exportFlipperMesh();
+    });
+  }
+}
+
+/**
+ * 플리퍼 메쉬 확인 및 UI 표시
+ */
+function checkAndShowFlipperExport() {
+  const flipperMesh = findFlipperMesh();
+  const flipperSection = document.getElementById('flipper-export-section');
+  
+  if (flipperMesh && flipperSection) {
+    flipperSection.style.display = 'block';
+    console.log('플리퍼 메쉬가 발견되어 내보내기 옵션을 표시합니다.');
+  } else if (flipperSection) {
+    flipperSection.style.display = 'none';
+  }
+}
+
+/**
+ * 플리퍼 메쉬 찾기
+ * @returns {THREE.Mesh|null} 플리퍼 메쉬 또는 null
+ */
+function findFlipperMesh() {
+  if (!refs.scene) return null;
+  
+  // 씬에서 플리퍼 메쉬 찾기
+  for (const object of refs.scene.children) {
+    if (object.isMesh && object.userData && object.userData.isFlipperMesh) {
+      return object;
+    }
+  }
+  
+  return null;
+}
+
+/**
+ * 플리퍼 메쉬만 STL로 내보내기
+ */
+function exportFlipperMesh() {
+  console.log('플리퍼 메쉬 내보내기 시작...');
+  
+  const flipperMesh = findFlipperMesh();
+  if (!flipperMesh) {
+    alert('플리퍼 메쉬를 찾을 수 없습니다.');
+    return;
+  }
+  
+  try {
+    // STL 익스포터 생성
+    const exporter = new STLExporter();
+    
+    // 플리퍼 메쉬를 STL로 변환
+    const stlContent = exporter.parse(flipperMesh, { binary: true });
+    
+    // 파일 다운로드
+    downloadContent(
+      stlContent,
+      'flipper_mesh.stl',
+      'application/octet-stream'
+    );
+    
+    // 성공 메시지
+    showFlipperExportSuccess();
+    
+  } catch (error) {
+    console.error('플리퍼 메쉬 내보내기 오류:', error);
+    alert('플리퍼 메쉬 내보내기 중 오류가 발생했습니다.');
+  }
+}
+
+/**
+ * 플리퍼 내보내기 성공 메시지
+ */
+function showFlipperExportSuccess() {
+  const message = document.createElement('div');
+  message.style.cssText = `
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(255, 193, 7, 0.9);
+    color: #333;
+    padding: 12px 24px;
+    border-radius: 4px;
+    font-weight: bold;
+    z-index: 2000;
+    transition: opacity 0.5s;
+  `;
+  message.textContent = '플리퍼 메쉬가 성공적으로 내보내졌습니다!';
+  document.body.appendChild(message);
+  
+  setTimeout(() => {
+    message.style.opacity = '0';
+    setTimeout(() => message.remove(), 500);
+  }, 3000);
 }
 
 /**
