@@ -2,7 +2,8 @@
 import * as THREE from 'three';
 import { refs } from '../../models/modelManager.js';
 import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { completeBlockout } from '../../workflow/processSteps.js'; // 프로세스 단계 관리 임포트
+import { completeBlockout } from '../../workflow/processSteps.js'; 
+import { setReferenceDirection } from '../../utils/referenceDirection.js';
 
 // Saved camera state for blockout operations
 let savedCameraState = null;
@@ -86,21 +87,6 @@ function resetBlockout() {
   }
 }
 
-// Save current camera state
-function saveCameraState() {
-  const direction = new THREE.Vector3();
-  refs.camera.getWorldDirection(direction);
-  
-  savedCameraState = {
-    position: refs.camera.position.clone(),
-    target: refs.controls.target.clone(),
-    quaternion: refs.camera.quaternion.clone(),
-    direction: direction.clone()
-  };
-  
-  console.log('Camera state saved for blockout');
-}
-
 // Restore saved camera state
 function restoreCamera() {
   if (savedCameraState) {
@@ -131,7 +117,11 @@ function detectUndercuts() {
       quaternion: refs.camera.quaternion.clone(),
       direction: direction.clone()
     };
-    console.log('Camera state saved:', savedCameraState);
+
+    if (window.referenceDirection && window.referenceDirection.set) {
+      window.referenceDirection.set(refs.camera, direction.clone().negate());
+      console.log('기준 방향이 설정되었습니다 (언더컷 감지 시점)');
+    }
   }
   
   // Clean up previous undercut mesh if it exists

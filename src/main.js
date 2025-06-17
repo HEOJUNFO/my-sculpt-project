@@ -3,6 +3,7 @@
 import { initScene } from './core/scene/initScene.js';
 import { startRenderLoop } from './core/scene/renderLoop.js';
 import { refs } from './models/modelManager.js';
+import './utils/referenceDirection.js';
 // 이벤트 핸들러
 import {
   onPointerDown,
