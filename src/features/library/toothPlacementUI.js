@@ -379,6 +379,7 @@ function onMouseMove(event) {
     
     if (intersected) {
       newDistalPoint = intersectionPoint;
+      console.log("가상 평면 사용 - 메지오와의 거리:", mesialPoint.distanceTo(newDistalPoint).toFixed(3));
     }
   }
   
@@ -499,6 +500,7 @@ function createPreviewTooth(mesialPosition) {
       
       // 초기 위치 설정 (메지오 위치)
       previewTooth.position.copy(mesialPosition);
+      console.log(previewTooth.rotation)
 
       previewTooth.renderOrder=999;
       
@@ -541,28 +543,81 @@ function updatePreviewTooth() {
   // 치아 길이 계산 (스케일 적용)
   const toothLength = originalGeometryBounds.size.x * scaleFactor;
   
-  // 🔥 기준 방향이 설정되어 있으면 사용, 없으면 기존 방식
-  if (window.referenceDirection && window.referenceDirection.has()) {
-    const normalizedDir = window.referenceDirection.getNormalizedToothDirection(toothId);
-    if (normalizedDir) {
-      // 기준 방향에 맞춰 오프셋 계산
-      const offsetMagnitude = toothLength * 0.39;
-      mesialOffset = normalizedDir.direction.clone().multiplyScalar(offsetMagnitude);
-      
-      // Y, Z 오프셋은 기준 up 벡터 기준으로 조정
-      // const yOffset = Math.max(0, Math.min(0.1, -1/3 * toothLength + 4/30));
-      // const zOffset = Math.max(-0.15, Math.min(0, 0.5 * toothLength - 0.2));
-      
-      // mesialOffset.add(normalizedDir.up.clone().multiplyScalar(yOffset));
-      // mesialOffset.add(normalizedDir.forward.clone().multiplyScalar(zOffset));
-    } else {
-      alert('언더컷감지륾 먼저해주세요')
-    }
-  } else {
-    alert('언더컷감지륾 먼저해주세요')
+  // 치아 번호에 따른 메지오 방향 오프셋 계산
+  if (toothId >= 11 && toothId <= 18) {
+    // 우측 상악 - 메지오는 중앙선 쪽 (음의 X 방향)
+    mesialOffset.x = toothLength * 0.39;
+  } else if (toothId >= 21 && toothId <= 28) {
+    // 좌측 상악 - 메지오는 중앙선 쪽 (양의 X 방향)
+    mesialOffset.x = -toothLength * 0.39;
+  } else if (toothId >= 31 && toothId <= 38) {
+    // 좌측 하악 - 메지오는 중앙선 쪽 (양의 X 방향)
+    mesialOffset.x = -toothLength * 0.39;
+  } else if (toothId >= 41 && toothId <= 48) {
+    // 우측 하악 - 메지오는 중앙선 쪽 (음의 X 방향)
+    mesialOffset.x = toothLength * 0.39;
   }
-  // mesialOffset.y = Math.max(0, Math.min(0.1, -1/3 * toothLength + 4/30));
-  // mesialOffset.z = Math.max(-0.15, Math.min(0, 0.5 * toothLength - 0.2));
+
+  mesialOffset.y = Math.max(0, Math.min(0.1, -1/3 * toothLength + 4/30));
+  mesialOffset.z = Math.max(-0.15, Math.min(0, 0.5 * toothLength - 0.2));
+  console.log(toothLength,mesialOffset.z)
+  
+  
+  // 치아 위치 설정 - 메지오 마커 위치에 메지오 부분이 오도록 조정
+  previewTooth.position.copy(mesialPoint);
+  previewTooth.position.add(mesialOffset);
+  
+  // 회전 초기화
+  previewTooth.rotation.set(0, 0, 0);
+  
+  // 치아 번호에 따른 기본 회전 보정
+  let baseRotation = 0;
+  if (toothId >= 11 && toothId <= 18) {
+    // 우측 상악
+    baseRotation = Math.PI;
+  } else if (toothId >= 21 && toothId <= 28) {
+    // 좌측 상악
+    baseRotation = -0.25;
+  } else if (toothId >= 31 && toothId <= 38) {
+    // 좌측 하악
+    baseRotation = 0;
+  } else if (toothId >= 41 && toothId <= 48) {
+    // 우측 하악
+    baseRotation = Math.PI;
+  }
+  
+  previewTooth.rotation.x = baseRotation;
+  
+  // 🚀 메지오 기준으로 마우스 위치에 따른 rotation.z 계산
+  // 메지오에서 디스탈로의 2D 벡터 계산 (XY 평면에서)
+  const mesialToDistal2D = new THREE.Vector2(
+    currentDistalPoint.x - mesialPoint.x,
+    currentDistalPoint.y - mesialPoint.y
+  );
+  
+  // 벡터의 각도 계산 (atan2 사용)
+  // atan2는 -π ~ π 범위의 값을 반환
+  let rotationZ = Math.atan2(-mesialToDistal2D.y, -mesialToDistal2D.x) * 0.8;
+  
+  // 치아 번호에 따른 회전 보정 (필요시)
+  // 각 사분면별로 다른 기준각을 적용할 수 있음
+  if (toothId >= 11 && toothId <= 18) {
+    // 우측 상악 - 추가 보정이 필요한 경우
+    // rotationZ += Math.PI; // 예시: 180도 추가 회전
+  } else if (toothId >= 21 && toothId <= 28) {
+    // 좌측 상악
+    // rotationZ += 0; // 기본값 유지
+  } else if (toothId >= 31 && toothId <= 38) {
+    // 좌측 하악
+    // rotationZ += 0; // 기본값 유지
+  } else if (toothId >= 41 && toothId <= 48) {
+    // 우측 하악
+    // rotationZ += Math.PI; // 예시: 180도 추가 회전
+  }
+  
+  // rotation.z 적용
+  previewTooth.rotation.z = rotationZ;
+
 }
 /**
  * 배치 객체들 정리
