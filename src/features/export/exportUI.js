@@ -1,8 +1,9 @@
-// src/exportUI.js
+// src/features/export/exportUI.js
 import { exportCurrentModel } from '../../models/modelManager.js';
 import { refs } from '../../models/modelManager.js';
 import { STLExporter } from 'three/examples/jsm/exporters/STLExporter.js';
 import * as THREE from 'three';
+import { exportAsHTML } from './htmlExporter.js';  // HTML 컨버터 모듈 import
 
 // External reference to placed teeth from libraryIntegration.js
 let placedTeeth = [];
@@ -114,7 +115,20 @@ export function initExportUI() {
           font-weight: bold;
           cursor: pointer;
         ">
-          전체 내보내기
+          STL 내보내기
+        </button>
+        
+        <button id="btn-export-html" style="
+          padding: 12px 24px;
+          background: #2196F3;
+          color: white;
+          border: none;
+          border-radius: 4px;
+          font-size: 16px;
+          font-weight: bold;
+          cursor: pointer;
+        ">
+          HTML로 내보내기
         </button>
         
         <button id="btn-cancel-export" style="
@@ -194,6 +208,14 @@ function setupExportEvents() {
       
       // 씬에 보이는 그대로 내보내기
       exportExactAsShown();
+    });
+  }
+  
+  // HTML Export button - htmlExporter 모듈의 exportAsHTML 함수 사용
+  const exportHTMLBtn = document.getElementById('btn-export-html');
+  if (exportHTMLBtn) {
+    exportHTMLBtn.addEventListener('click', () => {
+      exportAsHTML();
     });
   }
   
