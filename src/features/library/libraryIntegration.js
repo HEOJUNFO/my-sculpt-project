@@ -554,19 +554,12 @@ export function initLibraryMode() {
   document.body.appendChild(loadingMessage);
 
   if (!modulesLoaded) {
-    // 모듈 로드 및 초기화
+    // 모듈 로드 및 초기화 - modelSelectionUI 제거
     Promise.all([
       // dentalChartUI 모듈 로드
       loadModuleExports('/src/features/library/dentalChartUI.js', [
         'createDentalChartUI',
         'highlightSelectedTooth'
-      ]),
-      
-      // modelSelectionUI 모듈 로드
-      loadModuleExports('/src/features/library/modelSelectionUI.js', [
-        'initModelSelection',
-        'loadSTLModel',
-        'loadToothModel'
       ]),
       
       // toothPlacementUI 모듈 로드
@@ -642,18 +635,7 @@ function initLibraryUI() {
     console.error('createDentalChartUI 함수를 찾을 수 없습니다');
   }
   
-  // 모델 선택 초기화
-  if (typeof window.initModelSelection === 'function') {
-    const stlLoader = new STLLoader();
-    window.initModelSelection(stlLoader, (geometry) => {
-      // 기존 addModelToScene 함수 사용
-      if (refs.addModelToScene) {
-        refs.addModelToScene(geometry, 'Library Model');
-      }
-    });
-  } else {
-    console.error('initModelSelection 함수를 찾을 수 없습니다');
-  }
+  // 모델 선택 초기화 제거됨
   
   // 치아 배치 초기화
   if (typeof window.initToothPlacement === 'function') {
@@ -791,9 +773,7 @@ export function cleanupLibraryMode() {
   const dentalChart = document.getElementById('dental-chart-container');
   if (dentalChart) dentalChart.remove();
   
-  // Remove model selection UI if it exists
-  const modelSelectionUI = document.getElementById('model-selection-ui');
-  if (modelSelectionUI) modelSelectionUI.remove();
+  // Remove model selection UI if it exists - 더 이상 사용하지 않음
   
   // Remove placement UI if it exists
   const placementUI = document.getElementById('placement-ui');
