@@ -1,5 +1,5 @@
 // Dental Chart UI module
-import { loadToothModel } from './modelSelectionUI.js';
+import { startToothPlacement } from './toothPlacementUI.js';
 
 // Accurate teeth position data (user-defined positions)
 const teethPositions = {
@@ -48,9 +48,16 @@ function createTooth(id, x, y, container, numberPosition) {
   toothElement.style.left = `${x - 15}px`;  // Offset by half width (30px)
   toothElement.style.top = `${y - 22.5}px`;   // Offset by half height (45px)
   
-  // Add tooth click event
+  // 수정된 부분: 바로 AA 모델로 배치 단계 시작
   toothElement.addEventListener('click', () => {
-    loadToothModel(id);
+    // Highlight selected tooth
+    highlightSelectedTooth(id);
+    
+    // AA 모델 경로 생성
+    const modelPath = `/models/AA/AA_${id}.stl`;
+    
+    // 바로 배치 단계로 진행
+    startToothPlacement(id, modelPath);
   });
   
   const imgElement = document.createElement('img');
