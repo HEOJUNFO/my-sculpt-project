@@ -149,7 +149,9 @@ function placeToothModel(toothId, modelPath, position, rotation, mesialToDistalD
         
         // 회전 적용
         if (rotation) {
-          toothMesh.rotation.copy(rotation);
+          toothMesh.setRotationFromMatrix(rotation);
+          //toothMesh.applyMatrix4(rotation);
+          //toothMesh.rotation.copy(rotation);
         }
         
         // userdata에 정보 추가

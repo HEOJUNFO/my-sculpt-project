@@ -35,6 +35,7 @@ export const refs = {
   matcaps: null,
   transformControls: null,
   renderer:null,
+  camerastate: null,
 };
 
 // ------------------------
