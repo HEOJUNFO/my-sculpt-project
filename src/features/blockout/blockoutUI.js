@@ -38,7 +38,6 @@ export function setupBlockoutUI() {
     blockoutDistanceSlider.addEventListener('input', () => {
       // Update the display if needed
       const value = parseFloat(blockoutDistanceSlider.value);
-      console.log(`Blockout distance set to: ${value}`);
     });
   }
 }
@@ -117,6 +116,8 @@ function detectUndercuts() {
       quaternion: refs.camera.quaternion.clone(),
       direction: direction.clone()
     };
+
+    refs.camerastate = savedCameraState;
 
     if (window.referenceDirection && window.referenceDirection.set) {
       window.referenceDirection.set(refs.camera, direction.clone().negate());
