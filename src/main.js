@@ -23,6 +23,10 @@ import { onMemoNewOkBtn, onMemoEditUpdateBtn, onMemoEditDeleteBtn, makeDraggable
 // Import the setupBlockoutUI function
 import { setupBlockoutUI } from './features/blockout/blockoutUI.js';
 
+// Import tooth removal UI and system
+import { setupToothRemovalEventHandlers } from './features/tooth-removal/toothRemovalUI.js';
+import { toothRemovalSystem } from './features/tooth-removal/toothRemovalCore.js';
+
 // Import library integration (new)
 import './features/library/libraryIntegration.js';
 
@@ -32,6 +36,7 @@ import {
   completeUpload, 
   completeSculpting, 
   completeBlockout,
+  completeToothRemoval,
   completeLibrary,
   completeFlipper,
   STEPS 
@@ -98,6 +103,9 @@ function main() {
   // Setup the blockout UI
   setupBlockoutUI();
   
+  // Setup the tooth removal UI
+  setupToothRemovalEventHandlers();
+  
   // 업로드 UI 이벤트 설정
   setupUploadUI();
   
@@ -122,13 +130,42 @@ function main() {
     });
   }
 
+  // 치아 제거 완료 버튼에 이벤트 추가
+  const btnToothRemovalComplete = document.getElementById('btn-tooth-removal-complete');
+  if (btnToothRemovalComplete) {
+    btnToothRemovalComplete.addEventListener('click', () => {
+      console.log("Complete Tooth Removal 버튼 클릭됨");
+      
+      // 1. lasso 선택 마커와 선들 제거
+      toothRemovalSystem.completeToothRemoval();
+      
+      // 2. 다음 단계로 전환 (스컬프 모드)
+      completeToothRemoval();
+    });
+  }
+
+  // 치아 제거 건너뛰기 버튼에 이벤트 추가
+  const btnSkipToothRemoval = document.getElementById('btn-skip-tooth-removal');
+  if (btnSkipToothRemoval) {
+    btnSkipToothRemoval.addEventListener('click', () => {
+      console.log("Skip Tooth Removal 버튼 클릭됨");
+      
+      // 1. lasso 선택 마커와 선들 제거 (건너뛰기라도 정리 필요)
+      toothRemovalSystem.completeToothRemoval();
+      
+      // 2. 다음 단계로 진행
+      completeToothRemoval();
+    });
+  }
+
   // 3) 렌더 루프 시작
   startRenderLoop(renderer, scene, camera, stats);
   
   // 전역 접근을 위해 window 객체에 추가 (디버깅용)
   window.appSteps = { 
     completeSculpting, 
-    completeBlockout, 
+    completeBlockout,
+    completeToothRemoval, 
     completeLibrary,
     completeFlipper,
     STEPS 

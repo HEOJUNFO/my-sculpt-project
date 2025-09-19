@@ -29,6 +29,7 @@ export class LassoSelector {
       curveQuality: options.curveQuality || 20,
       minDistanceBetweenPoints: options.minDistanceBetweenPoints || 0.01,
       onUpdateMessage: options.onUpdateMessage || (() => {}), // 상태 변경 콜백
+      onPointAdded: options.onPointAdded || (() => {}), // 점 추가 콜백
       onComplete: options.onComplete || (() => {}), // 영역 완성 콜백
       onPointDragComplete: options.onPointDragComplete || (() => {}), // 점 드래깅 완료 콜백
       onError: options.onError || (() => {}) // 오류 콜백
@@ -518,6 +519,9 @@ export class LassoSelector {
       this.options.onUpdateMessage('Alt+Shift+첫번째점 클릭으로 영역을 완성하세요 (3점 이상 필요).');
     }
     
+    // 점 추가 콜백 호출
+    this.options.onPointAdded(this.drawingPoints.length);
+    
     console.log(`점 추가됨 (총 ${this.drawingPoints.length}개)`);
   }
   
@@ -699,6 +703,9 @@ export class LassoSelector {
     
     this.pointMarkers.splice(index, 1);
     this.drawingPoints.splice(index, 1);
+    
+    // 점 제거 콜백 호출
+    this.options.onPointAdded(this.drawingPoints.length);
     
     // 연결된 곡선 업데이트
     this.updateCurvesAfterPointRemoval(index);

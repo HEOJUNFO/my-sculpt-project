@@ -154,6 +154,10 @@ export function initScene() {
   brush.renderOrder = 9999;
   scene.add(brush);
 
+  // refs에 brush와 params 할당 (중요!)
+  refs.brush = brush;
+  refs.params = params;
+
   // Controls
   const controls = new TrackballControls(camera, currentRenderer.domElement);
   controls.rotateSpeed = 3;
