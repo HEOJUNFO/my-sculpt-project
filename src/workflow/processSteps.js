@@ -5,7 +5,7 @@
 import { initLibraryMode, cleanupLibraryMode } from '../features/library/libraryIntegration.js';
 import { initFlipperUI, cleanupFlipperUI } from '../features/flipper/flipperUI.js';
 import { initExportUI, cleanupExportUI } from '../features/export/exportUI.js';
-import { initToothRemovalUI, cleanupToothRemovalUI, setupToothRemovalEventHandlers } from '../features/tooth-removal/toothRemovalUI.js';
+import { initToothRemovalUI, cleanupToothRemovalUI, setupToothRemovalEventHandlers } from '../features/tooth-removal/toothRemovalUI.ts';
 import { refs } from '../models/modelManager.js';
 
 
