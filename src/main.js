@@ -24,8 +24,8 @@ import { onMemoNewOkBtn, onMemoEditUpdateBtn, onMemoEditDeleteBtn, makeDraggable
 import { setupBlockoutUI } from './features/blockout/blockoutUI.js';
 
 // Import tooth removal UI and system
-import { setupToothRemovalEventHandlers } from './features/tooth-removal/toothRemovalUI.js';
-import { toothRemovalSystem } from './features/tooth-removal/toothRemovalCore.js';
+import { setupToothRemovalEventHandlers } from './features/tooth-removal/toothRemovalUI.ts';
+import { toothRemovalSystem } from './features/tooth-removal/toothRemovalCore.ts';
 
 // Import library integration (new)
 import './features/library/libraryIntegration.js';
