@@ -4,6 +4,7 @@ import { refs } from '../../models/modelManager.js'
 import { getFlipperState, setFlipperMesh, updateFlipperInfoText } from './flipperDrawing.js';
 import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { MeshCutter } from '../../utils/meshCutter.js';
+import { extractInnerFacesFromBorder } from '../../utils/meshProcessing.js';
 
 /**
  * 플리퍼 생성
@@ -24,9 +25,6 @@ export function generateFlipper() {
   try {
     // 1. 원본 메시의 geometry 복사
     const originalGeometry = refs.targetMesh.geometry.clone();
-    const positions = originalGeometry.attributes.position.array;
-    const normals = originalGeometry.attributes.normal.array;
-    const indices = originalGeometry.index ? originalGeometry.index.array : null;
 
     // 2-4. 메시 절단 수행 (MeshCutter 사용 - 플리퍼 원본 로직 보존)
     const cuttingData = MeshCutter.performFlipperCutting(originalGeometry, selectedAreaPoints);
@@ -34,76 +32,10 @@ export function generateFlipper() {
 
 
 
-    //5. 경계 내의 면만 추출
-    const usedVertices = new Set(borderVertexIndices);
-    const usedFaces = new Set();
-    const queue = [];
-
-    // 내부 vertex 찾기
-    // 5.1. 경계 vertex들의 평균 위치 계산
-    const center = new THREE.Vector3();
-    for (const vertexIndex of borderVertexIndices) {
-      center.add(new THREE.Vector3(
-        newVertices[vertexIndex * 3],
-        newVertices[vertexIndex * 3 + 1],
-        newVertices[vertexIndex * 3 + 2]
-      ));
-    }
-    center.divideScalar(borderVertexIndices.length);
-
-    // 5.2. 평균 위치에 가장 가까운 vertex 찾기
-    let closestVertexIndex = -1;
-    let minDistance = Infinity;
-
-    for (let i = 0; i < newVertices.length / 3; i++) {
-      // 이미 경계에 있는 vertex는 건너뛰기
-      if (borderVertexIndices.includes(i)) continue;
-      
-      const vertexPos = new THREE.Vector3(
-        newVertices[i * 3],
-        newVertices[i * 3 + 1],
-        newVertices[i * 3 + 2]
-      );
-      
-      const distance = vertexPos.distanceTo(center);
-      if (distance < minDistance) {
-        minDistance = distance;
-        closestVertexIndex = i;
-      }
-    }
-
-    // 5.3. 가장 가까운 vertex를 시작점으로 사용
-    usedVertices.add(closestVertexIndex);
-    queue.push(closestVertexIndex);
-
-
-    // BFS로 내부 면 찾기
-    while (queue.length > 0) {
-      const vertexIndex = queue.shift();
-      
-      // 이 vertex를 사용하는 모든 face들 확인
-      for (const faceIndex of vertexFaceMap[vertexIndex]) {
-        if (usedFaces.has(faceIndex)) continue;
-        
-        // face의 모든 vertex들 확인
-        const faceVertices = [
-          newIndices[faceIndex * 3],
-          newIndices[faceIndex * 3 + 1],
-          newIndices[faceIndex * 3 + 2]
-        ];
-        
-        // face 추가
-        usedFaces.add(faceIndex);
-        
-        // 새로운 vertex들을 큐에 추가
-        for (const v of faceVertices) {
-          if (!usedVertices.has(v)) {
-            usedVertices.add(v);
-            queue.push(v);
-          }
-        }
-      }
-    }
+    //5. 경계 내의 면만 추출 (공통 함수 사용)
+    const { usedVertices, usedFaces, } = extractInnerFacesFromBorder(
+      newVertices, newIndices, vertexFaceMap, borderVertexIndices
+    );
 
     // 사용된 vertex와 face만으로 새로운 geometry 생성
     const finalVertices = [];
