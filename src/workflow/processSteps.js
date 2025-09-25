@@ -19,13 +19,13 @@ export const STEPS = {
   EXPORT: 'export'
 };
 
-// 단계 숫자 정의 (tooth-removal 추가로 인한 재정의)
+// 단계 숫자 정의 (발치가 블록아웃보다 먼저 오도록 재정의)
 // 1 = 업로드 UI (초기 단계)
 // 2 = 업로드 단계 + 스컬프 UI
-// 3 = 블록아웃 단계 + 블록아웃 UI
-// 4 = 블록아웃 단계 + 스컬프 UI
-// 5 = 치아 제거 단계 + 치아 제거 UI
-// 6 = 치아 제거 단계 + 스컬프 UI
+// 3 = 치아 제거 단계 + 치아 제거 UI
+// 4 = 치아 제거 단계 + 스컬프 UI
+// 5 = 블록아웃 단계 + 블록아웃 UI
+// 6 = 블록아웃 단계 + 스컬프 UI
 // 7 = 라이브러리 단계 + 라이브러리 UI
 // 8 = 라이브러리 단계 + 스컬프 UI
 // 9 = 플리퍼 단계 + 플리퍼 UI
@@ -46,7 +46,7 @@ export function getCurrentStep() {
  * 현재 단계가 치아 제거 단계인지 확인하는 함수
  */
 export function isToothRemovalStep() {
-  return currentStep === 5;
+  return currentStep === 3;
 }
 
 /**
@@ -91,29 +91,29 @@ function updateTopBar() {
       activeStep = STEPS.UPLOAD;
     } 
     else if (currentStep >= 3 && currentStep <= 4) {
-      // 단계 3-4: 블록아웃 단계 활성화, 업로드 단계 완료 
-      activeStep = STEPS.BLOCKOUT;
+      // 단계 3-4: 치아 제거 단계 활성화, 업로드 단계 완료 
+      activeStep = STEPS.TOOTH_REMOVAL;
       completedSteps = [STEPS.UPLOAD];
     }
     else if (currentStep >= 5 && currentStep <= 6) {
-      // 단계 5-6: 치아 제거 단계 활성화, 업로드와 블록아웃 단계 완료
-      activeStep = STEPS.TOOTH_REMOVAL;
-      completedSteps = [STEPS.UPLOAD, STEPS.BLOCKOUT];
+      // 단계 5-6: 블록아웃 단계 활성화, 업로드와 치아 제거 단계 완료
+      activeStep = STEPS.BLOCKOUT;
+      completedSteps = [STEPS.UPLOAD, STEPS.TOOTH_REMOVAL];
     }
     else if (currentStep >= 7 && currentStep <= 8) {
       // 단계 7-8: 라이브러리 단계 활성화, 이전 단계들 완료
       activeStep = STEPS.LIBRARY;
-      completedSteps = [STEPS.UPLOAD, STEPS.BLOCKOUT, STEPS.TOOTH_REMOVAL];
+      completedSteps = [STEPS.UPLOAD, STEPS.TOOTH_REMOVAL, STEPS.BLOCKOUT];
     }
     else if (currentStep >= 9 && currentStep <= 10) {
       // 단계 9-10: 플리퍼 단계 활성화, 이전 단계들 완료
       activeStep = STEPS.FLIPPER;
-      completedSteps = [STEPS.UPLOAD, STEPS.BLOCKOUT, STEPS.TOOTH_REMOVAL, STEPS.LIBRARY];
+      completedSteps = [STEPS.UPLOAD, STEPS.TOOTH_REMOVAL, STEPS.BLOCKOUT, STEPS.LIBRARY];
     }
     else if (currentStep >= 11) {
       // 단계 11: 익스포트 단계 활성화, 이전 단계들 완료
       activeStep = STEPS.EXPORT;
-      completedSteps = [STEPS.UPLOAD, STEPS.BLOCKOUT, STEPS.TOOTH_REMOVAL, STEPS.LIBRARY, STEPS.FLIPPER];
+      completedSteps = [STEPS.UPLOAD, STEPS.TOOTH_REMOVAL, STEPS.BLOCKOUT, STEPS.LIBRARY, STEPS.FLIPPER];
     }
     
     // 현재 활성화 단계 표시
@@ -150,7 +150,7 @@ function updateUIVisibility() {
   if (dragHint) dragHint.style.display = 'none';
   
   // 이전 단계의 특수 UI들 정리
-  if (currentStep !== 5 && currentStep !== 6) {
+  if (currentStep !== 3 && currentStep !== 4) {
     cleanupToothRemovalUI();
   }
   
@@ -177,21 +177,21 @@ function updateUIVisibility() {
       if (sculptUI) sculptUI.style.display = 'block';
       break;
       
-    case 3: // 블록아웃 UI 표시 (블록아웃 단계)
-      if (blockoutUI) blockoutUI.style.display = 'block';
-      break;
-      
-    case 4: // 스컬프 UI 표시 (블록아웃 단계)
-      if (sculptUI) sculptUI.style.display = 'block';
-      break;
-      
-    case 5: // 치아 제거 UI 표시
+    case 3: // 치아 제거 UI 표시
       initToothRemovalUI(); // Initialize tooth removal UI
       if (toothRemovalUI) toothRemovalUI.style.display = 'block';
       if (sculptUI) sculptUI.style.display = 'none'; // Hide sculpt UI
       break;
     
-    case 6: // 스컬프 UI 표시 (치아 제거 단계)
+    case 4: // 스컬프 UI 표시 (치아 제거 단계)
+      if (sculptUI) sculptUI.style.display = 'block';
+      break;
+      
+    case 5: // 블록아웃 UI 표시 (블록아웃 단계)
+      if (blockoutUI) blockoutUI.style.display = 'block';
+      break;
+      
+    case 6: // 스컬프 UI 표시 (블록아웃 단계)
       if (sculptUI) sculptUI.style.display = 'block';
       break;
       
@@ -256,15 +256,15 @@ export function completeUpload() {
  */
 export function completeSculpting() {
   if (currentStep === 2) {
-    // 업로드 후 첫 스컬프 완료: 단계 3으로 (블록아웃 UI)
+    // 업로드 후 첫 스컬프 완료: 단계 3으로 (치아 제거 UI)
     setStep(3);
   } 
   else if (currentStep === 4) {
-    // 블록아웃 후 스컬프 완료: 단계 5로 (치아 제거 UI)
+    // 치아 제거 후 스컬프 완료: 단계 5로 (블록아웃 UI)
     setStep(5);
   }
   else if (currentStep === 6) {
-    // 치아 제거 후 스컬프 완료: 단계 7로 (라이브러리 UI)
+    // 블록아웃 후 스컬프 완료: 단계 7로 (라이브러리 UI)
     setStep(7);
   }
   else if (currentStep === 8) {
@@ -306,18 +306,18 @@ function findBaseModel() {
 }
 
 /**
- * 블록아웃 완료 시 - 단계 4로 변경 (블록아웃 단계 + 스컬프 UI)
+ * 블록아웃 완료 시 - 단계 6으로 변경 (블록아웃 단계 + 스컬프 UI)
  */
 export function completeBlockout() {
-  setStep(4); // 단계 4: 블록아웃 단계 + 스컬프 UI
+  setStep(6); // 단계 6: 블록아웃 단계 + 스컬프 UI
   console.log('블록아웃 완료 - 스컬프 UI로 돌아감');
 }
 
 /**
- * 치아 제거 완료 시 - 단계 6으로 변경 (치아 제거 단계 + 스컬프 UI)
+ * 치아 제거 완료 시 - 단계 4로 변경 (치아 제거 단계 + 스컬프 UI)
  */
 export function completeToothRemoval() {
-  setStep(6); // 단계 6: 치아 제거 단계 + 스컬프 UI
+  setStep(4); // 단계 4: 치아 제거 단계 + 스컬프 UI
   console.log('치아 제거 완료 - 스컬프 UI로 돌아감');
 }
 
@@ -347,11 +347,11 @@ export function goToStep(stepName) {
     case STEPS.UPLOAD:
       setStep(1); // 업로드 단계의 시작점
       break;
-    case STEPS.BLOCKOUT:
-      setStep(3); // 블록아웃 단계의 시작점
-      break;
     case STEPS.TOOTH_REMOVAL:
-      setStep(5); // 치아 제거 단계의 시작점
+      setStep(3); // 치아 제거 단계의 시작점
+      break;
+    case STEPS.BLOCKOUT:
+      setStep(5); // 블록아웃 단계의 시작점
       break;
     case STEPS.LIBRARY:
       setStep(7); // 라이브러리 단계의 시작점
