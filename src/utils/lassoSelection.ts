@@ -1,14 +1,96 @@
-// src/utils/lassoSelection.js
+// src/utils/lassoSelection.ts
 // 올가미 선택 공통 모듈 - 플리퍼의 기존 코드를 클래스 기반으로 추상화
 
 import * as THREE from 'three';
+
+// toothRemovalCore.ts에서 가져온 타입 정의
+type LassoSelectorOptions = {
+  controls?: any;
+  markerColors?: {
+    first: number;
+    regular: number;
+    preview: number;
+  };
+  curveQuality?: number;
+  minDistanceBetweenPoints?: number;
+  onUpdateMessage?: (message: string) => void;
+  onPointAdded?: (pointCount: number) => void;
+  onComplete?: (points: THREE.Vector3[]) => void;
+  onError?: (error: string) => void;
+};
+
+// 점 데이터 타입 정의
+interface PointData {
+  position: THREE.Vector3;
+  normal: THREE.Vector3;
+  marker: THREE.Mesh;
+  faceIndex: number;
+}
+
+// 이벤트 핸들러 타입 정의
+interface BoundEventHandlers {
+  onKeyDown: (event: KeyboardEvent) => void;
+  onKeyUp: (event: KeyboardEvent) => void;
+  onPointerDown: (event: PointerEvent) => void;
+  onPointerMove: (event: PointerEvent) => void;
+  onPointerUp: (event: PointerEvent) => void;
+  onClick: (event: MouseEvent) => void;
+  onWindowBlur: () => void;
+}
 
 /**
  * 올가미 기반 영역 선택을 위한 공통 클래스
  * 플리퍼와 발치 기능에서 공통으로 사용
  */
 export class LassoSelector {
-  constructor(targetMesh, scene, camera, renderer, options = {}) {
+  private targetMesh: THREE.Mesh;
+  private scene: THREE.Scene;
+  private camera: THREE.Camera;
+  private renderer: THREE.WebGLRenderer;
+  private controls?: any;
+  
+  // 설정 옵션
+  private options: {
+    markerColors: {
+      first: number;
+      regular: number;
+      preview: number;
+    };
+    markerSizes: {
+      first: number;
+      regular: number;
+    };
+    curveQuality: number;
+    minDistanceBetweenPoints: number;
+    onUpdateMessage: (message: string) => void;
+    onPointAdded: (pointCount: number) => void;
+    onComplete: (points: THREE.Vector3[]) => void;
+    onPointDragComplete: (points: PointData[]) => void;
+    onError: (error: string) => void;
+  };
+  
+  // 상태 변수들 (플리퍼 기존 변수들)
+  private drawingPoints: PointData[] = [];
+  private pointMarkers: THREE.Mesh[] = [];
+  private curveLines: THREE.Line[] = [];
+  private lineClosed: boolean = false;
+  
+  // 마우스 관련 변수
+  private isDrawing: boolean = false;
+  private lastMousePosition: THREE.Vector2 = new THREE.Vector2();
+  private hoveredPointIndex: number = -1;
+  
+  // 점 드래깅 변수
+  private selectedPointIndex: number = -1;
+  private isDraggingPoint: boolean = false;
+  
+  // 이벤트 핸들러 바인딩
+  private boundEventHandlers: BoundEventHandlers;
+  
+  // 활성 상태
+  private isActive: boolean = false;
+
+  constructor(targetMesh: THREE.Mesh, scene: THREE.Scene, camera: THREE.Camera, renderer: THREE.WebGLRenderer, options: LassoSelectorOptions = {}) {
     this.targetMesh = targetMesh;
     this.scene = scene;
     this.camera = camera;
@@ -23,32 +105,17 @@ export class LassoSelector {
         preview: options.markerColors?.preview || 0xffa500  // 미리보기: 주황
       },
       markerSizes: {
-        first: options.markerSizes?.first || 0.005,
-        regular: options.markerSizes?.regular || 0.003
+        first: 0.005,
+        regular: 0.003
       },
       curveQuality: options.curveQuality || 20,
       minDistanceBetweenPoints: options.minDistanceBetweenPoints || 0.01,
       onUpdateMessage: options.onUpdateMessage || (() => {}), // 상태 변경 콜백
       onPointAdded: options.onPointAdded || (() => {}), // 점 추가 콜백
       onComplete: options.onComplete || (() => {}), // 영역 완성 콜백
-      onPointDragComplete: options.onPointDragComplete || (() => {}), // 점 드래깅 완료 콜백
+      onPointDragComplete: (() => {}), // 점 드래깅 완료 콜백
       onError: options.onError || (() => {}) // 오류 콜백
     };
-    
-    // 상태 변수들 (플리퍼 기존 변수들)
-    this.drawingPoints = [];
-    this.pointMarkers = [];
-    this.curveLines = [];
-    this.lineClosed = false;
-    
-    // 마우스 관련 변수
-    this.isDrawing = false;
-    this.lastMousePosition = new THREE.Vector2();
-    this.hoveredPointIndex = -1;
-    
-    // 점 드래깅 변수
-    this.selectedPointIndex = -1;
-    this.isDraggingPoint = false;
     
     // 이벤트 핸들러 바인딩
     this.boundEventHandlers = {
@@ -68,7 +135,7 @@ export class LassoSelector {
   /**
    * 올가미 선택 시작
    */
-  startSelection() {
+  startSelection(): boolean {
     if (this.isActive) {
       console.warn('LassoSelector가 이미 활성화되어 있습니다.');
       return false;
@@ -91,7 +158,7 @@ export class LassoSelector {
   /**
    * 올가미 선택 중지
    */
-  stopSelection() {
+  stopSelection(): boolean {
     if (!this.isActive) return false;
     
     this.isActive = false;
@@ -107,7 +174,7 @@ export class LassoSelector {
   /**
    * 모든 데이터 정리
    */
-  cleanup(preserveSelection = false) {
+  cleanup(preserveSelection: boolean = false): void {
     // 이벤트 리스너 제거
     this.stopSelection();
     
@@ -116,7 +183,11 @@ export class LassoSelector {
       if (marker && marker.parent) {
         marker.parent.remove(marker);
         marker.geometry?.dispose();
-        marker.material?.dispose();
+        if (Array.isArray(marker.material)) {
+          marker.material.forEach(mat => mat.dispose());
+        } else {
+          marker.material?.dispose();
+        }
       }
     });
     
@@ -125,7 +196,11 @@ export class LassoSelector {
       if (line && line.parent) {
         line.parent.remove(line);
         line.geometry?.dispose();
-        line.material?.dispose();
+        if (Array.isArray(line.material)) {
+          line.material.forEach(mat => mat.dispose());
+        } else {
+          line.material?.dispose();
+        }
       }
     });
     
@@ -147,7 +222,7 @@ export class LassoSelector {
   /**
    * 이벤트 리스너 추가
    */
-  addEventListeners() {
+  private addEventListeners(): void {
     const rendererDom = this.renderer.domElement;
     
     // 기존 이벤트 리스너 제거 (중복 방지)
@@ -167,7 +242,7 @@ export class LassoSelector {
   /**
    * 이벤트 리스너 제거
    */
-  removeEventListeners() {
+  private removeEventListeners(): void {
     const rendererDom = this.renderer.domElement;
     
     rendererDom.removeEventListener('pointerdown', this.boundEventHandlers.onPointerDown);
@@ -183,7 +258,7 @@ export class LassoSelector {
   /**
    * 키 다운 이벤트 핸들러
    */
-  onKeyDown(event) {
+  private onKeyDown(event: KeyboardEvent): void {
     if (!this.isActive) return;
     
     // 트리거 키 (기본: Alt)
@@ -203,7 +278,7 @@ export class LassoSelector {
   /**
    * 키 업 이벤트 핸들러
    */
-  onKeyUp(event) {
+  private onKeyUp(event: KeyboardEvent): void {
     if (!this.isActive) return;
     
     // 트리거 키 해제
@@ -228,7 +303,7 @@ export class LassoSelector {
   /**
    * 포인터 다운 이벤트 핸들러
    */
-  onPointerDown(event) {
+  private onPointerDown(event: PointerEvent): void {
     if (!this.isActive) return;
     
     // 영역이 이미 닫혔다면 점 이동 처리
@@ -262,7 +337,7 @@ export class LassoSelector {
     // 마커 클릭 처리
     const markerIntersects = raycaster.intersectObjects(this.pointMarkers);
     if (markerIntersects.length > 0) {
-      this.handleMarkerClick(markerIntersects[0].object, event);
+      this.handleMarkerClick(markerIntersects[0].object as THREE.Mesh, event);
       return;
     }
     
@@ -290,7 +365,7 @@ export class LassoSelector {
   /**
    * 마커 클릭 처리
    */
-  handleMarkerClick(clickedMarker, event) {
+  private handleMarkerClick(clickedMarker: THREE.Mesh, event: PointerEvent): void {
     const markerIndex = this.pointMarkers.indexOf(clickedMarker);
     if (markerIndex === -1) return;
     
@@ -308,7 +383,7 @@ export class LassoSelector {
   /**
    * 포인터 이동 이벤트 핸들러
    */
-  onPointerMove(event) {
+  private onPointerMove(event: PointerEvent): void {
     if (!this.isActive) return;
     
     // 화면 좌표를 정규화된 디바이스 좌표로 변환
@@ -362,7 +437,7 @@ export class LassoSelector {
   /**
    * 호버링 점 업데이트 및 커서 변경
    */
-  updateHoveredPoint(raycaster, event) {
+  private updateHoveredPoint(raycaster: THREE.Raycaster, event: PointerEvent): void {
     const prevHoveredIndex = this.hoveredPointIndex;
     this.hoveredPointIndex = -1;
     
@@ -399,7 +474,7 @@ export class LassoSelector {
   /**
    * 포인터 업 이벤트 핸들러
    */
-  onPointerUp(event) {
+  private onPointerUp(event: PointerEvent): void {
     if (!this.isActive) return;
     
     // 점 드래깅 종료
@@ -429,7 +504,7 @@ export class LassoSelector {
   /**
    * 클릭 이벤트 핸들러 - 영역 닫기
    */
-  onClick(event) {
+  private onClick(event: MouseEvent): void {
     if (!this.isActive) return;
     
     // 드래깅 중이거나 Alt 키가 눌려있거나 이미 완료되었으면 무시
@@ -444,7 +519,7 @@ export class LassoSelector {
   /**
    * 윈도우 포커스 아웃 이벤트 핸들러
    */
-  onWindowBlur() {
+  private onWindowBlur(): void {
     if (!this.isActive) return;
     
     if (this.isDrawing) {
@@ -470,10 +545,10 @@ export class LassoSelector {
   /**
    * 점 추가
    */
-  addPoint(intersect) {
+  private addPoint(intersect: THREE.Intersection): void {
     // 점 위치와 노멀 가져오기
     const position = intersect.point.clone();
-    let normal = intersect.face.normal.clone();
+    let normal = intersect.face!.normal.clone();
     normal.transformDirection(this.targetMesh.matrixWorld).normalize();
     
     // Z-fighting 방지를 위해 노멀 방향으로 약간 오프셋
@@ -493,11 +568,11 @@ export class LassoSelector {
     this.scene.add(marker);
     
     // 점 데이터 저장
-    const pointData = {
+    const pointData: PointData = {
       position: position,
       normal: normal,
       marker: marker,
-      faceIndex: intersect.faceIndex
+      faceIndex: intersect.faceIndex!
     };
     
     this.drawingPoints.push(pointData);
@@ -528,7 +603,7 @@ export class LassoSelector {
   /**
    * 두 점 사이에 곡선 생성
    */
-  createCurveBetweenPoints(pointA, pointB) {
+  private createCurveBetweenPoints(pointA: PointData, pointB: PointData): THREE.Line {
     const positionA = pointA.position;
     const positionB = pointB.position;
     const normalA = pointA.normal;
@@ -539,7 +614,7 @@ export class LassoSelector {
     const sampleCount = Math.max(this.options.curveQuality, Math.floor(distance * 500));
     
     // 표면 위 점 샘플링
-    const pointsOnSurface = [];
+    const pointsOnSurface: THREE.Vector3[] = [];
     
     for (let i = 0; i <= sampleCount; i++) {
       const t = i / sampleCount;
@@ -557,7 +632,7 @@ export class LassoSelector {
       
       if (intersects.length > 0) {
         // 레이캐스팅 성공 시 교차점 사용
-        let hitNormal = intersects[0].face.normal.clone();
+        let hitNormal = intersects[0].face!.normal.clone();
         hitNormal.transformDirection(this.targetMesh.matrixWorld);
         
         pos = intersects[0].point.clone().addScaledVector(hitNormal, 0.001);
@@ -570,7 +645,7 @@ export class LassoSelector {
     }
     
     // 성능을 위해 점 단순화
-    const simplifiedPoints = [];
+    const simplifiedPoints: THREE.Vector3[] = [];
     const simplificationFactor = Math.max(1, Math.floor(pointsOnSurface.length / 100));
     
     for (let i = 0; i < pointsOnSurface.length; i += simplificationFactor) {
@@ -622,7 +697,7 @@ export class LassoSelector {
   /**
    * 영역 완성
    */
-  completeArea() {
+  private completeArea(): boolean {
     if (this.drawingPoints.length < 3) {
       const message = '영역 완성에는 최소 3개의 점이 필요합니다.';
       console.warn(message);
@@ -645,7 +720,7 @@ export class LassoSelector {
     this.renderer.domElement.style.cursor = 'auto';
     
     // 완성 콜백 호출
-    this.options.onComplete(this.drawingPoints.slice()); // 복사본 전달
+    this.options.onComplete(this.drawingPoints.map(p => p.position)); // Vector3 배열로 변환
     this.options.onUpdateMessage('영역이 완성되었습니다.');
     
     console.log('올가미 영역 완성');
@@ -655,7 +730,7 @@ export class LassoSelector {
   /**
    * 특정 인덱스 이후의 모든 점 제거
    */
-  removePointsAfter(index) {
+  private removePointsAfter(index: number): void {
     if (index < 0 || index >= this.drawingPoints.length - 1) return;
     
     // 해당 인덱스 이후의 모든 점 제거
@@ -664,7 +739,11 @@ export class LassoSelector {
       if (marker && marker.parent) {
         this.scene.remove(marker);
         marker.geometry?.dispose();
-        marker.material?.dispose();
+        if (Array.isArray(marker.material)) {
+          marker.material.forEach(mat => mat.dispose());
+        } else {
+          marker.material?.dispose();
+        }
       }
       
       this.pointMarkers.pop();
@@ -677,7 +756,11 @@ export class LassoSelector {
       if (curveLine && curveLine.parent) {
         this.scene.remove(curveLine);
         curveLine.geometry?.dispose();
-        curveLine.material?.dispose();
+        if (Array.isArray(curveLine.material)) {
+          curveLine.material.forEach(mat => mat.dispose());
+        } else {
+          curveLine.material?.dispose();
+        }
       }
       this.curveLines.pop();
     }
@@ -690,7 +773,7 @@ export class LassoSelector {
   /**
    * 특정 점 제거
    */
-  removePoint(index) {
+  private removePoint(index: number): void {
     if (index < 0 || index >= this.drawingPoints.length) return;
     
     // 마커 제거
@@ -698,7 +781,11 @@ export class LassoSelector {
     if (marker && marker.parent) {
       this.scene.remove(marker);
       marker.geometry?.dispose();
-      marker.material?.dispose();
+      if (Array.isArray(marker.material)) {
+        marker.material.forEach(mat => mat.dispose());
+      } else {
+        marker.material?.dispose();
+      }
     }
     
     this.pointMarkers.splice(index, 1);
@@ -714,8 +801,8 @@ export class LassoSelector {
   /**
    * 점 제거 후 곡선 업데이트
    */
-  updateCurvesAfterPointRemoval(removedIndex) {
-    const curvesToRemove = [];
+  private updateCurvesAfterPointRemoval(removedIndex: number): void {
+    const curvesToRemove: number[] = [];
     
     // 제거된 점에 연결된 곡선 찾기
     if (removedIndex > 0) {
@@ -730,7 +817,11 @@ export class LassoSelector {
       if (this.curveLines[curveIndex] && this.curveLines[curveIndex].parent) {
         this.scene.remove(this.curveLines[curveIndex]);
         this.curveLines[curveIndex].geometry?.dispose();
-        this.curveLines[curveIndex].material?.dispose();
+        if (Array.isArray(this.curveLines[curveIndex].material)) {
+          this.curveLines[curveIndex].material.forEach(mat => mat.dispose());
+        } else {
+          this.curveLines[curveIndex].material?.dispose();
+        }
       }
       this.curveLines.splice(curveIndex, 1);
     });
@@ -753,19 +844,19 @@ export class LassoSelector {
   /**
    * 점 위치 업데이트 (드래깅용)
    */
-  updatePointPosition(index, intersection) {
+  private updatePointPosition(index: number, intersection: THREE.Intersection): void {
     if (index < 0 || index >= this.drawingPoints.length) return;
     
     // 새 위치와 노멀 가져오기
     const position = intersection.point.clone();
-    let normal = intersection.face.normal.clone();
+    let normal = intersection.face!.normal.clone();
     normal.transformDirection(this.targetMesh.matrixWorld).normalize();
     
     // 점 데이터 업데이트
     const pointData = this.drawingPoints[index];
     pointData.position.copy(position);
     pointData.normal.copy(normal);
-    pointData.faceIndex = intersection.faceIndex;
+    pointData.faceIndex = intersection.faceIndex!;
     
     // 마커 위치 업데이트
     if (pointData.marker) {
@@ -779,7 +870,7 @@ export class LassoSelector {
   /**
    * 점에 연결된 곡선 업데이트
    */
-  updateConnectedCurves(index) {
+  private updateConnectedCurves(index: number): void {
     if (index < 0 || index >= this.drawingPoints.length) return;
     
     const pointsCount = this.drawingPoints.length;
@@ -804,7 +895,7 @@ export class LassoSelector {
   /**
    * 두 점 사이의 곡선 업데이트
    */
-  updateCurveBetweenPoints(startIndex, endIndex) {
+  private updateCurveBetweenPoints(startIndex: number, endIndex: number): void {
     // 인덱스 유효성 검사
     if (startIndex < 0 || startIndex >= this.drawingPoints.length || 
         endIndex < 0 || endIndex >= this.drawingPoints.length) {
@@ -826,9 +917,14 @@ export class LassoSelector {
     if (curveIndex >= 0 && curveIndex < this.curveLines.length) {
       // 기존 곡선 제거
       if (this.curveLines[curveIndex] && this.curveLines[curveIndex].parent) {
-        this.curveLines[curveIndex].parent.remove(this.curveLines[curveIndex]);
+        this.curveLines[curveIndex].parent?.remove(this.curveLines[curveIndex]);
         this.curveLines[curveIndex].geometry?.dispose();
-        this.curveLines[curveIndex].material?.dispose();
+        const material = this.curveLines[curveIndex].material;
+        if (Array.isArray(material)) {
+          material.forEach(mat => mat.dispose());
+        } else {
+          material?.dispose();
+        }
       }
       
       // 새 곡선 생성
@@ -845,21 +941,27 @@ export class LassoSelector {
   /**
    * 현재 선택된 점들 반환
    */
-  getSelectedPoints() {
+  getSelectedPoints(): PointData[] {
     return this.drawingPoints.slice(); // 복사본 반환
   }
   
   /**
    * 영역이 완성되었는지 확인
    */
-  isAreaClosed() {
+  isAreaClosed(): boolean {
     return this.lineClosed;
   }
   
   /**
    * 현재 상태 정보 반환
    */
-  getState() {
+  getState(): {
+    isActive: boolean;
+    pointCount: number;
+    isAreaClosed: boolean;
+    isDrawing: boolean;
+    isDragging: boolean;
+  } {
     return {
       isActive: this.isActive,
       pointCount: this.drawingPoints.length,
