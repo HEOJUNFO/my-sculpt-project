@@ -4,7 +4,7 @@
 import * as THREE from 'three';
 import { LassoSelector } from '../../utils/lassoSelection.js';
 import { MeshCutter } from '../../utils/meshCutter.js';
-import { extractInnerFacesFromBorder } from '../../utils/meshProcessing.js';
+import { extractInnerFacesFromBorder, fillHole } from '../../utils/meshProcessing.js';
 import { refs, modelList, activeItemIndex } from '../../models/modelManager.js';
 
 // refs 객체를 any 타입으로 처리 (JavaScript 모듈이므로)
@@ -58,6 +58,7 @@ export class ToothRemovalSystem {
   private isSelectionComplete: boolean = false;
   private isRemovalComplete: boolean = false;
   private selectedPoints: THREE.Vector3[] = [];
+  
   
   // 콜백 함수들
   private onUpdateMessage: (message: string) => void = () => {};
@@ -216,6 +217,21 @@ export class ToothRemovalSystem {
       });
       const cuttingData: any = MeshCutter.performFlipperCutting(currentGeometry, this.selectedPoints);
       const { newVertices, newNormals, newIndices, vertexFaceMap, borderVertexIndices } = cuttingData;
+      
+      // borderVertexIndices의 최대값 계산 (스택 오버플로우 방지)
+      let maxBorderIndex = 0;
+      for (let i = 0; i < borderVertexIndices.length; i++) {
+        if (borderVertexIndices[i] > maxBorderIndex) {
+          maxBorderIndex = borderVertexIndices[i];
+        }
+      }
+      
+      console.log('Knife cut 결과:', {
+        newVerticesCount: newVertices.length / 3,
+        newIndicesCount: newIndices.length / 3,
+        borderVertexIndicesCount: borderVertexIndices.length,
+        maxBorderIndex: maxBorderIndex
+      });
 
       // 2. 내부 면 찾기
       console.log('2단계: 내부 면 찾기');
@@ -225,11 +241,29 @@ export class ToothRemovalSystem {
 
       // 3. 내부 면들 제거
       console.log('3단계: 내부 면 제거');
-      const remainingGeometry = this.removeInnerFaces(newVertices, newNormals, newIndices, usedFaces);
+      const { geometry: remainingGeometry, vertexMap } = this.removeInnerFaces(newVertices, newNormals, newIndices, usedFaces);
 
-      // 4. 메시 업데이트
-      console.log('4단계: 메시 업데이트');
-      this.updateMeshGeometry(remainingGeometry);
+      // 4. 구멍 채우기
+      console.log('4단계: 구멍 채우기');
+      console.log('구멍 채우기 입력 데이터:', {
+        remainingGeometryVertices: remainingGeometry.attributes.position.count,
+        remainingGeometryFaces: remainingGeometry.index ? remainingGeometry.index.count / 3 : 0,
+        borderVertexIndicesCount: borderVertexIndices.length,
+        vertexMapSize: vertexMap.size
+      });
+      
+      const filledGeometry = this.fillHoleInGeometry(remainingGeometry, borderVertexIndices, vertexMap);
+      
+      console.log('구멍 채우기 결과:', {
+        filledGeometryVertices: filledGeometry.attributes.position.count,
+        filledGeometryFaces: filledGeometry.index ? filledGeometry.index.count / 3 : 0,
+        verticesAdded: filledGeometry.attributes.position.count - remainingGeometry.attributes.position.count,
+        facesAdded: (filledGeometry.index ? filledGeometry.index.count / 3 : 0) - (remainingGeometry.index ? remainingGeometry.index.count / 3 : 0)
+      });
+
+      // 5. 메시 업데이트
+      console.log('5단계: 메시 업데이트');
+      this.updateMeshGeometry(filledGeometry);
 
       // 치아 제거 상태 업데이트
       this.isRemovalComplete = true;
@@ -257,7 +291,7 @@ export class ToothRemovalSystem {
     normals: Float32Array, 
     indices: Uint32Array, 
     usedFaces: Set<number>
-  ): THREE.BufferGeometry {
+  ): { geometry: THREE.BufferGeometry; vertexMap: Map<number, number> } {
     const totalFaces = indices.length / 3;
     
     // 제거할 면들을 Set으로 변환
@@ -318,17 +352,137 @@ export class ToothRemovalSystem {
       );
     }
 
+    // 데이터 유효성 검사
+    if (newVertices.length !== newNormals.length) {
+      console.warn('내부 면 제거 실패: 버텍스와 노멀 배열 길이 불일치');
+      return { geometry: new THREE.BufferGeometry(), vertexMap: new Map() }; // 빈 geometry 반환
+    }
+    
+    if (newIndices.length === 0) {
+      console.warn('내부 면 제거 실패: 남은 면이 없습니다');
+      return { geometry: new THREE.BufferGeometry(), vertexMap: new Map() }; // 빈 geometry 반환
+    }
+    
+    // 인덱스 범위 검사 (스택 오버플로우 방지를 위해 반복문 사용)
+    let maxVertexIndex = 0;
+    for (let i = 0; i < newIndices.length; i++) {
+      if (newIndices[i] > maxVertexIndex) {
+        maxVertexIndex = newIndices[i];
+      }
+    }
+    const expectedVertexCount = newVertices.length / 3;
+    if (maxVertexIndex >= expectedVertexCount) {
+      console.error(`인덱스 범위 오류: 최대 인덱스 ${maxVertexIndex}, 예상 버텍스 수 ${expectedVertexCount}`);
+      console.log('인덱스 배열:', newIndices.slice(0, 20), '...');
+      console.log('버텍스 수:', expectedVertexCount);
+      return { geometry: new THREE.BufferGeometry(), vertexMap: new Map() }; // 빈 geometry 반환
+    }
+    
     // 새로운 BufferGeometry 생성
     const newGeometry = new THREE.BufferGeometry();
     newGeometry.setAttribute('position', new THREE.Float32BufferAttribute(newVertices, 3));
     newGeometry.setAttribute('normal', new THREE.Float32BufferAttribute(newNormals, 3));
-    newGeometry.setIndex(newIndices);
+    newGeometry.setIndex(new THREE.Uint32BufferAttribute(newIndices, 1));
 
     // 노멀과 바운딩 정보 재계산
     newGeometry.computeVertexNormals();
     newGeometry.computeBoundingBox();
     newGeometry.computeBoundingSphere();
 
+    return { geometry: newGeometry, vertexMap };
+  }
+
+  /**
+   * geometry에서 구멍 채우기
+   */
+  private fillHoleInGeometry(geometry: THREE.BufferGeometry, borderVertexIndices: number[], vertexMap: Map<number, number>): THREE.BufferGeometry {
+    const positions = geometry.attributes.position.array as Float32Array;
+    const normals = geometry.attributes.normal.array as Float32Array;
+    const indices = geometry.index ? geometry.index.array as Uint32Array : null;
+    
+    if (!indices) {
+      console.warn('구멍 채우기 실패: 인덱스가 없습니다.');
+      return geometry;
+    }
+    
+    // 경계 인덱스를 현재 geometry에 맞게 재매핑
+    console.log('경계 인덱스 재매핑 시작...');
+    console.log('원본 경계 인덱스 샘플:', borderVertexIndices.slice(0, 10));
+    console.log('정점 매핑 정보 샘플:', Array.from(vertexMap.entries()).slice(0, 10));
+    
+    const mappedBorderIndices: number[] = [];
+    const unmappedIndices: number[] = [];
+    
+    for (const originalIndex of borderVertexIndices) {
+      const mappedIndex = vertexMap.get(originalIndex);
+      if (mappedIndex !== undefined) {
+        mappedBorderIndices.push(mappedIndex);
+      } else {
+        unmappedIndices.push(originalIndex);
+        console.warn(`경계 인덱스 ${originalIndex}가 매핑되지 않았습니다.`);
+      }
+    }
+    
+    console.log('경계 인덱스 재매핑 결과:', {
+      originalCount: borderVertexIndices.length,
+      mappedCount: mappedBorderIndices.length,
+      unmappedCount: unmappedIndices.length,
+      unmappedIndices: unmappedIndices.slice(0, 10) // 처음 10개만 표시
+    });
+    
+    if (mappedBorderIndices.length === 0) {
+      console.warn('구멍 채우기 실패: 유효한 경계 인덱스가 없습니다.');
+      return geometry;
+    }
+    
+    if (mappedBorderIndices.length < borderVertexIndices.length * 0.5) {
+      console.warn(`경계 인덱스 재매핑 성공률이 낮습니다: ${mappedBorderIndices.length}/${borderVertexIndices.length} (${(mappedBorderIndices.length/borderVertexIndices.length*100).toFixed(1)}%)`);
+    }
+    
+    // 구멍 채우기 실행 (항상 삼각분할 방식 사용)
+    const filledData: any = fillHole(positions, normals, indices, mappedBorderIndices, {
+      holeFillingMethod: 'triangulate'
+    });
+    
+    // 데이터 유효성 검사
+    if (!filledData.newVertices || !filledData.newNormals || !filledData.newIndices) {
+      console.warn('구멍 채우기 실패: 유효하지 않은 데이터');
+      return geometry;
+    }
+    
+    if (filledData.newVertices.length !== filledData.newNormals.length) {
+      console.warn('구멍 채우기 실패: 버텍스와 노멀 배열 길이 불일치');
+      return geometry;
+    }
+    
+    // 인덱스 범위 검사 (스택 오버플로우 방지를 위해 반복문 사용)
+    let maxVertexIndex = 0;
+    for (let i = 0; i < filledData.newIndices.length; i++) {
+      if (filledData.newIndices[i] > maxVertexIndex) {
+        maxVertexIndex = filledData.newIndices[i];
+      }
+    }
+    const expectedVertexCount = filledData.newVertices.length / 3;
+    if (maxVertexIndex >= expectedVertexCount) {
+      console.error(`구멍 채우기 인덱스 범위 오류: 최대 인덱스 ${maxVertexIndex}, 예상 버텍스 수 ${expectedVertexCount}`);
+      console.log('구멍 채우기 인덱스 배열:', filledData.newIndices.slice(0, 20), '...');
+      console.log('구멍 채우기 버텍스 수:', expectedVertexCount);
+      return geometry;
+    }
+    
+    // 새로운 geometry 생성
+    const newGeometry = new THREE.BufferGeometry();
+    newGeometry.setAttribute('position', new THREE.Float32BufferAttribute(filledData.newVertices, 3));
+    newGeometry.setAttribute('normal', new THREE.Float32BufferAttribute(filledData.newNormals, 3));
+    newGeometry.setIndex(new THREE.Uint32BufferAttribute(filledData.newIndices, 1));
+    
+    // 노멀과 바운딩 정보 재계산
+    newGeometry.computeVertexNormals();
+    newGeometry.computeBoundingBox();
+    newGeometry.computeBoundingSphere();
+    
+    console.log(`구멍 채우기 완료: ${filledData.newVertices.length / 3}개 정점, ${filledData.newIndices.length / 3}개 면`);
+    
     return newGeometry;
   }
 
@@ -716,6 +870,7 @@ export class ToothRemovalSystem {
 
     console.log('치아 제거 시스템 정리 완료');
   }
+
 
   /**
    * 현재 상태 정보 반환

@@ -4,7 +4,7 @@ import { refs } from '../../models/modelManager.js'
 import { getFlipperState, setFlipperMesh, updateFlipperInfoText } from './flipperDrawing.js';
 import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { MeshCutter } from '../../utils/meshCutter.js';
-import { extractInnerFacesFromBorder } from '../../utils/meshProcessing.js';
+import { extractInnerFacesFromBorder } from '../../utils/meshProcessing.ts';
 
 /**
  * 플리퍼 생성
