@@ -19,6 +19,7 @@
     "three-subdivide": "^1.1.5"
   },
   "devDependencies": {
+    "@types/earcut": "^3.0.0",
     "@types/three": "^0.180.0",
     "typescript": "^5.9.2",
     "vite": "^6.0.7"
