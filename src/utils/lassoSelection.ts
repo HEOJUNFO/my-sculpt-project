@@ -4,7 +4,7 @@
 import * as THREE from 'three';
 
 // toothRemovalCore.ts에서 가져온 타입 정의
-type LassoSelectorOptions = {
+export type LassoSelectorOptions = {
   controls?: any;
   markerColors?: {
     first: number;
@@ -15,12 +15,12 @@ type LassoSelectorOptions = {
   minDistanceBetweenPoints?: number;
   onUpdateMessage?: (message: string) => void;
   onPointAdded?: (pointCount: number) => void;
-  onComplete?: (points: THREE.Vector3[]) => void;
+  onComplete?: (points: DrawingPointData[]) => void;
   onError?: (error: string) => void;
 };
 
 // 점 데이터 타입 정의
-interface PointData {
+export interface DrawingPointData {
   position: THREE.Vector3;
   normal: THREE.Vector3;
   marker: THREE.Mesh;
@@ -64,13 +64,13 @@ export class LassoSelector {
     minDistanceBetweenPoints: number;
     onUpdateMessage: (message: string) => void;
     onPointAdded: (pointCount: number) => void;
-    onComplete: (points: THREE.Vector3[]) => void;
-    onPointDragComplete: (points: PointData[]) => void;
+    onComplete: (points: DrawingPointData[]) => void;
+    onPointDragComplete: (points: DrawingPointData[]) => void;
     onError: (error: string) => void;
   };
   
   // 상태 변수들 (플리퍼 기존 변수들)
-  private drawingPoints: PointData[] = [];
+  private drawingPoints: DrawingPointData[] = [];
   private pointMarkers: THREE.Mesh[] = [];
   private curveLines: THREE.Line[] = [];
   private lineClosed: boolean = false;
@@ -568,7 +568,7 @@ export class LassoSelector {
     this.scene.add(marker);
     
     // 점 데이터 저장
-    const pointData: PointData = {
+    const pointData: DrawingPointData = {
       position: position,
       normal: normal,
       marker: marker,
@@ -603,7 +603,7 @@ export class LassoSelector {
   /**
    * 두 점 사이에 곡선 생성
    */
-  private createCurveBetweenPoints(pointA: PointData, pointB: PointData): THREE.Line {
+  private createCurveBetweenPoints(pointA: DrawingPointData, pointB: DrawingPointData): THREE.Line {
     const positionA = pointA.position;
     const positionB = pointB.position;
     const normalA = pointA.normal;
@@ -720,7 +720,7 @@ export class LassoSelector {
     this.renderer.domElement.style.cursor = 'auto';
     
     // 완성 콜백 호출
-    this.options.onComplete(this.drawingPoints.map(p => p.position)); // Vector3 배열로 변환
+    this.options.onComplete(this.drawingPoints); // Vector3 배열로 변환
     this.options.onUpdateMessage('영역이 완성되었습니다.');
     
     console.log('올가미 영역 완성');
@@ -941,7 +941,7 @@ export class LassoSelector {
   /**
    * 현재 선택된 점들 반환
    */
-  getSelectedPoints(): PointData[] {
+  getSelectedPoints(): DrawingPointData[] {
     return this.drawingPoints.slice(); // 복사본 반환
   }
   

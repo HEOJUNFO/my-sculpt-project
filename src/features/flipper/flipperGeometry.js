@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { refs } from '../../models/modelManager.js'
 import { getFlipperState, setFlipperMesh, updateFlipperInfoText } from './flipperDrawing.js';
 import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { MeshCutter } from '../../utils/meshCutter.js';
+import { MeshCutter } from '../../utils/meshCutter.ts';
 import { extractInnerFacesFromBorder } from '../../utils/meshProcessing.ts';
 
 /**

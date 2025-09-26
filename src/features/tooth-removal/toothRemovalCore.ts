@@ -1,20 +1,25 @@
 // src/features/tooth-removal/toothRemovalCore.ts
 // 치아 제거 핵심 로직 - 1단계 구현 (lasso select + knife cut + 내부면 삭제)
 
-import * as THREE from 'three';
-import { LassoSelector } from '../../utils/lassoSelection.js';
-import { MeshCutter } from '../../utils/meshCutter.js';
-import { extractInnerFacesFromBorder, fillHole } from '../../utils/meshProcessing.js';
-import { refs, modelList, activeItemIndex } from '../../models/modelManager.js';
+import * as THREE from "three";
+import {
+  DrawingPointData,
+  LassoSelector,
+  LassoSelectorOptions,
+} from "../../utils/lassoSelection.js";
+import { MeshCutter } from "../../utils/meshCutter.js";
+import { extractInnerFacesFromBorder } from "../../utils/meshProcessing.js";
+import { MinimalSurfaceGenerator } from "../../utils/minimalSurfaceGenerator.ts";
+import { refs, modelList, activeItemIndex } from "../../models/modelManager.js";
 
 // refs 객체를 any 타입으로 처리 (JavaScript 모듈이므로)
 const refsAny = refs as any;
-import { MeshBVHHelper } from 'three-mesh-bvh';
+import { MeshBVHHelper } from "three-mesh-bvh";
 // 타입 정의
 type ToothRemovalInitOptions = {
   onUpdateMessage?: (message: string) => void;
   onPointProgress?: (pointCount: number) => void;
-  onSelectionComplete?: (points: THREE.Vector3[]) => void;
+  onSelectionComplete?: (points: DrawingPointData[]) => void;
   onRemovalComplete?: () => void;
   onError?: (error: string) => void;
 };
@@ -27,43 +32,27 @@ type ToothRemovalState = {
   hasBackup: boolean;
 };
 
-type LassoSelectorOptions = {
-  controls?: any;
-  markerColors?: {
-    first: number;
-    regular: number;
-    preview: number;
-  };
-  curveQuality?: number;
-  minDistanceBetweenPoints?: number;
-  onUpdateMessage?: (message: string) => void;
-  onPointAdded?: (pointCount: number) => void;
-  onComplete?: (points: THREE.Vector3[]) => void;
-  onError?: (error: string) => void;
-};
-
 /**
  * 치아 제거 시스템 클래스
  */
 export class ToothRemovalSystem {
   private lassoSelector: LassoSelector | null = null;
-  
+
   // geometry 백업 관리
-  private originalGeometry: THREE.BufferGeometry | null = null;      // 완전한 원본 (처음 상태)
-  private geometryBackup: THREE.BufferGeometry | null = null;        // 현재 작업 기준점 (되돌리기용)
+  private originalGeometry: THREE.BufferGeometry | null = null; // 완전한 원본 (처음 상태)
+  private geometryBackup: THREE.BufferGeometry | null = null; // 현재 작업 기준점 (되돌리기용)
   private lastConfirmedGeometry: THREE.BufferGeometry | null = null; // 마지막 확정된 상태
-  
+
   // 상태 관리
   private isActive: boolean = false;
   private isSelectionComplete: boolean = false;
   private isRemovalComplete: boolean = false;
-  private selectedPoints: THREE.Vector3[] = [];
-  
-  
+  private selectedPoints: DrawingPointData[] = [];
+
   // 콜백 함수들
   private onUpdateMessage: (message: string) => void = () => {};
   private onPointProgress: (pointCount: number) => void = () => {};
-  private onSelectionComplete: (points: THREE.Vector3[]) => void = () => {};
+  private onSelectionComplete: (points: DrawingPointData[]) => void = () => {};
   private onRemovalComplete: () => void = () => {};
   private onError: (error: string) => void = () => {};
 
@@ -72,7 +61,7 @@ export class ToothRemovalSystem {
    */
   public init(options: ToothRemovalInitOptions = {}): boolean {
     if (!refsAny.targetMesh) {
-      const message = '치아 제거할 대상 메시가 없습니다.';
+      const message = "치아 제거할 대상 메시가 없습니다.";
       console.warn(message);
       if (this.onError) this.onError(message);
       return false;
@@ -86,8 +75,8 @@ export class ToothRemovalSystem {
     this.onError = options.onError || (() => {});
 
     // geometry 백업 시스템 초기화
-    this.originalGeometry = refsAny.targetMesh.geometry;           // 완전한 원본
-    this.geometryBackup = this.originalGeometry!.clone();       // 현재 작업 기준점
+    this.originalGeometry = refsAny.targetMesh.geometry; // 완전한 원본
+    this.geometryBackup = this.originalGeometry!.clone(); // 현재 작업 기준점
     this.lastConfirmedGeometry = this.originalGeometry!.clone(); // 마지막 확정 상태
 
     // LassoSelector 초기화
@@ -99,14 +88,14 @@ export class ToothRemovalSystem {
     this.isRemovalComplete = false;
     this.selectedPoints = [];
 
-    console.log('치아 제거 시스템 초기화 완료');
+    console.log("치아 제거 시스템 초기화 완료");
     return true;
   }
 
   /**
    * LassoSelector 초기화
    */
-  private initLassoSelector(): void {
+  private initLassoSelector() {
     // 기존 LassoSelector 정리
     if (this.lassoSelector) {
       this.lassoSelector.cleanup();
@@ -116,9 +105,9 @@ export class ToothRemovalSystem {
     const options: LassoSelectorOptions = {
       controls: refsAny.controls,
       markerColors: {
-        first: 0x00ff00,    // 첫 점: 초록
-        regular: 0xff0000,  // 일반 점: 빨강
-        preview: 0xffa500   // 미리보기: 주황 (발치용)
+        first: 0x00ff00, // 첫 점: 초록
+        regular: 0xff0000, // 일반 점: 빨강
+        preview: 0xffa500, // 미리보기: 주황 (발치용)
       },
       curveQuality: 20,
       minDistanceBetweenPoints: 0.01,
@@ -126,23 +115,31 @@ export class ToothRemovalSystem {
         if (this.onUpdateMessage) this.onUpdateMessage(message);
       },
       onPointAdded: (pointCount: number) => {
-        this.selectedPoints = Array(pointCount).fill(null) as THREE.Vector3[]; // 임시로 개수만 맞춤
+        this.selectedPoints = Array(pointCount).fill(
+          null
+        ) as DrawingPointData[]; // 임시로 개수만 맞춤
         console.log(`치아 제거: 점 추가됨 (${pointCount}개)`);
         // UI 업데이트를 위한 콜백 호출
         if (this.onPointProgress) {
           this.onPointProgress(pointCount);
         }
       },
-      onComplete: (points: THREE.Vector3[]) => {
+      onComplete: (points: DrawingPointData[]) => {
         this.onLassoComplete(points);
       },
       onError: (error: string) => {
-        console.error('LassoSelector 오류:', error);
+        console.error("LassoSelector 오류:", error);
         if (this.onError) this.onError(`선택 오류: ${error}`);
-      }
+      },
     };
 
-    this.lassoSelector = new LassoSelector(refsAny.targetMesh, refsAny.scene, refsAny.camera, refsAny.renderer, options);
+    this.lassoSelector = new LassoSelector(
+      refsAny.targetMesh,
+      refsAny.scene,
+      refsAny.camera,
+      refsAny.renderer,
+      options
+    );
   }
 
   /**
@@ -150,19 +147,23 @@ export class ToothRemovalSystem {
    */
   public startSelection(): boolean {
     if (!this.isActive) {
-      console.warn('치아 제거 시스템이 초기화되지 않았습니다.');
+      console.warn("치아 제거 시스템이 초기화되지 않았습니다.");
       return false;
     }
 
     if (this.isSelectionComplete) {
-      this.onUpdateMessage('이미 선택이 완료되었습니다. "치아 제거" 버튼을 클릭하거나 초기화하세요.');
+      this.onUpdateMessage(
+        '이미 선택이 완료되었습니다. "치아 제거" 버튼을 클릭하거나 초기화하세요.'
+      );
       return false;
     }
 
     // 올가미 선택 시작
     const success = this.lassoSelector?.startSelection() || false;
     if (success) {
-      this.onUpdateMessage('Alt 키를 누른 상태에서 제거할 치아 영역을 선택하세요.');
+      this.onUpdateMessage(
+        "Alt 키를 누른 상태에서 제거할 치아 영역을 선택하세요."
+      );
     }
 
     return success;
@@ -171,27 +172,27 @@ export class ToothRemovalSystem {
   /**
    * 치아 선택 중지
    */
-  public stopSelection(): void {
-    if (this.lassoSelector) {
-      this.lassoSelector.stopSelection();
-    }
+  public stopSelection() {
+    this.lassoSelector?.stopSelection();
   }
 
   /**
    * 올가미 선택 완료 콜백
    */
-  private onLassoComplete(points: THREE.Vector3[]): void {
-    console.log('치아 영역 선택 완료:', points.length, '개 점');
-    
+  private onLassoComplete(points: DrawingPointData[]) {
+    console.log("치아 영역 선택 완료:", points.length, "개 점");
+
     this.selectedPoints = points;
     this.isSelectionComplete = true;
-    
+
     // 선택 중지
     this.stopSelection();
-    
+
     // 완료 콜백 호출
     this.onSelectionComplete(points);
-    this.onUpdateMessage('치아 영역 선택이 완료되었습니다. "치아 제거" 버튼을 클릭하세요.');
+    this.onUpdateMessage(
+      '치아 영역 선택이 완료되었습니다. "치아 제거" 버튼을 클릭하세요.'
+    );
   }
 
   /**
@@ -199,25 +200,36 @@ export class ToothRemovalSystem {
    */
   public removeTooth(): boolean {
     if (!this.isSelectionComplete || this.selectedPoints.length === 0) {
-      const message = '먼저 제거할 치아 영역을 선택해주세요.';
+      const message = "먼저 제거할 치아 영역을 선택해주세요.";
       console.warn(message);
       this.onError(message);
       return false;
     }
 
-    this.onUpdateMessage('치아를 제거하는 중...');
+    this.onUpdateMessage("치아를 제거하는 중...");
 
     try {
       // 1. MeshCutter를 이용한 knife cut 수행 (현재 geometry 사용)
-      console.log('1단계: Knife cut 수행');
+      console.log("1단계: Knife cut 수행");
       const currentGeometry = refsAny.targetMesh.geometry;
-      console.log('현재 geometry 정보:', {
+      console.log("현재 geometry 정보:", {
         vertices: currentGeometry.attributes.position.count,
-        faces: currentGeometry.index ? currentGeometry.index.count / 3 : 'no index'
+        faces: currentGeometry.index
+          ? currentGeometry.index.count / 3
+          : "no index",
       });
-      const cuttingData: any = MeshCutter.performFlipperCutting(currentGeometry, this.selectedPoints);
-      const { newVertices, newNormals, newIndices, vertexFaceMap, borderVertexIndices } = cuttingData;
-      
+      const cuttingData: any = MeshCutter.performFlipperCutting(
+        currentGeometry,
+        this.selectedPoints
+      );
+      const {
+        newVertices,
+        newNormals,
+        newIndices,
+        vertexFaceMap,
+        borderVertexIndices,
+      } = cuttingData;
+
       // borderVertexIndices의 최대값 계산 (스택 오버플로우 방지)
       let maxBorderIndex = 0;
       for (let i = 0; i < borderVertexIndices.length; i++) {
@@ -225,44 +237,64 @@ export class ToothRemovalSystem {
           maxBorderIndex = borderVertexIndices[i];
         }
       }
-      
-      console.log('Knife cut 결과:', {
+
+      console.log("Knife cut 결과:", {
         newVerticesCount: newVertices.length / 3,
         newIndicesCount: newIndices.length / 3,
         borderVertexIndicesCount: borderVertexIndices.length,
-        maxBorderIndex: maxBorderIndex
+        maxBorderIndex: maxBorderIndex,
       });
 
       // 2. 내부 면 찾기
-      console.log('2단계: 내부 면 찾기');
+      console.log("2단계: 내부 면 찾기");
       const { usedFaces }: any = extractInnerFacesFromBorder(
-        newVertices, newIndices, vertexFaceMap, borderVertexIndices
+        newVertices,
+        newIndices,
+        vertexFaceMap,
+        borderVertexIndices
       );
 
       // 3. 내부 면들 제거
-      console.log('3단계: 내부 면 제거');
-      const { geometry: remainingGeometry, vertexMap } = this.removeInnerFaces(newVertices, newNormals, newIndices, usedFaces);
+      console.log("3단계: 내부 면 제거");
+      const { geometry: remainingGeometry, vertexMap } = this.removeInnerFaces(
+        newVertices,
+        newNormals,
+        newIndices,
+        usedFaces
+      );
 
       // 4. 구멍 채우기
-      console.log('4단계: 구멍 채우기');
-      console.log('구멍 채우기 입력 데이터:', {
+      console.log("4단계: 구멍 채우기");
+      console.log("구멍 채우기 입력 데이터:", {
         remainingGeometryVertices: remainingGeometry.attributes.position.count,
-        remainingGeometryFaces: remainingGeometry.index ? remainingGeometry.index.count / 3 : 0,
+        remainingGeometryFaces: remainingGeometry.index
+          ? remainingGeometry.index.count / 3
+          : 0,
         borderVertexIndicesCount: borderVertexIndices.length,
-        vertexMapSize: vertexMap.size
+        vertexMapSize: vertexMap.size,
       });
-      
-      const filledGeometry = this.fillHoleInGeometry(remainingGeometry, borderVertexIndices, vertexMap);
-      
-      console.log('구멍 채우기 결과:', {
+
+      const filledGeometry = this.fillHoleInGeometry(
+        remainingGeometry,
+        borderVertexIndices,
+        vertexMap
+      );
+
+      console.log("구멍 채우기 결과:", {
         filledGeometryVertices: filledGeometry.attributes.position.count,
-        filledGeometryFaces: filledGeometry.index ? filledGeometry.index.count / 3 : 0,
-        verticesAdded: filledGeometry.attributes.position.count - remainingGeometry.attributes.position.count,
-        facesAdded: (filledGeometry.index ? filledGeometry.index.count / 3 : 0) - (remainingGeometry.index ? remainingGeometry.index.count / 3 : 0)
+        filledGeometryFaces: filledGeometry.index
+          ? filledGeometry.index.count / 3
+          : 0,
+        verticesAdded:
+          filledGeometry.attributes.position.count -
+          remainingGeometry.attributes.position.count,
+        facesAdded:
+          (filledGeometry.index ? filledGeometry.index.count / 3 : 0) -
+          (remainingGeometry.index ? remainingGeometry.index.count / 3 : 0),
       });
 
       // 5. 메시 업데이트
-      console.log('5단계: 메시 업데이트');
+      console.log("5단계: 메시 업데이트");
       this.updateMeshGeometry(filledGeometry);
 
       // 치아 제거 상태 업데이트
@@ -270,14 +302,16 @@ export class ToothRemovalSystem {
 
       // 완료 콜백
       this.onRemovalComplete();
-      this.onUpdateMessage('치아 제거가 완료되었습니다. 되돌리기 또는 다음 치아 제거를 선택하세요.');
+      this.onUpdateMessage(
+        "치아 제거가 완료되었습니다. 되돌리기 또는 다음 치아 제거를 선택하세요."
+      );
 
-      console.log('치아 제거 완료');
+      console.log("치아 제거 완료");
       return true;
-
     } catch (error) {
-      console.error('치아 제거 중 오류 발생:', error);
-      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error("치아 제거 중 오류 발생:", error);
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
       this.onError(`치아 제거 실패: ${errorMessage}`);
       return false;
     }
@@ -287,17 +321,19 @@ export class ToothRemovalSystem {
    * 내부 면들을 제거하여 새로운 geometry 생성
    */
   private removeInnerFaces(
-    vertices: Float32Array, 
-    normals: Float32Array, 
-    indices: Uint32Array, 
+    vertices: Float32Array,
+    normals: Float32Array,
+    indices: Uint32Array,
     usedFaces: Set<number>
   ): { geometry: THREE.BufferGeometry; vertexMap: Map<number, number> } {
     const totalFaces = indices.length / 3;
-    
+
     // 제거할 면들을 Set으로 변환
     const facesToRemove = new Set(usedFaces);
-    
-    console.log(`전체 면 수: ${totalFaces}, 제거할 면 수: ${facesToRemove.size}`);
+
+    console.log(
+      `전체 면 수: ${totalFaces}, 제거할 면 수: ${facesToRemove.size}`
+    );
 
     // 남길 면들의 인덱스 수집
     const remainingFaceIndices: number[] = [];
@@ -354,15 +390,15 @@ export class ToothRemovalSystem {
 
     // 데이터 유효성 검사
     if (newVertices.length !== newNormals.length) {
-      console.warn('내부 면 제거 실패: 버텍스와 노멀 배열 길이 불일치');
+      console.warn("내부 면 제거 실패: 버텍스와 노멀 배열 길이 불일치");
       return { geometry: new THREE.BufferGeometry(), vertexMap: new Map() }; // 빈 geometry 반환
     }
-    
+
     if (newIndices.length === 0) {
-      console.warn('내부 면 제거 실패: 남은 면이 없습니다');
+      console.warn("내부 면 제거 실패: 남은 면이 없습니다");
       return { geometry: new THREE.BufferGeometry(), vertexMap: new Map() }; // 빈 geometry 반환
     }
-    
+
     // 인덱스 범위 검사 (스택 오버플로우 방지를 위해 반복문 사용)
     let maxVertexIndex = 0;
     for (let i = 0; i < newIndices.length; i++) {
@@ -372,16 +408,24 @@ export class ToothRemovalSystem {
     }
     const expectedVertexCount = newVertices.length / 3;
     if (maxVertexIndex >= expectedVertexCount) {
-      console.error(`인덱스 범위 오류: 최대 인덱스 ${maxVertexIndex}, 예상 버텍스 수 ${expectedVertexCount}`);
-      console.log('인덱스 배열:', newIndices.slice(0, 20), '...');
-      console.log('버텍스 수:', expectedVertexCount);
+      console.error(
+        `인덱스 범위 오류: 최대 인덱스 ${maxVertexIndex}, 예상 버텍스 수 ${expectedVertexCount}`
+      );
+      console.log("인덱스 배열:", newIndices.slice(0, 20), "...");
+      console.log("버텍스 수:", expectedVertexCount);
       return { geometry: new THREE.BufferGeometry(), vertexMap: new Map() }; // 빈 geometry 반환
     }
-    
+
     // 새로운 BufferGeometry 생성
     const newGeometry = new THREE.BufferGeometry();
-    newGeometry.setAttribute('position', new THREE.Float32BufferAttribute(newVertices, 3));
-    newGeometry.setAttribute('normal', new THREE.Float32BufferAttribute(newNormals, 3));
+    newGeometry.setAttribute(
+      "position",
+      new THREE.Float32BufferAttribute(newVertices, 3)
+    );
+    newGeometry.setAttribute(
+      "normal",
+      new THREE.Float32BufferAttribute(newNormals, 3)
+    );
     newGeometry.setIndex(new THREE.Uint32BufferAttribute(newIndices, 1));
 
     // 노멀과 바운딩 정보 재계산
@@ -393,106 +437,171 @@ export class ToothRemovalSystem {
   }
 
   /**
-   * geometry에서 구멍 채우기
+   * geometry에서 구멍 채우기 (통합 최소 곡면 생성기 사용)
    */
-  private fillHoleInGeometry(geometry: THREE.BufferGeometry, borderVertexIndices: number[], vertexMap: Map<number, number>): THREE.BufferGeometry {
+  private fillHoleInGeometry(
+    geometry: THREE.BufferGeometry,
+    borderVertexIndices: number[],
+    vertexMap: Map<number, number>
+  ): THREE.BufferGeometry {
     const positions = geometry.attributes.position.array as Float32Array;
-    const normals = geometry.attributes.normal.array as Float32Array;
-    const indices = geometry.index ? geometry.index.array as Uint32Array : null;
-    
+    const indices = geometry.index
+      ? (geometry.index.array as Uint32Array)
+      : null;
+
     if (!indices) {
-      console.warn('구멍 채우기 실패: 인덱스가 없습니다.');
+      console.warn("구멍 채우기 실패: 인덱스가 없습니다.");
       return geometry;
     }
-    
-    // 경계 인덱스를 현재 geometry에 맞게 재매핑
-    console.log('경계 인덱스 재매핑 시작...');
-    console.log('원본 경계 인덱스 샘플:', borderVertexIndices.slice(0, 10));
-    console.log('정점 매핑 정보 샘플:', Array.from(vertexMap.entries()).slice(0, 10));
-    
-    const mappedBorderIndices: number[] = [];
-    const unmappedIndices: number[] = [];
-    
-    for (const originalIndex of borderVertexIndices) {
-      const mappedIndex = vertexMap.get(originalIndex);
-      if (mappedIndex !== undefined) {
-        mappedBorderIndices.push(mappedIndex);
-      } else {
-        unmappedIndices.push(originalIndex);
-        console.warn(`경계 인덱스 ${originalIndex}가 매핑되지 않았습니다.`);
-      }
-    }
-    
-    console.log('경계 인덱스 재매핑 결과:', {
-      originalCount: borderVertexIndices.length,
-      mappedCount: mappedBorderIndices.length,
-      unmappedCount: unmappedIndices.length,
-      unmappedIndices: unmappedIndices.slice(0, 10) // 처음 10개만 표시
+
+    const mappedBorderIndices = borderVertexIndices.map(
+      (index) => vertexMap.get(index)!
+    );
+
+    // 경계 정점들의 위치 수집
+    const boundaryPoints = mappedBorderIndices.map((index) => {
+      const x = positions[index * 3];
+      const y = positions[index * 3 + 1];
+      const z = positions[index * 3 + 2];
+      return new THREE.Vector3(x, y, z);
     });
-    
-    if (mappedBorderIndices.length === 0) {
-      console.warn('구멍 채우기 실패: 유효한 경계 인덱스가 없습니다.');
-      return geometry;
-    }
-    
-    if (mappedBorderIndices.length < borderVertexIndices.length * 0.5) {
-      console.warn(`경계 인덱스 재매핑 성공률이 낮습니다: ${mappedBorderIndices.length}/${borderVertexIndices.length} (${(mappedBorderIndices.length/borderVertexIndices.length*100).toFixed(1)}%)`);
-    }
-    
-    // 구멍 채우기 실행 (항상 삼각분할 방식 사용)
-    const filledData: any = fillHole(positions, normals, indices, mappedBorderIndices, {
-      holeFillingMethod: 'triangulate'
+
+    // 통합 최소 곡면 생성
+    const minimalSurfaceResult = new MinimalSurfaceGenerator(boundaryPoints).generate();
+
+    // 생성된 최소 곡면을 기존 geometry와 통합
+    const integratedGeometry = this.integrateMinimalSurface({
+      originalGeometry: geometry,
+      minimalSurfaceVertices: minimalSurfaceResult.vertices,
+      minimalSurfaceFaces: minimalSurfaceResult.faces,
+      borderIndices: mappedBorderIndices,
     });
-    
-    // 데이터 유효성 검사
-    if (!filledData.newVertices || !filledData.newNormals || !filledData.newIndices) {
-      console.warn('구멍 채우기 실패: 유효하지 않은 데이터');
-      return geometry;
-    }
-    
-    if (filledData.newVertices.length !== filledData.newNormals.length) {
-      console.warn('구멍 채우기 실패: 버텍스와 노멀 배열 길이 불일치');
-      return geometry;
-    }
-    
-    // 인덱스 범위 검사 (스택 오버플로우 방지를 위해 반복문 사용)
-    let maxVertexIndex = 0;
-    for (let i = 0; i < filledData.newIndices.length; i++) {
-      if (filledData.newIndices[i] > maxVertexIndex) {
-        maxVertexIndex = filledData.newIndices[i];
-      }
-    }
-    const expectedVertexCount = filledData.newVertices.length / 3;
-    if (maxVertexIndex >= expectedVertexCount) {
-      console.error(`구멍 채우기 인덱스 범위 오류: 최대 인덱스 ${maxVertexIndex}, 예상 버텍스 수 ${expectedVertexCount}`);
-      console.log('구멍 채우기 인덱스 배열:', filledData.newIndices.slice(0, 20), '...');
-      console.log('구멍 채우기 버텍스 수:', expectedVertexCount);
-      return geometry;
-    }
-    
-    // 새로운 geometry 생성
-    const newGeometry = new THREE.BufferGeometry();
-    newGeometry.setAttribute('position', new THREE.Float32BufferAttribute(filledData.newVertices, 3));
-    newGeometry.setAttribute('normal', new THREE.Float32BufferAttribute(filledData.newNormals, 3));
-    newGeometry.setIndex(new THREE.Uint32BufferAttribute(filledData.newIndices, 1));
-    
-    // 노멀과 바운딩 정보 재계산
-    newGeometry.computeVertexNormals();
-    newGeometry.computeBoundingBox();
-    newGeometry.computeBoundingSphere();
-    
-    console.log(`구멍 채우기 완료: ${filledData.newVertices.length / 3}개 정점, ${filledData.newIndices.length / 3}개 면`);
-    
-    return newGeometry;
+
+    console.log(
+      `통합 최소 곡면 구멍 채우기 완료: ${
+        integratedGeometry.attributes.position.count
+      }개 정점, ${
+        integratedGeometry.index ? integratedGeometry.index.count / 3 : 0
+      }개 면`
+    );
+
+    return integratedGeometry;
   }
 
   /**
+   * 통합 최소 곡면을 기존 geometry와 통합
+   */
+  private integrateMinimalSurface({
+    originalGeometry,
+    minimalSurfaceVertices,
+    minimalSurfaceFaces,
+    borderIndices,
+  }: {
+    originalGeometry: THREE.BufferGeometry;
+    minimalSurfaceVertices: THREE.Vector3[];
+    minimalSurfaceFaces: number[][];
+    borderIndices: number[];
+  }): THREE.BufferGeometry {
+    const originalPositions = originalGeometry.attributes.position
+      .array as Float32Array;
+    const originalNormals = originalGeometry.attributes.normal
+      .array as Float32Array;
+    const originalIndices = originalGeometry.index!.array as Uint32Array;
+
+    // winding 방향 확인
+    const windingDirection = this.checkWindingDirection(
+      borderIndices,
+      originalIndices
+    );
+
+    // 새로운 정점 배열 생성 (기존 + 최소 곡면의 내부 정점들)
+    const newVertices = [...originalPositions];
+    const newNormals = [...originalNormals];
+
+    // 최소 곡면의 내부 정점들 추가 (경계 정점 제외)
+    const borderVertexCount = borderIndices.length;
+    for (let i = borderVertexCount; i < minimalSurfaceVertices.length; i++) {
+      const vertex = minimalSurfaceVertices[i];
+      newVertices.push(vertex.x, vertex.y, vertex.z);
+      // 노멀은 나중에 계산하므로 임시로 0으로 설정
+      newNormals.push(0, 0, 0);
+    }
+
+    // 새로운 인덱스 배열 생성
+    const newIndices = [...originalIndices];
+
+    // 최소 곡면의 인덱스들 추가 (경계 정점은 기존 인덱스 사용, 내부 정점은 새 인덱스 사용)
+    const originalVertexCount = originalPositions.length / 3;
+    for (const face of minimalSurfaceFaces) {
+      for (const vertexIndex of windingDirection ? face : face.reverse()) {
+        if (vertexIndex < borderVertexCount) {
+          // 경계 정점: 기존 인덱스 사용
+          newIndices.push(borderIndices[vertexIndex]);
+        } else {
+          // 내부 정점: 새 인덱스 사용
+          const newIndex =
+            originalVertexCount + (vertexIndex - borderVertexCount);
+          newIndices.push(newIndex);
+        }
+      }
+    }
+
+    // 새로운 BufferGeometry 생성
+    const integratedGeometry = new THREE.BufferGeometry();
+    integratedGeometry.setAttribute(
+      "position",
+      new THREE.Float32BufferAttribute(newVertices, 3)
+    );
+    integratedGeometry.setAttribute(
+      "normal",
+      new THREE.Float32BufferAttribute(newNormals, 3)
+    );
+    integratedGeometry.setIndex(new THREE.Uint32BufferAttribute(newIndices, 1));
+
+    // 노멀과 바운딩 정보 재계산
+    integratedGeometry.computeVertexNormals();
+    integratedGeometry.computeBoundingBox();
+    integratedGeometry.computeBoundingSphere();
+
+    return integratedGeometry;
+  }
+
+  private checkWindingDirection(
+    borderIndices: number[],
+    originalIndices: Uint32Array
+  ): boolean {
+    const faceCount = originalIndices.length / 3;
+
+    for (let i = 0; i < faceCount; i++) {
+      const a = originalIndices[i * 3];
+      const b = originalIndices[i * 3 + 1];
+      const c = originalIndices[i * 3 + 2];
+
+      if (
+        (a === borderIndices[0] && b === borderIndices[1]) ||
+        (b === borderIndices[0] && c === borderIndices[1]) ||
+        (c === borderIndices[0] && a === borderIndices[1])
+      ) {
+        return false;
+      }
+      if (
+        (a === borderIndices[1] && b === borderIndices[0]) ||
+        (b === borderIndices[1] && c === borderIndices[0]) ||
+        (c === borderIndices[1] && a === borderIndices[0])
+      ) {
+        return true;
+      }
+    }
+
+    throw new Error("Winding direction check failed");
+  }
+  /**
    * 메시의 geometry 업데이트
    */
-  private updateMeshGeometry(newGeometry: THREE.BufferGeometry): void {
+  private updateMeshGeometry(newGeometry: THREE.BufferGeometry) {
     if (!refsAny.targetMesh) return;
 
-    console.log('치아 제거 후 geometry 업데이트 시작');
+    console.log("치아 제거 후 geometry 업데이트 시작");
 
     // 기존 geometry 정리
     const oldGeometry = refsAny.targetMesh.geometry;
@@ -506,12 +615,16 @@ export class ToothRemovalSystem {
     // BVH 트리 재계산 (스컬프팅을 위해 필수)
     if (newGeometry.computeBoundsTree) {
       newGeometry.computeBoundsTree({ setBoundingBox: false });
-      console.log('BVH 트리 재계산 완료');
+      console.log("BVH 트리 재계산 완료");
     }
 
     // 드로우 사용법 설정 (스컬프팅을 위해)
-    (newGeometry.attributes.position as THREE.BufferAttribute).setUsage(THREE.DynamicDrawUsage);
-    (newGeometry.attributes.normal as THREE.BufferAttribute).setUsage(THREE.DynamicDrawUsage);
+    (newGeometry.attributes.position as THREE.BufferAttribute).setUsage(
+      THREE.DynamicDrawUsage
+    );
+    (newGeometry.attributes.normal as THREE.BufferAttribute).setUsage(
+      THREE.DynamicDrawUsage
+    );
 
     // 메시 렌더링 설정 (스컬프팅을 위해)
     refsAny.targetMesh.frustumCulled = false;
@@ -525,46 +638,48 @@ export class ToothRemovalSystem {
     // 스컬프팅 시스템에 geometry 변경 알림
     this.notifyGeometryChange();
 
-    console.log('치아 제거 후 geometry 업데이트 완료');
+    console.log("치아 제거 후 geometry 업데이트 완료");
   }
 
   /**
    * modelManager의 상태들을 새 geometry에 맞게 업데이트
    */
-  private updateModelManagerState(newGeometry: THREE.BufferGeometry): void {
+  private updateModelManagerState(newGeometry: THREE.BufferGeometry) {
     if (activeItemIndex >= 0 && modelList[activeItemIndex]) {
       const activeItem = modelList[activeItemIndex];
-      
+
       // 현재 모델의 geometry 상태 업데이트
       if (activeItem.geometry) {
         activeItem.geometry.dispose();
       }
       activeItem.geometry = newGeometry.clone();
-      
-      console.log('modelManager 상태 동기화 완료');
+
+      console.log("modelManager 상태 동기화 완료");
     }
   }
 
   /**
    * 스컬프팅 시스템에 geometry 변경 알림
    */
-  private notifyGeometryChange(): void {
+  private notifyGeometryChange() {
     // 전역 이벤트 발생으로 다른 시스템들에게 geometry 변경 알림
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('geometryChanged', {
-        detail: {
-          targetMesh: refsAny.targetMesh,
-          source: 'tooth-removal'
-        }
-      }));
-      console.log('geometry 변경 이벤트 발생');
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(
+        new CustomEvent("geometryChanged", {
+          detail: {
+            targetMesh: refsAny.targetMesh,
+            source: "tooth-removal",
+          },
+        })
+      );
+      console.log("geometry 변경 이벤트 발생");
     }
   }
 
   /**
    * BVH Helper 업데이트 (스컬프팅 시각화용)
    */
-  private updateBVHHelper(): void {
+  private updateBVHHelper() {
     if (refsAny.bvhHelper) {
       // 기존 helper 제거
       if (refsAny.bvhHelper.parent) {
@@ -576,21 +691,22 @@ export class ToothRemovalSystem {
     // 새 BVH helper 생성
     if (refsAny.targetMesh && refsAny.scene) {
       try {
-        const depth = (refsAny.params && refsAny.params.depth) ? refsAny.params.depth : 10;
+        const depth =
+          refsAny.params && refsAny.params.depth ? refsAny.params.depth : 10;
         const newHelper = new MeshBVHHelper(refsAny.targetMesh, depth);
-        
+
         // helper 표시 여부는 기존 설정 따름 (기본값: false)
         const displayHelper = refsAny.params && refsAny.params.displayHelper;
         if (displayHelper) {
           refsAny.scene.add(newHelper);
         }
-        
+
         newHelper.update();
         refsAny.bvhHelper = newHelper;
-        
-        console.log('BVH Helper 업데이트 완료');
+
+        console.log("BVH Helper 업데이트 완료");
       } catch (error) {
-        console.warn('BVH Helper 업데이트 중 오류:', error);
+        console.warn("BVH Helper 업데이트 중 오류:", error);
       }
     }
   }
@@ -600,13 +716,13 @@ export class ToothRemovalSystem {
    */
   public restoreOriginal(): boolean {
     if (!this.geometryBackup || !refsAny.targetMesh) {
-      const message = '원본 geometry 백업이 없습니다.';
+      const message = "원본 geometry 백업이 없습니다.";
       console.warn(message);
       this.onError(message);
       return false;
     }
 
-    this.onUpdateMessage('원본 상태로 되돌리는 중...');
+    this.onUpdateMessage("원본 상태로 되돌리는 중...");
 
     try {
       // 현재 geometry 정리
@@ -625,8 +741,12 @@ export class ToothRemovalSystem {
       }
 
       // 드로우 사용법 설정
-      (restoredGeometry.attributes.position as THREE.BufferAttribute).setUsage(THREE.DynamicDrawUsage);
-      (restoredGeometry.attributes.normal as THREE.BufferAttribute).setUsage(THREE.DynamicDrawUsage);
+      (restoredGeometry.attributes.position as THREE.BufferAttribute).setUsage(
+        THREE.DynamicDrawUsage
+      );
+      (restoredGeometry.attributes.normal as THREE.BufferAttribute).setUsage(
+        THREE.DynamicDrawUsage
+      );
 
       // 메시 렌더링 설정 (스컬프팅을 위해)
       refsAny.targetMesh.frustumCulled = false;
@@ -643,13 +763,15 @@ export class ToothRemovalSystem {
       // 제거 상태만 리셋 (lasso 선택은 유지)
       this.isRemovalComplete = false;
 
-      this.onUpdateMessage('메쉬가 복원되었습니다. 다시 치아 제거를 할 수 있습니다.');
-      console.log('원본 상태 복원 완료');
+      this.onUpdateMessage(
+        "메쉬가 복원되었습니다. 다시 치아 제거를 할 수 있습니다."
+      );
+      console.log("원본 상태 복원 완료");
       return true;
-
     } catch (error) {
-      console.error('원본 복원 중 오류:', error);
-      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error("원본 복원 중 오류:", error);
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
       this.onError(`원본 복원 실패: ${errorMessage}`);
       return false;
     }
@@ -660,13 +782,13 @@ export class ToothRemovalSystem {
    */
   public restoreToCompleteOriginal(): boolean {
     if (!this.originalGeometry || !refsAny.targetMesh) {
-      const message = '완전한 원본 geometry가 없습니다.';
+      const message = "완전한 원본 geometry가 없습니다.";
       console.warn(message);
       if (this.onError) this.onError(message);
       return false;
     }
 
-    this.onUpdateMessage('완전 원본 상태로 되돌리는 중...');
+    this.onUpdateMessage("완전 원본 상태로 되돌리는 중...");
 
     try {
       // 현재 geometry 정리
@@ -685,17 +807,27 @@ export class ToothRemovalSystem {
       }
 
       // 드로우 사용법 설정
-      (restoredGeometry.attributes.position as THREE.BufferAttribute).setUsage(THREE.DynamicDrawUsage);
-      (restoredGeometry.attributes.normal as THREE.BufferAttribute).setUsage(THREE.DynamicDrawUsage);
+      (restoredGeometry.attributes.position as THREE.BufferAttribute).setUsage(
+        THREE.DynamicDrawUsage
+      );
+      (restoredGeometry.attributes.normal as THREE.BufferAttribute).setUsage(
+        THREE.DynamicDrawUsage
+      );
 
       // 메시 렌더링 설정 (스컬프팅을 위해)
       refsAny.targetMesh.frustumCulled = false;
 
       // 백업들을 원본으로 재설정
-      if (this.geometryBackup && this.geometryBackup !== this.originalGeometry) {
+      if (
+        this.geometryBackup &&
+        this.geometryBackup !== this.originalGeometry
+      ) {
         this.geometryBackup.dispose();
       }
-      if (this.lastConfirmedGeometry && this.lastConfirmedGeometry !== this.originalGeometry) {
+      if (
+        this.lastConfirmedGeometry &&
+        this.lastConfirmedGeometry !== this.originalGeometry
+      ) {
         this.lastConfirmedGeometry.dispose();
       }
       this.geometryBackup = this.originalGeometry.clone();
@@ -715,13 +847,13 @@ export class ToothRemovalSystem {
       this.isRemovalComplete = false;
       this.selectedPoints = [];
 
-      this.onUpdateMessage('완전 원본 상태로 복원되었습니다.');
-      console.log('완전 원본 상태 복원 완료');
+      this.onUpdateMessage("완전 원본 상태로 복원되었습니다.");
+      console.log("완전 원본 상태 복원 완료");
       return true;
-
     } catch (error) {
-      console.error('완전 원본 복원 중 오류:', error);
-      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error("완전 원본 복원 중 오류:", error);
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
       if (this.onError) this.onError(`완전 원본 복원 실패: ${errorMessage}`);
       return false;
     }
@@ -730,7 +862,7 @@ export class ToothRemovalSystem {
   /**
    * 선택 상태만 초기화 (geometry는 그대로)
    */
-  public reset(): void {
+  public reset() {
     // 올가미 선택 완전 정리
     if (this.lassoSelector) {
       this.lassoSelector.cleanup();
@@ -745,8 +877,8 @@ export class ToothRemovalSystem {
     this.isRemovalComplete = false;
     this.selectedPoints = [];
 
-    this.onUpdateMessage('치아 제거 시스템이 초기화되었습니다.');
-    console.log('치아 제거 시스템 리셋 완료');
+    this.onUpdateMessage("치아 제거 시스템이 초기화되었습니다.");
+    console.log("치아 제거 시스템 리셋 완료");
   }
 
   /**
@@ -754,45 +886,55 @@ export class ToothRemovalSystem {
    */
   public finalizeCurrent(): boolean {
     if (!this.isRemovalComplete) {
-      const message = '먼저 치아 제거를 완료해주세요.';
+      const message = "먼저 치아 제거를 완료해주세요.";
       console.warn(message);
       if (this.onError) this.onError(message);
       return false;
     }
 
-    console.log('현재 치아 제거 확정 및 다음 치아 선택 시작');
+    console.log("현재 치아 제거 확정 및 다음 치아 선택 시작");
 
     // 현재 제거 상태를 확정하고 다음 작업을 위한 기준점으로 설정
     if (refsAny.targetMesh && refsAny.targetMesh.geometry) {
       // 이전 백업들 정리
-      if (this.geometryBackup && this.geometryBackup !== this.originalGeometry) {
+      if (
+        this.geometryBackup &&
+        this.geometryBackup !== this.originalGeometry
+      ) {
         this.geometryBackup.dispose();
       }
-      if (this.lastConfirmedGeometry && this.lastConfirmedGeometry !== this.originalGeometry) {
+      if (
+        this.lastConfirmedGeometry &&
+        this.lastConfirmedGeometry !== this.originalGeometry
+      ) {
         this.lastConfirmedGeometry.dispose();
       }
-      
+
       // 현재 상태를 새로운 확정 상태로 저장
       this.lastConfirmedGeometry = refsAny.targetMesh.geometry.clone();
-      
+
       // 다음 작업을 위한 새로운 기준점으로 현재 geometry 설정
       this.geometryBackup = refsAny.targetMesh.geometry.clone();
-      
+
       // BVH 트리 재계산 (현재 geometry에 대해)
       if (refsAny.targetMesh.geometry.computeBoundsTree) {
-        refsAny.targetMesh.geometry.computeBoundsTree({ setBoundingBox: false });
+        refsAny.targetMesh.geometry.computeBoundsTree({
+          setBoundingBox: false,
+        });
       }
-      
+
       // model manager 상태도 업데이트
       this.updateModelManagerState(refsAny.targetMesh.geometry);
-      
+
       // BVH helper 업데이트
       this.updateBVHHelper();
-      
+
       // 다른 시스템에 geometry 변경 알림
       this.notifyGeometryChange();
-      
-      console.log('현재 치아 제거 상태가 확정되고 다음 작업을 위한 기준점으로 설정됨');
+
+      console.log(
+        "현재 치아 제거 상태가 확정되고 다음 작업을 위한 기준점으로 설정됨"
+      );
     }
 
     // 새로운 선택을 위해 올가미 선택 초기화
@@ -812,17 +954,19 @@ export class ToothRemovalSystem {
     // 새로운 선택 시작
     this.startSelection();
 
-    this.onUpdateMessage('다음 치아를 선택하세요. Alt 키를 누른 상태에서 제거할 치아 영역을 선택하세요.');
-    console.log('다음 치아 제거 모드 시작');
+    this.onUpdateMessage(
+      "다음 치아를 선택하세요. Alt 키를 누른 상태에서 제거할 치아 영역을 선택하세요."
+    );
+    console.log("다음 치아 제거 모드 시작");
     return true;
   }
 
   /**
    * 발치 완료 - lasso 마커와 선들 완전 제거
    */
-  public completeToothRemoval(): void {
-    console.log('발치 완료 - lasso 정리 시작');
-    
+  public completeToothRemoval() {
+    console.log("발치 완료 - lasso 정리 시작");
+
     // 올가미 선택 완전 정리 (마커, 선 모두 제거)
     if (this.lassoSelector) {
       this.lassoSelector.cleanup();
@@ -831,19 +975,21 @@ export class ToothRemovalSystem {
 
     // 시스템 비활성화
     this.isActive = false;
-    
+
     // 초기화된 경우에만 메시지 업데이트
-    if (this.onUpdateMessage && typeof this.onUpdateMessage === 'function') {
-      this.onUpdateMessage('발치가 완료되었습니다. 이제 자유 수정을 할 수 있습니다.');
+    if (this.onUpdateMessage && typeof this.onUpdateMessage === "function") {
+      this.onUpdateMessage(
+        "발치가 완료되었습니다. 이제 자유 수정을 할 수 있습니다."
+      );
     }
-    
-    console.log('발치 완료 - lasso 정리 완료');
+
+    console.log("발치 완료 - lasso 정리 완료");
   }
 
   /**
    * 시스템 완전 정리
    */
-  public cleanup(): void {
+  public cleanup() {
     // 올가미 선택 정리
     if (this.lassoSelector) {
       this.lassoSelector.cleanup();
@@ -855,8 +1001,11 @@ export class ToothRemovalSystem {
       this.geometryBackup.dispose();
     }
     this.geometryBackup = null;
-    
-    if (this.lastConfirmedGeometry && this.lastConfirmedGeometry !== this.originalGeometry) {
+
+    if (
+      this.lastConfirmedGeometry &&
+      this.lastConfirmedGeometry !== this.originalGeometry
+    ) {
       this.lastConfirmedGeometry.dispose();
     }
     this.lastConfirmedGeometry = null;
@@ -868,9 +1017,8 @@ export class ToothRemovalSystem {
     this.isRemovalComplete = false;
     this.selectedPoints = [];
 
-    console.log('치아 제거 시스템 정리 완료');
+    console.log("치아 제거 시스템 정리 완료");
   }
-
 
   /**
    * 현재 상태 정보 반환
@@ -881,7 +1029,7 @@ export class ToothRemovalSystem {
       isSelectionComplete: this.isSelectionComplete,
       isRemovalComplete: this.isRemovalComplete,
       selectedPointCount: this.selectedPoints.length,
-      hasBackup: !!this.geometryBackup
+      hasBackup: !!this.geometryBackup,
     };
   }
 }
