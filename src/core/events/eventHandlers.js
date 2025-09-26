@@ -1,7 +1,7 @@
 // src/eventHandlers.js
 
 import * as THREE from 'three';
-import { pushUndoState, refs, redoStack, undo, redo } from '../../models/modelManager.js';
+import { pushUndoState, refs, redoStack, undo, redo, toggleWireframeMode } from '../../models/modelManager.js';
 import { memos, openEditMemoModal, openNewMemoModal } from '../../features/memo/memo.js';
 import { isLibraryStep, isFlipperStep, canSculpt } from '../../workflow/processSteps.js';
 
@@ -25,6 +25,12 @@ export function onKeyDown(e){
       // Undo
       undo();
     }
+    e.preventDefault();
+  }
+  
+  // Wireframe 토글 (W 키)
+  if (e.key.toLowerCase() === 'w' && !primaryKeyPressed && !e.shiftKey && !e.altKey) {
+    toggleWireframeMode();
     e.preventDefault();
   }
 }
