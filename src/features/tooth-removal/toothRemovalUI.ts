@@ -3,6 +3,7 @@
 
 import * as THREE from 'three';
 import { toothRemovalSystem } from './toothRemovalCore.js';
+import { DrawingPointData } from '../../utils/lassoSelection.js';
 
 /**
  * 치아 제거 UI 초기화
@@ -120,7 +121,7 @@ function onToothPointProgress(pointCount: number): void {
 /**
  * 치아 선택 완료 콜백
  */
-function onToothSelectionComplete(points: THREE.Vector3[]): void {
+function onToothSelectionComplete(points: DrawingPointData[]): void {
   console.log('치아 선택 완료:', points.length, '개 점');
   updateUIState();
 }
@@ -147,13 +148,6 @@ function onToothRemovalError(error: string): void {
 function updateUIState(): void {
   try {
     const state = toothRemovalSystem.getState();
-    console.log('치아 제거 UI 상태:', {
-      isActive: state.isActive,
-      isSelectionComplete: state.isSelectionComplete,
-      isRemovalComplete: state.isRemovalComplete,
-      selectedPointCount: state.selectedPointCount,
-      hasBackup: state.hasBackup
-    });
     
     // 치아 제거 버튼 - 영역 선택 완료 시 활성화
     const removeBtn = document.getElementById('btn-remove-tooth') as HTMLButtonElement | null;

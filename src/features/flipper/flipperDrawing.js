@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { refs } from '../../models/modelManager.js'
 import { generateFlipper } from './flipperGeometry.js';
-import { LassoSelector } from '../../utils/lassoSelection.js';
+import { LassoSelector } from '../../utils/lassoSelection.ts';
 
 // 플리퍼 상태 변수
 let flipperThickness = 1.0; // 기본 두께 (mm)
