@@ -15,7 +15,7 @@ import {
 } from './core/events/eventHandlers.js';
 
 // 모델 드래그&드롭 이벤트
-import { onDropSTL, onDragOver, importModel } from './models/modelManager.js';
+import { onDropSTL, onDragOver, importModel, toggleWireframeMode } from './models/modelManager.js';
 
 // 메모 모달 관련
 import { onMemoNewOkBtn, onMemoEditUpdateBtn, onMemoEditDeleteBtn, makeDraggable } from './features/memo/memo.js';
@@ -170,6 +170,9 @@ function main() {
     completeFlipper,
     STEPS 
   };
+  
+  // Wireframe 토글 함수를 전역으로 노출
+  window.toggleWireframe = toggleWireframeMode;
 }
 
 /**
