@@ -242,7 +242,6 @@ export class MeshCutter {
         point.position.z
       );
       this.newNormals.push(point.normal.x, point.normal.y, point.normal.z);
-      console.log("newVertexIndex", newVertexIndex);
       this.borderVertexIndices.push(newVertexIndex);
 
       // vertexFaceMap 확장
