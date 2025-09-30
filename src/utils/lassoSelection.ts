@@ -260,8 +260,8 @@ export class LassoSelector {
     
     // 트리거 키 (기본: Alt)
     if (event.key === 'Alt' || event.altKey) {
-      // 그리기 모드가 닫히지 않았다면 커서 변경
-      if (this.drawingPoints.length === 0 || this.curveLines.length < this.drawingPoints.length) {
+      // 닫힌 영역이 아니고 그리기 모드가 닫히지 않았다면 커서 변경
+      if (!this.lineClosed && (this.drawingPoints.length === 0 || this.curveLines.length < this.drawingPoints.length)) {
         this.renderer.domElement.style.cursor = 'crosshair';
         
         // 카메라 컨트롤 비활성화
@@ -303,18 +303,20 @@ export class LassoSelector {
   private onPointerDown(event: PointerEvent): void {
     if (!this.isActive) return;
     
-    // 영역이 이미 닫혔다면 점 이동 처리
-    if (this.lineClosed && this.hoveredPointIndex !== -1) {
-      event.preventDefault();
-      
-      // 카메라 컨트롤 비활성화
-      if (this.controls) {
-        this.controls.enabled = false;
+    // 영역이 이미 닫혔다면 점 이동 처리만 가능
+    if (this.lineClosed) {
+      if (this.hoveredPointIndex !== -1) {
+        event.preventDefault();
+        
+        // 카메라 컨트롤 비활성화
+        if (this.controls) {
+          this.controls.enabled = false;
+        }
+        
+        this.selectedPointIndex = this.hoveredPointIndex;
+        this.isDraggingPoint = true;
       }
-      
-      this.selectedPointIndex = this.hoveredPointIndex;
-      this.isDraggingPoint = true;
-      return;
+      return; // 닫힌 영역에서는 점 추가 불가
     }
     
     // Alt 키가 눌려 있지 않다면 무시
@@ -405,8 +407,8 @@ export class LassoSelector {
     // 호버링 점 확인
     this.updateHoveredPoint(raycaster, event);
     
-    // 그리기 모드에서 드래그로 점 추가
-    if (this.isDrawing && event.altKey) {
+    // 그리기 모드에서 드래그로 점 추가 (닫힌 영역이 아닐 때만)
+    if (this.isDrawing && event.altKey && !this.lineClosed) {
       // 마우스가 충분히 이동했을 때만 새 점 추가
       if (mouse.distanceTo(this.lastMousePosition) > 0.01) {
         this.lastMousePosition.copy(mouse);
@@ -449,21 +451,28 @@ export class LassoSelector {
     
     // 호버링 상태 변경 시 커서 스타일 업데이트
     if (prevHoveredIndex !== this.hoveredPointIndex) {
-      if (this.hoveredPointIndex === 0 && this.drawingPoints.length > 2 && !this.lineClosed) {
-        // 첫 번째 점에 호버링 - 영역 닫기 가능
-        this.renderer.domElement.style.cursor = 'pointer';
-      } else if (this.hoveredPointIndex !== -1 && this.lineClosed) {
-        // 점에 호버링 - 이동 가능
-        this.renderer.domElement.style.cursor = 'move';
-      } else if (this.isDrawing) {
-        // 그리기 중
-        this.renderer.domElement.style.cursor = 'crosshair';
-      } else if (event.altKey && !this.lineClosed) {
-        // Alt 키 누른 상태에서 그리기 가능
-        this.renderer.domElement.style.cursor = 'crosshair';
+      if (this.lineClosed) {
+        // 닫힌 영역에서는 점 이동만 가능
+        if (this.hoveredPointIndex !== -1) {
+          this.renderer.domElement.style.cursor = 'move';
+        } else {
+          this.renderer.domElement.style.cursor = 'auto';
+        }
       } else {
-        // 기본 상태
-        this.renderer.domElement.style.cursor = 'auto';
+        // 열린 영역에서는 그리기 가능
+        if (this.hoveredPointIndex === 0 && this.drawingPoints.length > 2) {
+          // 첫 번째 점에 호버링 - 영역 닫기 가능
+          this.renderer.domElement.style.cursor = 'pointer';
+        } else if (this.isDrawing) {
+          // 그리기 중
+          this.renderer.domElement.style.cursor = 'crosshair';
+        } else if (event.altKey) {
+          // Alt 키 누른 상태에서 그리기 가능
+          this.renderer.domElement.style.cursor = 'crosshair';
+        } else {
+          // 기본 상태
+          this.renderer.domElement.style.cursor = 'auto';
+        }
       }
     }
   }
