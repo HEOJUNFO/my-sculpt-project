@@ -47,11 +47,7 @@ export class MinimalSurfaceGenerator {
   public generate() {
     this.createInitialTriangleFan();
     this.smoothAndSubdivide();
-    return {
-      vertices: this.vertices,
-      fixedVerticeCount: this.fixedVerticeCount,
-      faces: Array.from(this.faces.values()),
-    };
+    return this.createCompactedResult();
   }
 
   private createInitialTriangleFan() {
@@ -465,5 +461,24 @@ export class MinimalSurfaceGenerator {
     }
 
     edgeQueue.sort((a, b) => a.length - b.length);
+  }
+
+  private createCompactedResult() {
+    const newVertices = [];
+    const vertexMap = new Map<number, number>();
+    for (let i = 0; i < this.vertices.length; i++) {
+      if (!this.deletedVertices.has(i)) {
+        newVertices.push(this.vertices[i]);
+        vertexMap.set(i, newVertices.length - 1);
+      }
+    }
+
+    return {
+      vertices: newVertices,
+      fixedVerticeCount: this.fixedVerticeCount,
+      faces: Array.from(this.faces.values()).map((face) =>
+        face.map((v) => vertexMap.get(v)!)
+      ),
+    };
   }
 }
