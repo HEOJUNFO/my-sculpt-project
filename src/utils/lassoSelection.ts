@@ -9,7 +9,6 @@ export type LassoSelectorOptions = {
   markerColors?: {
     first: number;
     regular: number;
-    preview: number;
   };
   curveQuality?: number;
   minDistanceBetweenPoints?: number;
@@ -54,7 +53,6 @@ export class LassoSelector {
     markerColors: {
       first: number;
       regular: number;
-      preview: number;
     };
     markerSizes: {
       first: number;
@@ -102,7 +100,6 @@ export class LassoSelector {
       markerColors: {
         first: options.markerColors?.first || 0x00ff00,    // 첫 점: 초록
         regular: options.markerColors?.regular || 0xff0000, // 일반 점: 빨강
-        preview: options.markerColors?.preview || 0xffa500  // 미리보기: 주황
       },
       markerSizes: {
         first: 0.005,
