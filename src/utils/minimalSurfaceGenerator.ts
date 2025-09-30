@@ -37,9 +37,9 @@ export class MinimalSurfaceGenerator {
     this.deletedVertices = new Set();
     this.config = {
       edgeLengthMin: 0.005,
-      edgeLengthMax: 0.01,
-      stepCount: 10,
-      smoothIterations: 30,
+      edgeLengthMax: 0.015,
+      stepCount: 8,
+      smoothIterations: 10,
       ...config,
     };
   }
@@ -87,13 +87,19 @@ export class MinimalSurfaceGenerator {
     this.adjacencyMap.set(centerIndex, centerNeighbors);
   }
 
-  private addFace(face: [number, number, number]): void {
+  /** 면을 추가하고, 이미 존재하는 면인지 여부를 반환합니다. */
+  private addFace(face: [number, number, number]): { exists: boolean } {
     // 키는 오름차순으로 정렬된 인덱스들
     const sortedIndices = [...face].sort((a, b) => a - b);
     const key = sortedIndices.join("-");
 
+    if (this.faces.has(key)) {
+      return { exists: true };
+    }
+
     // 값은 원래 방향 유지
     this.faces.set(key, face);
+    return { exists: false };
   }
 
   private removeFace(face: [number, number, number]): void {
@@ -107,17 +113,16 @@ export class MinimalSurfaceGenerator {
   }
 
   private smoothAndSubdivide() {
-    try{
+    try {
       for (let i = 0; i < this.config.stepCount; i++) {
-      this.performAdaptiveSubdivision(this.config.edgeLengthMin);
-      this.verifyAdjacencyAndDeletedVertices();
-      this.performLaplacianSmoothing(this.config.smoothIterations);
-      this.mergeShortEdges(this.config.edgeLengthMax);
-      this.verifyAdjacencyAndDeletedVertices();
-      this.performLaplacianSmoothing(this.config.smoothIterations);
-    }
+        this.performAdaptiveSubdivision(this.config.edgeLengthMin);
+        this.verifyAdjacencyAndDeletedVertices();
+        this.performLaplacianSmoothing(this.config.smoothIterations);
+        this.mergeShortEdges(this.config.edgeLengthMax);
+        this.verifyAdjacencyAndDeletedVertices();
+        this.performLaplacianSmoothing(this.config.smoothIterations);
+      }
     } catch (error) {
-      console.log(this)
       throw error;
     }
   }
@@ -128,12 +133,18 @@ export class MinimalSurfaceGenerator {
     const deletedVerticesSet = new Set<number>(this.deletedVertices);
     for (const vertexIndex of adjacencySet) {
       if (deletedVerticesSet.has(vertexIndex)) {
-        throw new Error("verifyAdjacencyAndDeletedVertices: 유효하지 않은 인접 리스트" + vertexIndex);
+        throw new Error(
+          "verifyAdjacencyAndDeletedVertices: 유효하지 않은 인접 리스트" +
+            vertexIndex
+        );
       }
     }
     for (const vertexIndex of deletedVerticesSet) {
       if (adjacencySet.has(vertexIndex)) {
-        throw new Error("verifyAdjacencyAndDeletedVertices: 유효하지 않은 인접 리스트" + vertexIndex);
+        throw new Error(
+          "verifyAdjacencyAndDeletedVertices: 유효하지 않은 인접 리스트" +
+            vertexIndex
+        );
       }
     }
   }
@@ -145,7 +156,7 @@ export class MinimalSurfaceGenerator {
         if (index < this.fixedVerticeCount || this.deletedVertices.has(index))
           return vertex;
         const neighbors = this.adjacencyMap.get(index);
-        if (!neighbors || neighbors.size === 0){
+        if (!neighbors || neighbors.size === 0) {
           console.error("performLaplacianSmoothing: 유효하지 않은 정점", {
             index,
             neighbors,
@@ -219,9 +230,13 @@ export class MinimalSurfaceGenerator {
     const [faceA, faceB] = windingDirection
       ? sharedFaces
       : sharedFaces.reverse();
-    
-    if(!faceA || !faceB) {
-      console.error("perform2To4Subdivision: 유효하지 않은 면", {v1, v2, sharedFaces});
+
+    if (!faceA || !faceB) {
+      console.error("perform2To4Subdivision: 유효하지 않은 면", {
+        v1,
+        v2,
+        sharedFaces,
+      });
       return;
     }
 
@@ -236,10 +251,7 @@ export class MinimalSurfaceGenerator {
     // faceB에서 v1, v2가 아닌 정점 찾기
     const b = faceB.find((v) => v !== v1 && v !== v2)!;
 
-    console.log("subdivide", { v1, v2, a, b, c });
-
     // 4개의 새로운 면 생성
-    // TODO: 방향 고려
     this.addFace([v1, c, a]);
     this.addFace([c, v2, a]);
     this.addFace([v2, c, b]);
@@ -359,11 +371,14 @@ export class MinimalSurfaceGenerator {
    * v1을 v2로 병합하고, v1을 삭제된 정점으로 표시합니다.
    */
   private mergeEdge(v1: number, v2: number, edgeQueue: EdgeInfo[]) {
-    console.log("mergeEdge", { v1, v2 });
-    // 공유하는 면들 제거, v1을 v2로 변경
-    if (v1 === v2) {
+    if (
+      v1 === v2 ||
+      this.deletedVertices.has(v1) ||
+      this.deletedVertices.has(v2)
+    )
       return;
-    }
+
+    // 공유하는 면들 제거, v1을 v2로 변경
     const facesToRemove = [];
     const facesToReAdd = [];
     for (const face of this.faces.values()) {
@@ -380,14 +395,21 @@ export class MinimalSurfaceGenerator {
     for (const face of facesToRemove) {
       this.removeFace(face);
     }
+
+    // 중심에 a가 있고, bcd가 a를 둘러싸며 fully connected인 상황을 생각.
+    // 면은 abc, abd, acd 3개가 있음 여기서 mergeEdge(b, c)를 하게 되는 경우 abd가 acd로 바뀌게 되는데, acd는 이미 존재함.
+    // 이것이 duplicatedFaces 상황이고, 남는 면은 acd 한개임. 원래 abc만 삭제되는게 맞았음. 이는 이제 a를 삭제해야 하는 상황이 됨. a는 adjacent vertex가 2개 뿐임.
+    const duplicateFaces = [];
     for (const face of facesToReAdd) {
-      this.addFace(face);
+      const { exists } = this.addFace(face);
+      if (exists) {
+        duplicateFaces.push(face);
+      }
     }
 
     // v1의 모든 인접 정점들을 v2에 연결
     const v1Neighbors = this.adjacencyMap.get(v1)!;
     const v2Neighbors = this.adjacencyMap.get(v2)!;
-    console.log("v1Neighbors", [...v1Neighbors]);
     for (const neighbor of v1Neighbors) {
       if (neighbor !== v2) {
         // v1의 인접 정점들을 v2에 연결
@@ -415,17 +437,33 @@ export class MinimalSurfaceGenerator {
       }
     }
 
-    edgeQueue.sort((a, b) => a.length - b.length);
-    this.validateEdgeQueueVertexRemoved(edgeQueue, v1);
-  }
+    // duplicatedFaces를 제거
+    const vertexRemoveCandidates = new Set<number>(duplicateFaces.flat());
+    while (vertexRemoveCandidates.size > 0) {
+      const vertexToRemove = Array.from(vertexRemoveCandidates).find(
+        (vertex) => this.adjacencyMap.get(vertex)!.size === 2
+      );
+      if (vertexToRemove) {
+        this.deletedVertices.add(vertexToRemove);
 
-  validateEdgeQueueVertexRemoved(edgeQueue: EdgeInfo[], removedVertex: number) {
-    for (const edge of edgeQueue) {
-      if (edge.v1 === removedVertex || edge.v2 === removedVertex) {
-        throw new Error(
-          `validateEdgeQueueVertexRemoved: 유효하지 않은 엣지 ${removedVertex} -> ${edge.v1} or ${edge.v2}`
-        );
-      }
+        // inbound 제거
+        this.adjacencyMap.get(vertexToRemove)!.forEach((neighbor) => {
+          this.adjacencyMap.get(neighbor)!.delete(vertexToRemove);
+        });
+
+        // outbound 제거
+        this.adjacencyMap.delete(vertexToRemove);
+
+        // candidate에서 제거
+        vertexRemoveCandidates.delete(vertexToRemove);
+      } else break;
     }
+
+    // 결국 duplicateFaces는 모두 삭제됨.
+    for (const face of duplicateFaces) {
+      this.removeFace(face);
+    }
+
+    edgeQueue.sort((a, b) => a.length - b.length);
   }
 }
