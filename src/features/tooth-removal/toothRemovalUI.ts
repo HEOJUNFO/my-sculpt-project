@@ -93,10 +93,6 @@ export function resetToothSelection(): void {
   
   // 완전 원본 geometry로 복원 (모든 치아 제거 취소)
   toothRemovalSystem.restoreToCompleteOriginal();
-  
-  // 그 다음 모든 상태 초기화
-  toothRemovalSystem.reset();
-  toothRemovalSystem.startSelection();
   updateUIState();
 }
 
@@ -175,7 +171,7 @@ function updateUIState(): void {
     const resetBtn = document.getElementById('btn-reset-tooth-selection') as HTMLButtonElement | null;
     if (resetBtn) {
       // 선택된 점이 있거나, 선택 완료, 제거 완료 상태면 활성화
-      const canReset = state.isActive && (state.selectedPointCount > 0 || state.isSelectionComplete || state.isRemovalComplete);
+      const canReset = state.isActive && (state.isSelectionComplete || state.isRemovalComplete);
       resetBtn.disabled = !canReset;
       if (canReset) {
         resetBtn.classList.add('active');
