@@ -36,8 +36,8 @@ export class MinimalSurfaceGenerator {
     this.adjacencyMap = new Map();
     this.deletedVertices = new Set();
     this.config = {
-      edgeLengthMin: 0.005,
-      edgeLengthMax: 0.015,
+      edgeLengthMin: 0.002,
+      edgeLengthMax: 0.008,
       stepCount: 8,
       smoothIterations: 10,
       ...config,
