@@ -939,7 +939,7 @@ export class LassoSelector {
    * 현재 선택된 점들 반환
    */
   getSelectedPoints(): DrawingPointData[] {
-    return this.drawingPoints.slice(); // 복사본 반환
+    return [...this.drawingPoints];
   }
   
   /**

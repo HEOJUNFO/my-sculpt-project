@@ -28,7 +28,6 @@ type ToothRemovalState = {
   isActive: boolean;
   isSelectionComplete: boolean;
   isRemovalComplete: boolean;
-  selectedPointCount: number;
   hasBackup: boolean;
 };
 
@@ -113,10 +112,9 @@ export class ToothRemovalSystem {
         this.selectedPoints = Array(pointCount).fill(
           null
         ) as DrawingPointData[]; // 임시로 개수만 맞춤
+        
         // UI 업데이트를 위한 콜백 호출
-        if (this.onPointProgress) {
-          this.onPointProgress(pointCount);
-        }
+        this.onPointProgress?.(pointCount);
       },
       onComplete: (points: DrawingPointData[]) => {
         this.onLassoComplete(points);
@@ -164,13 +162,6 @@ export class ToothRemovalSystem {
   }
 
   /**
-   * 치아 선택 중지
-   */
-  public stopSelection() {
-    this.lassoSelector?.stopSelection();
-  }
-
-  /**
    * 올가미 선택 완료 콜백
    */
   private onLassoComplete(points: DrawingPointData[]) {
@@ -178,9 +169,6 @@ export class ToothRemovalSystem {
 
     this.selectedPoints = points;
     this.isSelectionComplete = true;
-
-    // 선택 중지
-    this.stopSelection();
 
     // 완료 콜백 호출
     this.onSelectionComplete(points);
@@ -202,6 +190,8 @@ export class ToothRemovalSystem {
 
     this.onUpdateMessage("치아를 제거하는 중...");
 
+    this.lassoSelector?.stopSelection();
+
     try {
       // 1. MeshCutter를 이용한 knife cut 수행 (현재 geometry 사용)
       console.log("1단계: Knife cut 수행");
@@ -214,7 +204,7 @@ export class ToothRemovalSystem {
       });
       const cuttingData: any = MeshCutter.performFlipperCutting(
         currentGeometry,
-        this.selectedPoints
+        this.lassoSelector!.getSelectedPoints()
       );
       const {
         newVertices,
@@ -680,18 +670,12 @@ export class ToothRemovalSystem {
    * 백업 상태로 되돌리기 (lasso 선택은 유지)
    */
   public restoreOriginal(): boolean {
-    if (!this.backupGeometry || !refsAny.targetMesh) {
-      const message = "백업 geometry가 없습니다.";
-      console.warn(message);
-      this.onError(message);
-      return false;
-    }
-
     this.onUpdateMessage("백업 상태로 되돌리는 중...");
+
 
     try {
       // 백업 geometry 복원
-      const restoredGeometry = this.backupGeometry.clone();
+      const restoredGeometry = this.backupGeometry!.clone();
       this.updateMeshGeometry(restoredGeometry);
 
       // 제거 상태만 리셋 (lasso 선택은 유지)
@@ -700,6 +684,7 @@ export class ToothRemovalSystem {
       this.onUpdateMessage(
         "메쉬가 복원되었습니다. 다시 치아 제거를 할 수 있습니다."
       );
+      this.lassoSelector?.startSelection();
       console.log("백업 상태 복원 완료");
       return true;
     } catch (error) {
@@ -715,24 +700,18 @@ export class ToothRemovalSystem {
    * 완전 초기화 (모든 치아 제거 취소)
    */
   public restoreToCompleteOriginal(): boolean {
-    if (!this.backupGeometry || !refsAny.targetMesh) {
-      const message = "백업 geometry가 없습니다.";
-      console.warn(message);
-      if (this.onError) this.onError(message);
-      return false;
-    }
-
     this.onUpdateMessage("완전 초기화 중...");
 
     try {
       // 백업 geometry 복원
-      const restoredGeometry = this.backupGeometry.clone();
+      const restoredGeometry = this.backupGeometry!.clone();
       this.updateMeshGeometry(restoredGeometry);
 
       // 상태 완전 초기화
       this.isSelectionComplete = false;
       this.isRemovalComplete = false;
-      this.selectedPoints = [];
+      this.initLassoSelector();
+      this.startSelection();
 
       this.onUpdateMessage("완전 초기화 완료");
       console.log("완전 초기화 완료");
@@ -744,28 +723,6 @@ export class ToothRemovalSystem {
       if (this.onError) this.onError(`완전 초기화 실패: ${errorMessage}`);
       return false;
     }
-  }
-
-  /**
-   * 선택 상태만 초기화 (geometry는 그대로)
-   */
-  public reset() {
-    // 올가미 선택 완전 정리
-    if (this.lassoSelector) {
-      this.lassoSelector.cleanup();
-      this.lassoSelector = null;
-    }
-
-    // 새로운 LassoSelector 생성
-    this.initLassoSelector();
-
-    // 상태 초기화
-    this.isSelectionComplete = false;
-    this.isRemovalComplete = false;
-    this.selectedPoints = [];
-
-    this.onUpdateMessage("치아 제거 시스템이 초기화되었습니다.");
-    console.log("치아 제거 시스템 리셋 완료");
   }
 
   /**
@@ -808,19 +765,12 @@ export class ToothRemovalSystem {
       this.notifyGeometryChange();
     }
 
-    // 새로운 선택을 위해 올가미 선택 초기화
-    if (this.lassoSelector) {
-      this.lassoSelector.cleanup();
-      this.lassoSelector = null;
-    }
-
     // 새로운 LassoSelector 생성
     this.initLassoSelector();
 
     // 상태 초기화 (새로운 선택을 위해)
     this.isSelectionComplete = false;
     this.isRemovalComplete = false;
-    this.selectedPoints = [];
 
     // 새로운 선택 시작
     this.startSelection();
@@ -875,7 +825,6 @@ export class ToothRemovalSystem {
     this.isActive = false;
     this.isSelectionComplete = false;
     this.isRemovalComplete = false;
-    this.selectedPoints = [];
 
     console.log("치아 제거 시스템 정리 완료");
   }
@@ -888,7 +837,6 @@ export class ToothRemovalSystem {
       isActive: this.isActive,
       isSelectionComplete: this.isSelectionComplete,
       isRemovalComplete: this.isRemovalComplete,
-      selectedPointCount: this.selectedPoints.length,
       hasBackup: !!this.backupGeometry,
     };
   }
