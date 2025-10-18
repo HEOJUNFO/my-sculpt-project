@@ -1,7 +1,6 @@
 // src/features/tooth-removal/toothRemovalUI.ts
 // 치아 제거 UI 시스템
 
-import * as THREE from 'three';
 import { toothRemovalSystem } from './toothRemovalCore.js';
 import { DrawingPointData } from '../../utils/lassoSelection.js';
 

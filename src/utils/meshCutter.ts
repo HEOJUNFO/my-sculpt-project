@@ -33,7 +33,13 @@ interface SplitResult {
   splitTriangles: number[];
 }
 
-interface WorkingData {
+interface EdgeInfo {
+  v1: number;
+  v2: number;
+  length: number;
+}
+
+interface  WorkingData {
   newVertices: number[];
   newNormals: number[];
   newIndices: number[];
@@ -101,6 +107,8 @@ export class MeshCutter {
   private newIndices: number[];
   private vertexFaceMap: number[][];
   private borderVertexIndices: number[];
+  private deletedVertices: Set<number>;
+  private adjacencyMap: Map<number, Set<number>>;
 
   constructor(originalGeometry: THREE.BufferGeometry) {
     this.originalGeometry = originalGeometry;
@@ -111,6 +119,8 @@ export class MeshCutter {
     this.newIndices = [];
     this.vertexFaceMap = [];
     this.borderVertexIndices = [];
+    this.deletedVertices = new Set();
+    this.adjacencyMap = new Map();
 
     this._initializeWorkingData();
   }
@@ -120,9 +130,12 @@ export class MeshCutter {
    */
   static performFlipperCutting(
     originalGeometry: THREE.BufferGeometry,
-    selectedAreaPoints: DrawingPoint[]
+    selectedAreaPoints: DrawingPoint[],
+    edgeMergeThreshold: number = 0.005
   ): WorkingData {
     const cutter = new MeshCutter(originalGeometry);
+
+    console.log("=== Knife Cut 시작 ===");
 
     // 1. 각 점에 대해 면 분할 (플리퍼 원본 3.1, 3.2 단계)
     cutter.subdivideIntersectedFaces(selectedAreaPoints);
@@ -130,7 +143,20 @@ export class MeshCutter {
     // 2. 연속된 점들 사이의 경로 찾기 및 면 분할 (플리퍼 원본 4단계)
     cutter.performKnifeCuts(selectedAreaPoints);
 
-    // 3. 플리퍼가 기대하는 형태로 결과 반환
+    console.log("Knife Cut 완료");
+    console.log(
+      `  정점: ${cutter.newVertices.length / 3}개, 면: ${cutter.newIndices.length / 3}개, 경계 정점: ${cutter.borderVertexIndices.length}개`
+    );
+
+    // 3. 엣지 병합 단계
+    console.log("=== 엣지 병합 시작 ===");
+    cutter.buildAdjacencyMap();
+    cutter.mergeShortEdges(edgeMergeThreshold);
+    cutter.compactDeletedVertices();
+    cutter.verifyDataIntegrity();
+    console.log("=== 엣지 병합 완료 ===");
+
+    // 4. 플리퍼가 기대하는 형태로 결과 반환
     return cutter.getWorkingData();
   }
 
@@ -152,9 +178,18 @@ export class MeshCutter {
     // vertexFaceMap 구축 (플리퍼 원본과 동일)
     for (let i = 0; i < this.newIndices.length / 3; i += 1) {
       const baseIndex = i * 3;
-      this.vertexFaceMap[this.newIndices[baseIndex]].push(i);
-      this.vertexFaceMap[this.newIndices[baseIndex + 1]].push(i);
-      this.vertexFaceMap[this.newIndices[baseIndex + 2]].push(i);
+      const v0 = this.newIndices[baseIndex];
+      const v1 = this.newIndices[baseIndex + 1];
+      const v2 = this.newIndices[baseIndex + 2];
+      
+      // vertexFaceMap 안전한 접근 보장
+      if (!this.vertexFaceMap[v0]) this.vertexFaceMap[v0] = [];
+      if (!this.vertexFaceMap[v1]) this.vertexFaceMap[v1] = [];
+      if (!this.vertexFaceMap[v2]) this.vertexFaceMap[v2] = [];
+      
+      this.vertexFaceMap[v0].push(i);
+      this.vertexFaceMap[v1].push(i);
+      this.vertexFaceMap[v2].push(i);
     }
   }
 
@@ -282,6 +317,9 @@ export class MeshCutter {
 
     // vertexFaceMap에서 기존 면 제거
     for (const vertexIndex of vertexIndices) {
+      if (!this.vertexFaceMap[vertexIndex]) {
+        this.vertexFaceMap[vertexIndex] = [];
+      }
       this.vertexFaceMap[vertexIndex] = this.vertexFaceMap[vertexIndex].filter(
         (f) => f !== faceIndex
       );
@@ -292,6 +330,9 @@ export class MeshCutter {
 
     // 첫 번째 면 정점들의 vertexFaceMap 업데이트
     for (const vertexIndex of newTriangles[0]) {
+      if (!this.vertexFaceMap[vertexIndex]) {
+        this.vertexFaceMap[vertexIndex] = [];
+      }
       this.vertexFaceMap[vertexIndex].push(faceIndex);
     }
 
@@ -435,7 +476,10 @@ export class MeshCutter {
         newVertexIndex,
       };
 
-      this.vertexFaceMap[pseudoDrawingPoint.newVertexIndex!] = [];
+      // vertexFaceMap 확장 (배열 범위 보장)
+      while (this.vertexFaceMap.length <= newVertexIndex) {
+        this.vertexFaceMap.push([]);
+      }
       this.borderVertexIndices.splice(newBorderIndex, 0, newVertexIndex);
     }
 
@@ -447,6 +491,11 @@ export class MeshCutter {
       pseudoDrawingPoint.newVertexIndex!,
       otherVertexIndex
     );
+    
+    // vertexFaceMap 안전한 접근 보장
+    if (!this.vertexFaceMap[edgeEndIndex]) {
+      this.vertexFaceMap[edgeEndIndex] = [];
+    }
     this.vertexFaceMap[edgeEndIndex] = this.vertexFaceMap[edgeEndIndex].filter(
       (face) => face !== triangleIndex
     );
@@ -458,6 +507,18 @@ export class MeshCutter {
       otherVertexIndex
     );
     const newTriangleIndex = this.newIndices.length / 3 - 1;
+    
+    // vertexFaceMap 안전한 접근 보장
+    if (!this.vertexFaceMap[edgeEndIndex]) {
+      this.vertexFaceMap[edgeEndIndex] = [];
+    }
+    if (!this.vertexFaceMap[otherVertexIndex]) {
+      this.vertexFaceMap[otherVertexIndex] = [];
+    }
+    if (!this.vertexFaceMap[pseudoDrawingPoint.newVertexIndex!]) {
+      this.vertexFaceMap[pseudoDrawingPoint.newVertexIndex!] = [];
+    }
+    
     this.vertexFaceMap[edgeEndIndex].push(newTriangleIndex);
     this.vertexFaceMap[otherVertexIndex].push(newTriangleIndex);
     this.vertexFaceMap[pseudoDrawingPoint.newVertexIndex!].push(
@@ -482,6 +543,9 @@ export class MeshCutter {
     currentTriangle: number
   ): number | null {
     // edge의 첫 번째 정점에 연결된 모든 면들
+    if (!this.vertexFaceMap[edge.startIndex]) {
+      this.vertexFaceMap[edge.startIndex] = [];
+    }
     const facesWithStartVertex = this.vertexFaceMap[edge.startIndex];
 
     // 이 면들 중에서 edge의 두 번째 정점도 포함하고, currentTriangle이 아닌 면 찾기
@@ -510,6 +574,9 @@ export class MeshCutter {
     startDrawingPoint: DrawingPoint,
     endDrawingPoint: DrawingPoint
   ) {
+    if (!this.vertexFaceMap[startDrawingPoint.newVertexIndex!]) {
+      this.vertexFaceMap[startDrawingPoint.newVertexIndex!] = [];
+    }
     const candidateTriangleFaceIndexes =
       this.vertexFaceMap[startDrawingPoint.newVertexIndex!];
 
@@ -614,6 +681,332 @@ export class MeshCutter {
       splitResult.pseudoDrawingPoint,
       endDrawingPoint
     );
+  }
+
+  /**
+   * 인접성 맵 구축
+   * newIndices로부터 각 정점의 인접 정점들을 추출하여 adjacencyMap에 저장
+   */
+  private buildAdjacencyMap(): void {
+    this.adjacencyMap.clear();
+
+    // 모든 정점에 대해 빈 Set 초기화
+    const vertexCount = this.newVertices.length / 3;
+    for (let i = 0; i < vertexCount; i++) {
+      this.adjacencyMap.set(i, new Set());
+    }
+
+    // 모든 면을 순회하며 엣지 정보 추출
+    const faceCount = this.newIndices.length / 3;
+    for (let i = 0; i < faceCount; i++) {
+      const baseIdx = i * 3;
+      const v0 = this.newIndices[baseIdx];
+      const v1 = this.newIndices[baseIdx + 1];
+      const v2 = this.newIndices[baseIdx + 2];
+
+      // 양방향 연결 추가
+      this.adjacencyMap.get(v0)!.add(v1);
+      this.adjacencyMap.get(v0)!.add(v2);
+      this.adjacencyMap.get(v1)!.add(v0);
+      this.adjacencyMap.get(v1)!.add(v2);
+      this.adjacencyMap.get(v2)!.add(v0);
+      this.adjacencyMap.get(v2)!.add(v1);
+    }
+  }
+
+  /**
+   * 경계선에 인접한 엣지들만 수집
+   * borderVertexIndices의 정점들과 연결된 모든 엣지를 수집하고 길이 계산
+   */
+  private collectCandidateEdges(): EdgeInfo[] {
+    const edgeQueue: EdgeInfo[] = [];
+    const processedEdges = new Set<string>();
+
+    // 경계 정점들과 연결된 모든 엣지 수집
+    for (const borderVertex of this.borderVertexIndices) {
+      const neighbors = this.adjacencyMap.get(borderVertex);
+      if (!neighbors) continue;
+
+      for (const neighbor of neighbors) {
+        // 엣지 키 생성 (v1 < v2 보장)
+        const v1 = Math.min(borderVertex, neighbor);
+        const v2 = Math.max(borderVertex, neighbor);
+        const edgeKey = `${v1}-${v2}`;
+
+        // 이미 처리한 엣지는 건너뛰기
+        if (processedEdges.has(edgeKey)) continue;
+        processedEdges.add(edgeKey);
+
+        // 엣지 길이 계산
+        const pos1 = new THREE.Vector3(
+          this.newVertices[v1 * 3],
+          this.newVertices[v1 * 3 + 1],
+          this.newVertices[v1 * 3 + 2]
+        );
+        const pos2 = new THREE.Vector3(
+          this.newVertices[v2 * 3],
+          this.newVertices[v2 * 3 + 1],
+          this.newVertices[v2 * 3 + 2]
+        );
+        const length = pos1.distanceTo(pos2);
+
+        edgeQueue.push({ v1, v2, length });
+      }
+    }
+
+    return edgeQueue;
+  }
+
+  /**
+   * 짧은 엣지들을 병합하여 메시를 단순화
+   * MinimalSurfaceGenerator의 mergeShortEdges 참고
+   */
+  private mergeShortEdges(threshold: number = 0.005): void {
+    // 모든 후보 엣지 수집
+    const edgeQueue = this.collectCandidateEdges();
+
+    // 길이 기준으로 정렬
+    edgeQueue.sort((a, b) => a.length - b.length);
+
+    console.log(`엣지 병합 시작: ${edgeQueue.length}개 후보, threshold=${threshold}`);
+    let mergedCount = 0;
+
+    // 짧은 엣지들을 순차적으로 병합
+    while (edgeQueue.length > 0) {
+      const { v1, v2, length } = edgeQueue.shift()!;
+
+      // 임계값보다 긴 엣지가 나오면 종료
+      if (length >= threshold) {
+        break;
+      }
+
+      // 이미 삭제된 정점은 건너뛰기
+      if (this.deletedVertices.has(v1) || this.deletedVertices.has(v2)) {
+        continue;
+      }
+
+      // 엣지 병합 (v2를 v1로 병합)
+      this.mergeEdge(v1, v2, edgeQueue);
+      mergedCount++;
+    }
+
+    console.log(`엣지 병합 완료: ${mergedCount}개 병합됨`);
+  }
+
+  /**
+   * 두 정점을 병합
+   * v2를 v1로 병합하고, v2를 삭제된 정점으로 표시
+   * 정점 위치는 v2의 위치를 사용
+   * MinimalSurfaceGenerator의 mergeEdge 참고
+   */
+  private mergeEdge(v1: number, v2: number, edgeQueue: EdgeInfo[]): void {
+    if (
+      v1 === v2 ||
+      this.deletedVertices.has(v1) ||
+      this.deletedVertices.has(v2)
+    )
+      return;
+
+    // v2의 위치를 v1로 복사
+    this.newVertices[v1 * 3] = this.newVertices[v2 * 3];
+    this.newVertices[v1 * 3 + 1] = this.newVertices[v2 * 3 + 1];
+    this.newVertices[v1 * 3 + 2] = this.newVertices[v2 * 3 + 2];
+
+    // v2의 노멀을 v1로 복사
+    this.newNormals[v1 * 3] = this.newNormals[v2 * 3];
+    this.newNormals[v1 * 3 + 1] = this.newNormals[v2 * 3 + 1];
+    this.newNormals[v1 * 3 + 2] = this.newNormals[v2 * 3 + 2];
+
+    // newIndices에서 v2를 v1로 치환
+    for (let i = 0; i < this.newIndices.length; i++) {
+      if (this.newIndices[i] === v2) {
+        this.newIndices[i] = v1;
+      }
+    }
+
+    // vertexFaceMap 업데이트
+    const v2Faces = this.vertexFaceMap[v2] || [];
+    const v1Faces = this.vertexFaceMap[v1] || [];
+
+    for (const faceIndex of v2Faces) {
+      if (!v1Faces.includes(faceIndex)) {
+        v1Faces.push(faceIndex);
+      }
+    }
+    this.vertexFaceMap[v2] = [];
+
+    // adjacencyMap 업데이트
+    const v1Neighbors = this.adjacencyMap.get(v1)!;
+    const v2Neighbors = this.adjacencyMap.get(v2)!;
+
+    for (const neighbor of v2Neighbors) {
+      if (neighbor !== v1) {
+        // v2의 인접 정점들을 v1에 연결
+        v1Neighbors.add(neighbor);
+        const neighborNeighbors = this.adjacencyMap.get(neighbor)!;
+        neighborNeighbors.delete(v2);
+        neighborNeighbors.add(v1);
+      }
+    }
+
+    // v1과 v2 사이의 연결 제거
+    v1Neighbors.delete(v2);
+
+    // v2의 인접성 맵 제거
+    this.adjacencyMap.delete(v2);
+
+    // v2를 삭제된 정점으로 표시
+    this.deletedVertices.add(v2);
+
+    // borderVertexIndices에서 v2를 v1로 교체
+    const borderIndex = this.borderVertexIndices.indexOf(v2);
+    if (borderIndex !== -1) {
+      this.borderVertexIndices[borderIndex] = v1;
+    }
+
+    // edgeQueue의 모든 엣지에서 v2를 v1로 변경하고 길이 재계산
+    for (const edge of edgeQueue) {
+      if (edge.v1 === v2) edge.v1 = v1;
+      if (edge.v2 === v2) edge.v2 = v1;
+
+      // v1이 관련된 엣지의 길이 재계산
+      if (edge.v1 === v1 || edge.v2 === v1) {
+        const pos1 = new THREE.Vector3(
+          this.newVertices[edge.v1 * 3],
+          this.newVertices[edge.v1 * 3 + 1],
+          this.newVertices[edge.v1 * 3 + 2]
+        );
+        const pos2 = new THREE.Vector3(
+          this.newVertices[edge.v2 * 3],
+          this.newVertices[edge.v2 * 3 + 1],
+          this.newVertices[edge.v2 * 3 + 2]
+        );
+        edge.length = pos1.distanceTo(pos2);
+      }
+    }
+
+    // edgeQueue 재정렬
+    edgeQueue.sort((a, b) => a.length - b.length);
+  }
+
+  /**
+   * 삭제된 정점들을 실제로 제거하고 인덱스 재매핑
+   */
+  private compactDeletedVertices(): void {
+    if (this.deletedVertices.size === 0) {
+      return;
+    }
+
+    console.log(`정점 압축 시작: ${this.deletedVertices.size}개 정점 제거`);
+
+    // 새로운 정점 인덱스 매핑 생성
+    const vertexMap = new Map<number, number>();
+    const newVertices: number[] = [];
+    const newNormals: number[] = [];
+
+    let newIndex = 0;
+    const vertexCount = this.newVertices.length / 3;
+
+    for (let i = 0; i < vertexCount; i++) {
+      if (!this.deletedVertices.has(i)) {
+        vertexMap.set(i, newIndex);
+        newVertices.push(
+          this.newVertices[i * 3],
+          this.newVertices[i * 3 + 1],
+          this.newVertices[i * 3 + 2]
+        );
+        newNormals.push(
+          this.newNormals[i * 3],
+          this.newNormals[i * 3 + 1],
+          this.newNormals[i * 3 + 2]
+        );
+        newIndex++;
+      }
+    }
+
+    // newIndices 재매핑
+    const newIndices: number[] = [];
+    for (let i = 0; i < this.newIndices.length; i++) {
+      const oldIndex = this.newIndices[i];
+      const mappedIndex = vertexMap.get(oldIndex);
+      if (mappedIndex !== undefined) {
+        newIndices.push(mappedIndex);
+      }
+    }
+
+    // vertexFaceMap 재구축
+    const newVertexFaceMap: number[][] = Array.from(
+      { length: newVertices.length / 3 },
+      () => []
+    );
+
+    const faceCount = newIndices.length / 3;
+    for (let i = 0; i < faceCount; i++) {
+      const baseIdx = i * 3;
+      newVertexFaceMap[newIndices[baseIdx]].push(i);
+      newVertexFaceMap[newIndices[baseIdx + 1]].push(i);
+      newVertexFaceMap[newIndices[baseIdx + 2]].push(i);
+    }
+
+    // borderVertexIndices 재매핑 (순서 유지)
+    const newBorderVertexIndices: number[] = [];
+    for (const oldIndex of this.borderVertexIndices) {
+      const mappedIndex = vertexMap.get(oldIndex);
+      if (mappedIndex !== undefined) {
+        // 중복 체크 (병합으로 인해 중복 가능)
+        if (!newBorderVertexIndices.includes(mappedIndex)) {
+          newBorderVertexIndices.push(mappedIndex);
+        }
+      }
+    }
+
+    // 데이터 교체
+    this.newVertices = newVertices;
+    this.newNormals = newNormals;
+    this.newIndices = newIndices;
+    this.vertexFaceMap = newVertexFaceMap;
+    this.borderVertexIndices = newBorderVertexIndices;
+
+    // 삭제된 정점 목록 초기화
+    this.deletedVertices.clear();
+
+    console.log(
+      `정점 압축 완료: ${newVertices.length / 3}개 정점, ${newBorderVertexIndices.length}개 경계 정점`
+    );
+  }
+
+  /**
+   * 데이터 무결성 검증
+   */
+  private verifyDataIntegrity(): void {
+    // deletedVertices와 adjacencyMap의 일관성 확인
+    const adjacencySet = new Set(this.adjacencyMap.keys());
+    for (const vertexIndex of this.deletedVertices) {
+      if (adjacencySet.has(vertexIndex)) {
+        throw new Error(
+          `무결성 오류: 삭제된 정점 ${vertexIndex}이 adjacencyMap에 존재함`
+        );
+      }
+    }
+
+    // borderVertexIndices의 모든 정점이 유효한지 확인
+    const vertexCount = this.newVertices.length / 3;
+    for (const borderVertex of this.borderVertexIndices) {
+      if (borderVertex >= vertexCount || this.deletedVertices.has(borderVertex)) {
+        throw new Error(
+          `무결성 오류: 유효하지 않은 경계 정점 ${borderVertex}`
+        );
+      }
+    }
+
+    // newIndices의 모든 인덱스가 유효한지 확인
+    for (const index of this.newIndices) {
+      if (index >= vertexCount || this.deletedVertices.has(index)) {
+        throw new Error(`무결성 오류: 유효하지 않은 인덱스 ${index}`);
+      }
+    }
+
+    console.log("데이터 무결성 검증 완료");
   }
 
   /**
