@@ -10,6 +10,7 @@ import {
 import { MeshCutter } from "../../utils/meshCutter.js";
 import { extractInnerFacesFromBorder } from "../../utils/meshProcessing.js";
 import { MinimalSurfaceGenerator } from "../../utils/minimalSurfaceGenerator.ts";
+import { InformedGeometry } from "../../utils/InformedGeometry.ts";
 import { refs, modelList, activeItemIndex } from "../../models/modelManager.js";
 
 // refs 객체를 any 타입으로 처리 (JavaScript 모듈이므로)
@@ -202,48 +203,30 @@ export class ToothRemovalSystem {
           ? currentGeometry.index.count / 3
           : "no index",
       });
-      const cuttingData: any = MeshCutter.performFlipperCutting(
+      const { borderVertexIndices, geometry } = MeshCutter.performCutting(
         currentGeometry,
-        this.lassoSelector!.getSelectedPoints()
+        this.lassoSelector!.getSelectedPoints(),
+        0.005,
+        refsAny.scene // 디버깅용 scene 전달
       );
-      const {
-        newVertices,
-        newNormals,
-        newIndices,
-        vertexFaceMap,
-        borderVertexIndices,
-      } = cuttingData;
-
-      // borderVertexIndices의 최대값 계산 (스택 오버플로우 방지)
-      let maxBorderIndex = 0;
-      for (let i = 0; i < borderVertexIndices.length; i++) {
-        if (borderVertexIndices[i] > maxBorderIndex) {
-          maxBorderIndex = borderVertexIndices[i];
-        }
-      }
 
       console.log("Knife cut 결과:", {
-        newVerticesCount: newVertices.length / 3,
-        newIndicesCount: newIndices.length / 3,
+        vertexCount: geometry.getVertexCount(),
+        faceCount: geometry.getFaceCount(),
         borderVertexIndicesCount: borderVertexIndices.length,
-        maxBorderIndex: maxBorderIndex,
       });
 
       // 2. 내부 면 찾기
       console.log("2단계: 내부 면 찾기");
       const { usedFaces }: any = extractInnerFacesFromBorder(
-        newVertices,
-        newIndices,
-        vertexFaceMap,
+        geometry,
         borderVertexIndices
       );
 
       // 3. 내부 면들 제거
       console.log("3단계: 내부 면 제거");
       const { geometry: remainingGeometry, vertexMap } = this.removeInnerFaces(
-        newVertices,
-        newNormals,
-        newIndices,
+        geometry,
         usedFaces
       );
 
@@ -292,113 +275,30 @@ export class ToothRemovalSystem {
    * 내부 면들을 제거하여 새로운 geometry 생성
    */
   private removeInnerFaces(
-    vertices: Float32Array,
-    normals: Float32Array,
-    indices: Uint32Array,
-    usedFaces: Set<number>
+    geometry: InformedGeometry,
+    usedFaces: Array<[number, number, number]>
   ): { geometry: THREE.BufferGeometry; vertexMap: Map<number, number> } {
-    const totalFaces = indices.length / 3;
-
-    // 제거할 면들을 Set으로 변환
-    const facesToRemove = new Set(usedFaces);
-
-    // 남길 면들의 인덱스 수집
-    const remainingFaceIndices: number[] = [];
-    for (let i = 0; i < totalFaces; i++) {
-      if (!facesToRemove.has(i)) {
-        remainingFaceIndices.push(i);
-      }
+    // 제거할 면들을 모두 제거
+    for (const face of usedFaces) {
+      geometry.removeFace(face[0], face[1], face[2]);
     }
 
-    // 사용되는 정점들 찾기
-    const usedVertexSet = new Set<number>();
-    for (const faceIndex of remainingFaceIndices) {
-      const baseIdx = faceIndex * 3;
-      usedVertexSet.add(indices[baseIdx]);
-      usedVertexSet.add(indices[baseIdx + 1]);
-      usedVertexSet.add(indices[baseIdx + 2]);
-    }
+    // compact로 null 정점 제거 및 재매핑
+    const { geometry: compacted, vertexMap } = geometry.compact();
 
-    // 정점 재매핑
-    const usedVertices = Array.from(usedVertexSet).sort((a, b) => a - b);
-    const vertexMap = new Map<number, number>();
-    usedVertices.forEach((oldIndex, newIndex) => {
-      vertexMap.set(oldIndex, newIndex);
-    });
-
-    // 새로운 정점 배열 생성
-    const newVertices: number[] = [];
-    const newNormals: number[] = [];
-    for (const vertexIndex of usedVertices) {
-      newVertices.push(
-        vertices[vertexIndex * 3],
-        vertices[vertexIndex * 3 + 1],
-        vertices[vertexIndex * 3 + 2]
-      );
-      newNormals.push(
-        normals[vertexIndex * 3],
-        normals[vertexIndex * 3 + 1],
-        normals[vertexIndex * 3 + 2]
-      );
-    }
-
-    // 새로운 인덱스 배열 생성
-    const newIndices: number[] = [];
-    for (const faceIndex of remainingFaceIndices) {
-      const baseIdx = faceIndex * 3;
-      newIndices.push(
-        vertexMap.get(indices[baseIdx])!,
-        vertexMap.get(indices[baseIdx + 1])!,
-        vertexMap.get(indices[baseIdx + 2])!
-      );
-    }
-
-    // 데이터 유효성 검사
-    if (newVertices.length !== newNormals.length) {
-      console.warn("내부 면 제거 실패: 버텍스와 노멀 배열 길이 불일치");
-      return { geometry: new THREE.BufferGeometry(), vertexMap: new Map() }; // 빈 geometry 반환
-    }
-
-    if (newIndices.length === 0) {
-      console.warn("내부 면 제거 실패: 남은 면이 없습니다");
-      return { geometry: new THREE.BufferGeometry(), vertexMap: new Map() }; // 빈 geometry 반환
-    }
-
-    // 인덱스 범위 검사 (스택 오버플로우 방지를 위해 반복문 사용)
-    let maxVertexIndex = 0;
-    for (let i = 0; i < newIndices.length; i++) {
-      if (newIndices[i] > maxVertexIndex) {
-        maxVertexIndex = newIndices[i];
-      }
-    }
-    const expectedVertexCount = newVertices.length / 3;
-    if (maxVertexIndex >= expectedVertexCount) {
-      console.error(
-        `인덱스 범위 오류: 최대 인덱스 ${maxVertexIndex}, 예상 버텍스 수 ${expectedVertexCount}`
-      );
-      console.log("인덱스 배열:", newIndices.slice(0, 20), "...");
-      console.log("버텍스 수:", expectedVertexCount);
-      return { geometry: new THREE.BufferGeometry(), vertexMap: new Map() }; // 빈 geometry 반환
-    }
-
-    // 새로운 BufferGeometry 생성
-    const newGeometry = new THREE.BufferGeometry();
-    newGeometry.setAttribute(
-      "position",
-      new THREE.Float32BufferAttribute(newVertices, 3)
-    );
-    newGeometry.setAttribute(
-      "normal",
-      new THREE.Float32BufferAttribute(newNormals, 3)
-    );
-    newGeometry.setIndex(new THREE.Uint32BufferAttribute(newIndices, 1));
+    // BufferGeometry로 변환
+    const bufferGeometry = compacted.toBufferGeometry();
 
     // 노멀과 바운딩 정보 재계산
-    newGeometry.computeVertexNormals();
-    newGeometry.computeBoundingBox();
-    newGeometry.computeBoundingSphere();
+    bufferGeometry.computeVertexNormals();
+    bufferGeometry.computeBoundingBox();
+    bufferGeometry.computeBoundingSphere();
 
-    return { geometry: newGeometry, vertexMap };
+    console.log(
+      `내부 면 제거 완료: ${compacted.getVertexCount()}개 정점, ${compacted.getFaceCount()}개 면`
+    );
+
+    return { geometry: bufferGeometry, vertexMap };
   }
 
   /**

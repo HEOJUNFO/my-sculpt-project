@@ -38,11 +38,8 @@ interface EdgeInfo {
 }
 
 interface WorkingData {
-  newVertices: number[];
-  newNormals: number[];
-  newIndices: number[];
-  vertexFaceMap: number[][];
   borderVertexIndices: number[];
+  geometry: InformedGeometry;
 }
 
 /**
@@ -101,25 +98,26 @@ export function findEdgeIntersection(
 export class MeshCutter {
   private geometry: InformedGeometry; // 주 데이터 구조
   private borderVertexIndices: number[];
+  private debugScene: THREE.Scene | null = null;
+  private debugObjects: THREE.Object3D[] = [];
 
-  constructor(originalGeometry: THREE.BufferGeometry) {
+  constructor(originalGeometry: THREE.BufferGeometry, debugScene?: THREE.Scene) {
     this.geometry = InformedGeometry.fromBufferGeometry(originalGeometry);
     this.borderVertexIndices = [];
+    this.debugScene = debugScene || null;
   }
 
-  /**
-   * 플리퍼용 메시 절단 (원본 로직 보존) - 정적 메서드로 API 호환성 유지
-   */
-  static performFlipperCutting(
+  static performCutting(
     originalGeometry: THREE.BufferGeometry,
     selectedAreaPoints: {
       position: THREE.Vector3;
       normal: THREE.Vector3;
       faceIndex: number;
     }[],
-    edgeMergeThreshold: number = 0.005
-  ): WorkingData {
-    const cutter = new MeshCutter(originalGeometry);
+    edgeMergeThreshold: number = 0.005,
+    debugScene?: THREE.Scene
+  ) {
+    const cutter = new MeshCutter(originalGeometry, debugScene);
     const faceIndices = originalGeometry.getIndex()!.array;
     const borderPoints: DrawingPoint[] = selectedAreaPoints.map((point) => ({
       position: point.position,
@@ -143,11 +141,11 @@ export class MeshCutter {
     );
 
     // 3. 엣지 병합 단계
-    console.log("=== 엣지 병합 시작 ===");
-    cutter.mergeShortEdges(edgeMergeThreshold);
-    console.log("=== 엣지 병합 완료 ===");
+    // console.log("=== 엣지 병합 시작 ===");
+    // cutter.mergeShortEdges(edgeMergeThreshold);
+    // console.log("=== 엣지 병합 완료 ===");
 
-    // 4. 플리퍼가 기대하는 형태로 결과 반환
+    // 4. 플리퍼가 기대하는 형태로 결과 반환 (compact된 상태)
     return cutter.getWorkingData();
   }
 
@@ -387,7 +385,7 @@ export class MeshCutter {
     );
     const currentFaceKey = this.geometry.makeFaceKey(currentFace);
     for (const candidate of candidates) {
-      if (this.geometry.makeFaceKey(candidate) === currentFaceKey)
+      if (this.geometry.makeFaceKey(candidate) !== currentFaceKey)
         return candidate;
     }
 
@@ -404,6 +402,10 @@ export class MeshCutter {
     const candidateTriangles = this.geometry.findFacesWithVertex(
       startDrawingPoint.newVertexIndex!
     );
+
+    // 디버깅: start/end 포인트 표시
+    this._addDebugPoint(startDrawingPoint.position, 0x00ff00); // 초록색
+    this._addDebugPoint(endDrawingPoint.position, 0xff0000); // 빨간색
 
     // candidate 중 endPoint가 포함되면 종료
     for (const face of candidateTriangles) {
@@ -427,6 +429,9 @@ export class MeshCutter {
         startIndex: edgeVertexIndexes[0],
         endIndex: edgeVertexIndexes[1],
       };
+
+      // 디버깅: 검사 중인 엣지 표시
+      this._addDebugEdge(edge.start, edge.end, 0xffff00); // 노란색
 
       const endPointOnPlane = endDrawingPoint.position.clone();
 
@@ -454,6 +459,7 @@ export class MeshCutter {
           edge: edge,
           triangle: face,
         };
+        this.clearDebugObjects();
         break;
       }
     }
@@ -586,56 +592,72 @@ export class MeshCutter {
   }
 
   /**
+   * 디버깅용 점 추가
+   */
+  private _addDebugPoint(position: THREE.Vector3, color: number = 0xff0000, size: number = 0.001): void {
+    if (!this.debugScene) return;
+
+    const geometry = new THREE.SphereGeometry(size, 4, 4);
+    const material = new THREE.MeshBasicMaterial({ color });
+    const sphere = new THREE.Mesh(geometry, material);
+    sphere.position.copy(position);
+    this.debugScene.add(sphere);
+    this.debugObjects.push(sphere);
+  }
+
+  /**
+   * 디버깅용 엣지 라인 추가
+   */
+  private _addDebugEdge(start: THREE.Vector3, end: THREE.Vector3, color: number = 0xffff00, lineWidth: number = 1): void {
+    if (!this.debugScene) return;
+
+    const points = [start, end];
+    const geometry = new THREE.BufferGeometry().setFromPoints(points);
+    const material = new THREE.LineBasicMaterial({ 
+      color, 
+      linewidth: lineWidth,
+      depthTest: false, // 항상 보이도록
+      transparent: true,
+      opacity: 0.8
+    });
+    const line = new THREE.Line(geometry, material);
+    this.debugScene.add(line);
+    this.debugObjects.push(line);
+  }
+
+  /**
+   * 디버깅 오브젝트 제거
+   */
+  clearDebugObjects(): void {
+    if (!this.debugScene) return;
+
+    for (const obj of this.debugObjects) {
+      this.debugScene.remove(obj);
+      if (obj instanceof THREE.Mesh || obj instanceof THREE.Line) {
+        obj.geometry.dispose();
+        if (Array.isArray(obj.material)) {
+          obj.material.forEach(m => m.dispose());
+        } else {
+          obj.material.dispose();
+        }
+      }
+    }
+    this.debugObjects = [];
+  }
+
+  /**
    * 현재 상태를 플리퍼가 기대하는 형태로 반환
    */
   getWorkingData(): WorkingData {
     // InformedGeometry를 compact하여 삭제된 정점 제거
     const { geometry: compacted, vertexMap } = this.geometry.compact();
 
-    // BufferGeometry로 변환하여 flat array 얻기
-    const bufferGeometry = compacted.toBufferGeometry();
-
-    const newVertices = Array.from(bufferGeometry.attributes.position.array);
-    const newNormals = Array.from(bufferGeometry.attributes.normal.array);
-    const newIndices = Array.from(bufferGeometry.index!.array);
-
-    // vertexFaceMap 재구축
-    const vertexCount = newVertices.length / 3;
-    const newVertexFaceMap: number[][] = Array.from(
-      { length: vertexCount },
-      () => []
-    );
-
-    const faceCount = newIndices.length / 3;
-    for (let i = 0; i < faceCount; i++) {
-      const baseIdx = i * 3;
-      newVertexFaceMap[newIndices[baseIdx]].push(i);
-      newVertexFaceMap[newIndices[baseIdx + 1]].push(i);
-      newVertexFaceMap[newIndices[baseIdx + 2]].push(i);
-    }
-
     // borderVertexIndices 재매핑
-    const newBorderVertexIndices: number[] = [];
-    for (const oldIndex of this.borderVertexIndices) {
-      const mappedIndex = vertexMap.get(oldIndex);
-      if (mappedIndex !== undefined) {
-        // 중복 체크 (병합으로 인해 중복 가능)
-        if (!newBorderVertexIndices.includes(mappedIndex)) {
-          newBorderVertexIndices.push(mappedIndex);
-        }
-      }
-    }
-
-    console.log(
-      `getWorkingData 완료: ${vertexCount}개 정점, ${faceCount}개 면, ${newBorderVertexIndices.length}개 경계 정점`
-    );
+    const newBorderVertexIndices = this.borderVertexIndices.map(index => vertexMap.get(index)!);
 
     return {
-      newVertices,
-      newNormals,
-      newIndices,
-      vertexFaceMap: newVertexFaceMap,
       borderVertexIndices: newBorderVertexIndices,
+      geometry: compacted
     };
   }
 }
