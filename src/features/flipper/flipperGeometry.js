@@ -5,6 +5,7 @@ import { getFlipperState, setFlipperMesh, updateFlipperInfoText } from './flippe
 import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { MeshCutter } from '../../utils/meshCutter.ts';
 import { extractInnerFacesFromBorder } from '../../utils/meshProcessing.ts';
+import { InformedGeometry } from '../../utils/InformedGeometry.ts';
 
 /**
  * 플리퍼 생성
@@ -23,49 +24,40 @@ export function generateFlipper() {
   updateFlipperInfoText('플리퍼를 생성하는 중...');
   
   try {
-    // 1. 원본 메시의 geometry 복사
     const originalGeometry = refs.targetMesh.geometry.clone();
 
-    // 2-4. 메시 절단 수행 (MeshCutter 사용 - 플리퍼 원본 로직 보존)
-    const cuttingData = MeshCutter.performFlipperCutting(originalGeometry, selectedAreaPoints);
-    const { newVertices, newNormals, newIndices, vertexFaceMap, borderVertexIndices } = cuttingData;
+    const { borderVertexIndices, geometry } = MeshCutter.performCutting(originalGeometry, selectedAreaPoints, 0.005, refs.scene);
 
-
-
-    //5. 경계 내의 면만 추출 (공통 함수 사용)
-    const { usedVertices, usedFaces, } = extractInnerFacesFromBorder(
-      newVertices, newIndices, vertexFaceMap, borderVertexIndices
+    const { usedVertices, usedFaces } = extractInnerFacesFromBorder(
+      geometry,
+      borderVertexIndices
     );
 
-    // 사용된 vertex와 face만으로 새로운 geometry 생성
-    const finalVertices = [];
-    const finalNormals = [];
-    const finalIndices = [];
-    const vertexMap = new Map(); // old index -> new index 매핑
-
-    // 사용된 vertex들만 추출
+    // InformedGeometry에서 사용된 정점/면만 추출
+    const innerGeometry = new InformedGeometry();
+    
+    // 정점 복사
+    const vertexMap = new Map();
     for (const vertexIndex of usedVertices) {
-      vertexMap.set(vertexIndex, finalVertices.length / 3);
-      finalVertices.push(
-        newVertices[vertexIndex * 3],
-        newVertices[vertexIndex * 3 + 1],
-        newVertices[vertexIndex * 3 + 2]
-      );
-      finalNormals.push(
-        newNormals[vertexIndex * 3],
-        newNormals[vertexIndex * 3 + 1],
-        newNormals[vertexIndex * 3 + 2]
-      );
+      const vertex = geometry.getVertex(vertexIndex);
+      if (vertex) {
+        const newIndex = innerGeometry.addVertex(vertex.position, vertex.normal);
+        vertexMap.set(vertexIndex, newIndex);
+      }
+    }
+    const remappedBorderIndices = new Set(borderVertexIndices.map(v => vertexMap.get(v)));
+
+    // 면 복사 (재매핑)
+    for (const face of usedFaces) {
+      const remappedFace = face.map(v => vertexMap.get(v));
+      innerGeometry.addFace(...remappedFace);
     }
 
-    // 사용된 face들만 추출
-    for (const faceIndex of usedFaces) {
-      finalIndices.push(
-        vertexMap.get(newIndices[faceIndex * 3]),
-        vertexMap.get(newIndices[faceIndex * 3 + 1]),
-        vertexMap.get(newIndices[faceIndex * 3 + 2])
-      );
-    }
+    // BufferGeometry로 변환
+    const innerBuffer = innerGeometry.toBufferGeometry();
+    const finalVertices = Array.from(innerBuffer.attributes.position.array);
+    const finalNormals = Array.from(innerBuffer.attributes.normal.array);
+    const finalIndices = Array.from(innerBuffer.index.array);
 
     // 6. 부풀어오른 면 만들기
     //  0~borderVertexCount: 경계 정점
