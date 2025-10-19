@@ -109,7 +109,6 @@ export function nextToothRemoval(): void {
  * 치아 점 추가 진행 콜백
  */
 function onToothPointProgress(pointCount: number): void {
-  console.log('치아 점 추가 진행:', pointCount, '개 점');
   updateUIState();
 }
 
@@ -117,7 +116,6 @@ function onToothPointProgress(pointCount: number): void {
  * 치아 선택 완료 콜백
  */
 function onToothSelectionComplete(points: DrawingPointData[]): void {
-  console.log('치아 선택 완료:', points.length, '개 점');
   updateUIState();
 }
 
@@ -125,7 +123,6 @@ function onToothSelectionComplete(points: DrawingPointData[]): void {
  * 치아 제거 완료 콜백
  */
 function onToothRemovalComplete(): void {
-  console.log('치아 제거 완료');
   updateUIState();
 }
 
@@ -202,9 +199,6 @@ export function updateToothRemovalInfoText(text: string): void {
     const infoElement = document.getElementById('tooth-removal-info') as HTMLElement | null;
     if (infoElement) {
       infoElement.textContent = text;
-    }
-    if (text) {
-      console.log('치아 제거 정보:', text);
     }
   } catch (error) {
     console.warn('치아 제거 정보 텍스트 업데이트 중 오류:', error);
