@@ -602,8 +602,6 @@ export class LassoSelector {
     
     // 점 추가 콜백 호출
     this.options.onPointAdded(this.drawingPoints.length);
-    
-    console.log(`점 추가됨 (총 ${this.drawingPoints.length}개)`);
   }
   
   /**
