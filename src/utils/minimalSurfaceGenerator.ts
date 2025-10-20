@@ -297,9 +297,9 @@ export class MinimalSurfaceGenerator {
       for (const neighborIndex of neighbors) {
         if (neighborIndex < vertexIndex) continue;
 
-        // 경계 엣지는 제외 (고정된 정점들 사이의 엣지)
+        // 경계점을 포함한 엣지는 제외 (고정된 정점을 포함하는 엣지)
         if (
-          vertexIndex < this.fixedVerticeCount &&
+          vertexIndex < this.fixedVerticeCount ||
           neighborIndex < this.fixedVerticeCount
         ) {
           continue;
