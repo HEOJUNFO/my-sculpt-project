@@ -92,13 +92,10 @@ export function findEdgeIntersection(
 export class MeshCutter {
   private geometry: InformedGeometry; // 주 데이터 구조
   private borderVertexIndices: number[];
-  private debugScene: THREE.Scene | null = null;
-  private debugObjects: THREE.Object3D[] = [];
 
-  constructor(originalGeometry: THREE.BufferGeometry, debugScene?: THREE.Scene) {
+  constructor(originalGeometry: THREE.BufferGeometry) {
     this.geometry = InformedGeometry.fromBufferGeometry(originalGeometry);
     this.borderVertexIndices = [];
-    this.debugScene = debugScene || null;
   }
 
   static performCutting(
@@ -109,9 +106,8 @@ export class MeshCutter {
       faceIndex: number;
     }[],
     edgeMergeThreshold: number = 0.005,
-    debugScene?: THREE.Scene
   ) {
-    const cutter = new MeshCutter(originalGeometry, debugScene);
+    const cutter = new MeshCutter(originalGeometry);
     const faceIndices = originalGeometry.getIndex()!.array;
     const borderPoints: DrawingPoint[] = selectedAreaPoints.map((point) => ({
       position: point.position,
@@ -399,10 +395,6 @@ export class MeshCutter {
       startDrawingPoint.newVertexIndex!
     );
 
-    // 디버깅: start/end 포인트 표시
-    this._addDebugPoint(startDrawingPoint.position, 0x00ff00); // 초록색
-    this._addDebugPoint(endDrawingPoint.position, 0xff0000); // 빨간색
-
     // candidate 중 endPoint가 포함되면 종료
     for (const face of candidateTriangles) {
       if (this._isTriangleContainsEndPoint(face, endDrawingPoint)) {
@@ -449,7 +441,6 @@ export class MeshCutter {
           edge: edge,
           triangle: face,
         };
-        this.clearDebugObjects();
         break;
       }
     }
@@ -473,7 +464,6 @@ export class MeshCutter {
         newVertexIndex: vIndex,
       };
 
-      this.clearDebugObjects();
       this._edgeBetweenSelectedAreaPoints(fallbackPoint, endDrawingPoint);
       return;
 
@@ -632,60 +622,6 @@ export class MeshCutter {
         }
       }
     }
-  }
-
-  /**
-   * 디버깅용 점 추가
-   */
-  private _addDebugPoint(position: THREE.Vector3, color: number = 0xff0000, size: number = 0.001): void {
-    if (!this.debugScene) return;
-
-    const geometry = new THREE.SphereGeometry(size, 4, 4);
-    const material = new THREE.MeshBasicMaterial({ color });
-    const sphere = new THREE.Mesh(geometry, material);
-    sphere.position.copy(position);
-    this.debugScene.add(sphere);
-    this.debugObjects.push(sphere);
-  }
-
-  /**
-   * 디버깅용 엣지 라인 추가
-   */
-  private _addDebugEdge(start: THREE.Vector3, end: THREE.Vector3, color: number = 0xffff00, lineWidth: number = 1): void {
-    if (!this.debugScene) return;
-
-    const points = [start, end];
-    const geometry = new THREE.BufferGeometry().setFromPoints(points);
-    const material = new THREE.LineBasicMaterial({ 
-      color, 
-      linewidth: lineWidth,
-      depthTest: false, // 항상 보이도록
-      transparent: true,
-      opacity: 0.8
-    });
-    const line = new THREE.Line(geometry, material);
-    this.debugScene.add(line);
-    this.debugObjects.push(line);
-  }
-
-  /**
-   * 디버깅 오브젝트 제거
-   */
-  clearDebugObjects(): void {
-    if (!this.debugScene) return;
-
-    for (const obj of this.debugObjects) {
-      this.debugScene.remove(obj);
-      if (obj instanceof THREE.Mesh || obj instanceof THREE.Line) {
-        obj.geometry.dispose();
-        if (Array.isArray(obj.material)) {
-          obj.material.forEach(m => m.dispose());
-        } else {
-          obj.material.dispose();
-        }
-      }
-    }
-    this.debugObjects = [];
   }
 
   /**

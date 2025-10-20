@@ -200,8 +200,6 @@ export class ToothRemovalSystem {
       const { borderVertexIndices, geometry } = MeshCutter.performCutting(
         currentGeometry,
         this.lassoSelector!.getSelectedPoints(),
-        0.005,
-        refsAny.scene // 디버깅용 scene 전달
       );
 
       // 2. 내부 면 찾기
