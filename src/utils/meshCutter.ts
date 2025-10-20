@@ -31,12 +31,6 @@ interface SplitResult {
   splitTriangles: [number, number, number][];
 }
 
-interface EdgeInfo {
-  v1: number;
-  v2: number;
-  length: number;
-}
-
 interface WorkingData {
   borderVertexIndices: number[];
   geometry: InformedGeometry;
@@ -141,9 +135,9 @@ export class MeshCutter {
     );
 
     // 3. 엣지 병합 단계
-    // console.log("=== 엣지 병합 시작 ===");
-    // cutter.mergeShortEdges(edgeMergeThreshold);
-    // console.log("=== 엣지 병합 완료 ===");
+    console.log("=== 엣지 병합 시작 ===");
+    cutter.mergeShortEdges(edgeMergeThreshold);
+    console.log("=== 엣지 병합 완료 ===");
 
     // 4. 플리퍼가 기대하는 형태로 결과 반환 (compact된 상태)
     return cutter.getWorkingData();
@@ -505,90 +499,186 @@ export class MeshCutter {
   }
 
   /**
-   * 짧은 엣지들을 병합하여 메시를 단순화
+   * 점에서 선분까지의 최단 거리와 projection point 계산
    */
-  private mergeShortEdges(threshold: number = 0.005): void {
-    // 경계 정점들과 연결된 엣지 수집
-    const edgeQueue = this._collectCandidateEdges();
-
-    // 길이 기준으로 정렬
-    edgeQueue.sort((a, b) => a.length - b.length);
-
-    console.log(
-      `엣지 병합 시작: ${edgeQueue.length}개 후보, threshold=${threshold}`
-    );
-    let mergedCount = 0;
-
-    // 짧은 엣지들을 순차적으로 병합
-    while (edgeQueue.length > 0) {
-      const { v1, v2, length } = edgeQueue.shift()!;
-
-      // 임계값보다 긴 엣지가 나오면 종료
-      if (length >= threshold) {
-        break;
-      }
-
-      // 이미 삭제된 정점은 건너뛰기
-      if (
-        this.geometry.positions[v1] === null ||
-        this.geometry.positions[v2] === null
-      ) {
-        continue;
-      }
-
-      // 엣지 병합
-      this.geometry.mergeVertices(v1, v2);
-      mergedCount++;
-
-      // edgeQueue의 모든 엣지에서 v2를 v1로 변경하고 길이 재계산
-      for (const edge of edgeQueue) {
-        if (edge.v1 === v2) edge.v1 = v1;
-        if (edge.v2 === v2) edge.v2 = v1;
-
-        // v1이 관련된 엣지의 길이 재계산
-        if (edge.v1 === v1 || edge.v2 === v1) {
-          const pos1 = this.geometry.positions[edge.v1]!;
-          const pos2 = this.geometry.positions[edge.v2]!;
-          edge.length = pos1.distanceTo(pos2);
-        }
-      }
-
-      // edgeQueue 재정렬
-      edgeQueue.sort((a, b) => a.length - b.length);
+  private projectPointToEdge(
+    point: THREE.Vector3,
+    edgeStart: THREE.Vector3,
+    edgeEnd: THREE.Vector3
+  ): { distance: number; projection: THREE.Vector3; t: number } {
+    const AB = new THREE.Vector3().subVectors(edgeEnd, edgeStart);
+    const AP = new THREE.Vector3().subVectors(point, edgeStart);
+    
+    const abLengthSq = AB.lengthSq();
+    if (abLengthSq < 1e-10) {
+      // 엣지 길이가 0에 가까우면 시작점으로
+      return {
+        distance: point.distanceTo(edgeStart),
+        projection: edgeStart.clone(),
+        t: 0
+      };
     }
-    console.log(`엣지 병합 완료: ${mergedCount}개 병합됨`);
+    
+    // t는 0-1 사이로 clamp (선분 범위 내)
+    const t = Math.max(0, Math.min(1, AP.dot(AB) / abLengthSq));
+    
+    // Projection point = A + t * AB
+    const projection = new THREE.Vector3()
+      .copy(edgeStart)
+      .add(AB.multiplyScalar(t));
+    
+    const distance = point.distanceTo(projection);
+    
+    return { distance, projection, t };
   }
 
   /**
-   * 경계선에 인접한 엣지들만 수집
+   * 짧은 엣지 병합 및 border edge projection
    */
-  private _collectCandidateEdges(): EdgeInfo[] {
-    const edgeQueue: EdgeInfo[] = [];
-    const processedEdges = new Set<string>();
-
-    // 경계 정점들과 연결된 모든 엣지 수집
-    for (const borderVertex of this.borderVertexIndices) {
-      const neighbors = this.geometry.edges.get(borderVertex)!;
-
-      for (const neighbor of neighbors) {
-        // 엣지 키 생성 (v1 < v2 보장)
-        const v1 = Math.min(borderVertex, neighbor);
-        const v2 = Math.max(borderVertex, neighbor);
-        const edgeKey = `${v1}-${v2}`;
-
-        // 이미 처리한 엣지는 건너뛰기
-        if (processedEdges.has(edgeKey)) continue;
-        processedEdges.add(edgeKey);
-
-        // 엣지 길이 계산
-        const length = this.geometry.positions[v1]!.distanceTo(
-          this.geometry.positions[v2]!
-        );
-        edgeQueue.push({ v1, v2, length });
+  private mergeShortEdges(threshold: number): void {
+    // Border vertex set 생성 (빠른 검색)
+    const borderVertexSet = new Set(this.borderVertexIndices);
+    
+    console.log(`  초기 경계 정점 수: ${this.borderVertexIndices.length}`);
+    
+    // === 1단계: Adjacent Vertex Merging ===
+    console.log("  1단계: 인접 정점 병합 시작");
+    let mergeCount = 0;
+    
+      for (let i = 0; i < this.borderVertexIndices.length; i++) {
+        const borderVertex = this.borderVertexIndices[i];
+        
+        if (!this.geometry.positions[borderVertex]) {
+          console.log("이미 삭제된 border 제거:", borderVertex);
+          this.borderVertexIndices.splice(i, 1);
+          borderVertexSet.delete(borderVertex);
+          continue;
+        }
+      
+      const borderPos = this.geometry.positions[borderVertex]!;
+      const adjacentVertices = this.geometry.edges.get(borderVertex)!;
+      
+      // 인접 정점들 중 threshold보다 가까운 것 찾기
+      for (const adjacentVertex of adjacentVertices) {
+        // 이미 삭제되었으면 스킵
+        const adjacentPos = this.geometry.positions[adjacentVertex]!;
+        
+        const distance = borderPos.distanceTo(adjacentPos);
+        
+        if (distance < threshold) {
+          // border vertex로 병합 (adjacentVertex를 borderVertex로)
+          this.geometry.mergeVertices(borderVertex, adjacentVertex);
+          mergeCount++;
+          
+          // adjacentVertex가 border vertex였다면 제거
+          if (borderVertexSet.has(adjacentVertex)) {
+            const idx = this.borderVertexIndices.indexOf(adjacentVertex);
+            if (idx !== -1) {
+              this.borderVertexIndices.splice(idx, 1);
+              borderVertexSet.delete(adjacentVertex);
+            }
+          }
+        }
       }
     }
+    
+    console.log(`  1단계 완료: ${mergeCount}개 정점 병합`);
+    
+    // 1단계 후 정리: mergeVertices가 다른 border 정점들도 삭제했을 수 있으므로 정리
+    this.borderVertexIndices = this.borderVertexIndices.filter(idx => {
+      const isValid = this.geometry.positions[idx] !== null;
+      if (!isValid) {
+        console.log("1단계 정리: 삭제된 border 제거:", idx);
+        borderVertexSet.delete(idx);
+      }
+      return isValid;
+    });
+    
+    // === 2단계: Border Edge Projection ===
+    console.log("  2단계: Border edge projection 시작");
+    let projectionCount = 0;
+    
+    // Border edges 생성 (정점 인덱스만 저장, borderIdx는 동적으로 계산)
+    const borderEdges: Array<{ v1: number; v2: number }> = [];
+    for (let i = 0; i < this.borderVertexIndices.length; i++) {
+      const v1 = this.borderVertexIndices[i];
+      const v2 = this.borderVertexIndices[(i + 1) % this.borderVertexIndices.length];
+      borderEdges.push({ v1, v2 });
+    }
+    
+    // 각 border edge에 대해 인접 face 처리
+    for (const { v1, v2 } of borderEdges) {
+      // 엣지가 유효한지 확인
+      const pos1 = this.geometry.positions[v1];
+      const pos2 = this.geometry.positions[v2];
+      if (!pos1 || !pos2) continue;
+      
+      // 이 엣지를 포함하는 면들 찾기
+      const facesWithEdge = this.geometry.findFacesWithEdge(v1, v2);
+      
+      for (const face of facesWithEdge) {
+        // Opposite vertex 찾기 (v1, v2가 아닌 나머지)
+        const oppositeVertex = face.find(idx => idx !== v1 && idx !== v2);
+        if (oppositeVertex === undefined) continue;
+        
+        // 이미 border vertex면 스킵
+        if (borderVertexSet.has(oppositeVertex)) continue;
+        
+        const oppositePos = this.geometry.positions[oppositeVertex];
+        if (!oppositePos) continue;
+        
+        // Opposite vertex에서 border edge까지 projection 계산
+        const { distance, projection, t } = this.projectPointToEdge(oppositePos, pos1, pos2);
+        
+        if (distance < threshold) {
+          // Opposite vertex의 노멀 계산 (엣지 노멀 보간)
+          const normal1 = this.geometry.normals[v1]!;
+          const normal2 = this.geometry.normals[v2]!;
+          const newNormal = new THREE.Vector3().lerpVectors(normal1, normal2, t).normalize();
+          
+          // Opposite vertex를 projection 위치로 이동
+          this.geometry.setVertex(oppositeVertex, projection, newNormal);
+          
+          // borderVertexIndices에 삽입 (v1과 v2 사이에)
+          // 현재 borderVertexIndices에서 v1의 위치를 찾아서 그 다음에 삽입
+          const currentV1Idx = this.borderVertexIndices.indexOf(v1);
+          if (currentV1Idx !== -1) {
+            this.borderVertexIndices.splice(currentV1Idx + 1, 0, oppositeVertex);
+            borderVertexSet.add(oppositeVertex);
+          }
+          
+          // 해당 face는 이제 degenerate (넓이 0) - 즉시 삭제
+          this.geometry.removeFace(face[0], face[1], face[2]);
+          
+          projectionCount++;
+        }
+      }
+    }
+    
+    console.log(`  2단계 완료: ${projectionCount}개 정점 projection`);
+    
+    // 2단계 후 최종 정리: 삭제된 정점이 혹시 남아있는지 확인
+    const beforeFinalCleanup = this.borderVertexIndices.length;
+    this.borderVertexIndices = this.borderVertexIndices.filter(idx => {
+      const isValid = this.geometry.positions[idx] !== null;
+      if (!isValid) {
+        console.log("2단계 정리: 삭제된 border 제거:", idx);
+        borderVertexSet.delete(idx);
+      }
+      return isValid;
+    });
+    console.log(`  2단계 정리: ${beforeFinalCleanup - this.borderVertexIndices.length}개 삭제된 정점 제거`);
+    console.log(`  최종 경계 정점 수: ${this.borderVertexIndices.length}`);
 
-    return edgeQueue;
+    // 현재 borderVertexIndices의 모든 정점에 debug point 추가 (빨강)
+    if (this.debugScene) {
+      for (const idx of this.borderVertexIndices) {
+        const pos = this.geometry.positions[idx];
+        if (pos) {
+          this._addDebugPoint(pos, 0xff0000, 0.0008); // 약간 작은 구로 표시
+        }
+      }
+    }
   }
 
   /**
