@@ -333,7 +333,7 @@ export class MeshCutter {
       pseudoDrawingPoint = {
         position: intersectionPoint,
         normal: newNormal,
-        face: face,
+        face: undefined,
         newVertexIndex,
       };
 
@@ -410,8 +410,9 @@ export class MeshCutter {
       }
     }
 
-    // 교차점 찾기
+    // 교차점 찾기 + 교차 실패 시를 대비한 가장 가까운 후보 정점 트래킹
     let intersection: Intersection | null = null;
+    const vertexCandidates: {vertexIndex: number, distance: number}[] = [];
 
     for (const face of candidateTriangles) {
       const edgeVertexIndexes = face.filter(
@@ -426,21 +427,14 @@ export class MeshCutter {
         endIndex: edgeVertexIndexes[1],
       };
 
-      // 디버깅: 검사 중인 엣지 표시
-      this._addDebugEdge(edge.start, edge.end, 0xffff00); // 노란색
+      // endPoint를 face 평면에 투영 (THREE.Plane 사용)
+      const endPointOnPlane = this._projectPointToFacePlane(face, endDrawingPoint.position);
 
-      const endPointOnPlane = endDrawingPoint.position.clone();
-
-      // 첫 번째 삼각형의 법선 벡터를 사용하여 평면 계산
-      const vertices = face.map((vIdx) => this.geometry.positions[vIdx]!);
-      const v1 = new THREE.Vector3().subVectors(vertices[1], vertices[0]);
-      const v2 = new THREE.Vector3().subVectors(vertices[2], vertices[0]);
-      const planeNormal = new THREE.Vector3().crossVectors(v1, v2).normalize();
-
-      // endPoint를 평면에 투영
-      const v = new THREE.Vector3().subVectors(endPointOnPlane, vertices[0]);
-      const distance = v.dot(planeNormal);
-      endPointOnPlane.sub(planeNormal.multiplyScalar(distance));
+      // 교차 실패 대비: edge의 각 정점과 start-endPointOnPlane 선분 간 최단거리 측정
+      for (const vIdx of edgeVertexIndexes) {
+        const candidatePos = this.geometry.positions[vIdx]!;
+        vertexCandidates.push({vertexIndex: vIdx, distance: candidatePos.distanceTo(endPointOnPlane)});
+      }
 
       const intersectionPosition = findEdgeIntersection(
         startDrawingPoint.position,
@@ -461,7 +455,28 @@ export class MeshCutter {
     }
 
     if (!intersection) {
-      throw new Error("교차점 찾기 실패");
+      // 교차 실패: 가장 가까운 후보 정점으로 우회 진행
+      console.warn("교차점 찾기 실패: 가장 가까운 후보 정점으로 우회 진행", vertexCandidates);
+      const vIndex = vertexCandidates.sort((a, b) => a.distance - b.distance)[0].vertexIndex;
+
+      // 경계 인덱스에 삽입
+      const newBorderIndex =
+        this.borderVertexIndices.findIndex(
+          (idx) => idx === startDrawingPoint.newVertexIndex
+        ) + 1;
+      this.borderVertexIndices.splice(newBorderIndex, 0, vIndex);
+
+      // 기존 정점을 pseudoDrawingPoint로 사용하여 재귀 진행
+      const fallbackPoint: DrawingPoint = {
+        position: this.geometry.positions[vIndex]!,
+        normal: this.geometry.normals[vIndex]!,
+        newVertexIndex: vIndex,
+      };
+
+      this.clearDebugObjects();
+      this._edgeBetweenSelectedAreaPoints(fallbackPoint, endDrawingPoint);
+      return;
+
     }
 
     // 엣지 반대편의 삼각형 찾기
@@ -501,37 +516,18 @@ export class MeshCutter {
   }
 
   /**
-   * 점에서 선분까지의 최단 거리와 projection point 계산
+   * 주어진 face의 평면으로 3D 포인트를 정사영
    */
-  private projectPointToEdge(
-    point: THREE.Vector3,
-    edgeStart: THREE.Vector3,
-    edgeEnd: THREE.Vector3
-  ): { distance: number; projection: THREE.Vector3; t: number } {
-    const AB = new THREE.Vector3().subVectors(edgeEnd, edgeStart);
-    const AP = new THREE.Vector3().subVectors(point, edgeStart);
-    
-    const abLengthSq = AB.lengthSq();
-    if (abLengthSq < 1e-10) {
-      // 엣지 길이가 0에 가까우면 시작점으로
-      return {
-        distance: point.distanceTo(edgeStart),
-        projection: edgeStart.clone(),
-        t: 0
-      };
-    }
-    
-    // t는 0-1 사이로 clamp (선분 범위 내)
-    const t = Math.max(0, Math.min(1, AP.dot(AB) / abLengthSq));
-    
-    // Projection point = A + t * AB
-    const projection = new THREE.Vector3()
-      .copy(edgeStart)
-      .add(AB.multiplyScalar(t));
-    
-    const distance = point.distanceTo(projection);
-    
-    return { distance, projection, t };
+  private _projectPointToFacePlane(
+    face: [number, number, number],
+    point: THREE.Vector3
+  ): THREE.Vector3 {
+    const a = this.geometry.positions[face[0]]!;
+    const b = this.geometry.positions[face[1]]!;
+    const c = this.geometry.positions[face[2]]!;
+
+    const plane = new THREE.Plane().setFromCoplanarPoints(a, b, c);
+    return plane.projectPoint(point, new THREE.Vector3());
   }
 
   /**
