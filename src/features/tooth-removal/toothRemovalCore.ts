@@ -195,14 +195,8 @@ export class ToothRemovalSystem {
 
     try {
       // 1. MeshCutter를 이용한 knife cut 수행 (현재 geometry 사용)
-      console.log("1단계: Knife cut 수행");
       const currentGeometry = refsAny.targetMesh.geometry;
-      console.log("현재 geometry 정보:", {
-        vertices: currentGeometry.attributes.position.count,
-        faces: currentGeometry.index
-          ? currentGeometry.index.count / 3
-          : "no index",
-      });
+
       const { borderVertexIndices, geometry } = MeshCutter.performCutting(
         currentGeometry,
         this.lassoSelector!.getSelectedPoints(),
@@ -210,41 +204,22 @@ export class ToothRemovalSystem {
         refsAny.scene // 디버깅용 scene 전달
       );
 
-      console.log("Knife cut 결과:", {
-        vertexCount: geometry.getVertexCount(),
-        faceCount: geometry.getFaceCount(),
-        borderVertexIndicesCount: borderVertexIndices.length,
-      });
-
       // 2. 내부 면 찾기
-      console.log("2단계: 내부 면 찾기");
-      const { usedFaces }: any = extractInnerFacesFromBorder(
+      const { usedFaces } = extractInnerFacesFromBorder(
         geometry,
         borderVertexIndices
       );
 
       // 3. 내부 면들 제거
-      console.log("3단계: 내부 면 제거");
-      const { geometry: remainingGeometry, vertexMap } = this.removeInnerFaces(
-        geometry,
-        usedFaces
-      );
+      for (const face of usedFaces) {
+        geometry.removeFace(...face);
+      }
 
       // 4. 구멍 채우기
-      console.log("4단계: 구멍 채우기");
-      console.log("구멍 채우기 입력 데이터:", {
-        remainingGeometryVertices: remainingGeometry.attributes.position.count,
-        remainingGeometryFaces: remainingGeometry.index
-          ? remainingGeometry.index.count / 3
-          : 0,
-        borderVertexIndicesCount: borderVertexIndices.length,
-        vertexMapSize: vertexMap.size,
-      });
 
       const filledGeometry = this.fillHoleInGeometry(
-        remainingGeometry,
-        borderVertexIndices,
-        vertexMap
+        geometry,
+        borderVertexIndices
       );
 
       // 5. 메시 업데이트
@@ -272,150 +247,50 @@ export class ToothRemovalSystem {
   }
 
   /**
-   * 내부 면들을 제거하여 새로운 geometry 생성
-   */
-  private removeInnerFaces(
-    geometry: InformedGeometry,
-    usedFaces: Array<[number, number, number]>
-  ): { geometry: THREE.BufferGeometry; vertexMap: Map<number, number> } {
-    // 제거할 면들을 모두 제거
-    for (const face of usedFaces) {
-      geometry.removeFace(face[0], face[1], face[2]);
-    }
-
-    // compact로 null 정점 제거 및 재매핑
-    const { geometry: compacted, vertexMap } = geometry.compact();
-
-    // BufferGeometry로 변환
-    const bufferGeometry = compacted.toBufferGeometry();
-
-    // 노멀과 바운딩 정보 재계산
-    bufferGeometry.computeVertexNormals();
-    bufferGeometry.computeBoundingBox();
-    bufferGeometry.computeBoundingSphere();
-
-    console.log(
-      `내부 면 제거 완료: ${compacted.getVertexCount()}개 정점, ${compacted.getFaceCount()}개 면`
-    );
-
-    return { geometry: bufferGeometry, vertexMap };
-  }
-
-  /**
    * geometry에서 구멍 채우기 (통합 최소 곡면 생성기 사용)
    */
   private fillHoleInGeometry(
-    geometry: THREE.BufferGeometry,
-    borderVertexIndices: number[],
-    vertexMap: Map<number, number>
+    geometry: InformedGeometry,
+    borderVertexIndices: number[]
   ): THREE.BufferGeometry {
-    const positions = geometry.attributes.position.array as Float32Array;
-    const indices = geometry.index
-      ? (geometry.index.array as Uint32Array)
-      : null;
-
-    if (!indices) {
-      console.warn("구멍 채우기 실패: 인덱스가 없습니다.");
-      return geometry;
-    }
-
-    const mappedBorderIndices = borderVertexIndices.map(
-      (index) => vertexMap.get(index)!
-    );
-
     // 경계 정점들의 위치 수집
-    const boundaryPoints = mappedBorderIndices.map((index) => {
-      const x = positions[index * 3];
-      const y = positions[index * 3 + 1];
-      const z = positions[index * 3 + 2];
-      return new THREE.Vector3(x, y, z);
-    });
+    const boundaryPoints = borderVertexIndices.map(
+      (index) => geometry.positions[index]!
+    );
 
     // 통합 최소 곡면 생성
     const minimalSurfaceResult = new MinimalSurfaceGenerator(
       boundaryPoints
     ).generate();
 
-    // 생성된 최소 곡면을 기존 geometry와 통합
-    const integratedGeometry = this.integrateMinimalSurface({
-      originalGeometry: geometry,
-      minimalSurfaceVertices: minimalSurfaceResult.vertices,
-      minimalSurfaceFaces: minimalSurfaceResult.faces,
-      borderIndices: mappedBorderIndices,
-    });
-
-    return integratedGeometry;
-  }
-
-  /**
-   * 통합 최소 곡면을 기존 geometry와 통합
-   */
-  private integrateMinimalSurface({
-    originalGeometry,
-    minimalSurfaceVertices,
-    minimalSurfaceFaces,
-    borderIndices,
-  }: {
-    originalGeometry: THREE.BufferGeometry;
-    minimalSurfaceVertices: THREE.Vector3[];
-    minimalSurfaceFaces: number[][];
-    borderIndices: number[];
-  }): THREE.BufferGeometry {
-    const originalPositions = originalGeometry.attributes.position
-      .array as Float32Array;
-    const originalNormals = originalGeometry.attributes.normal
-      .array as Float32Array;
-    const originalIndices = originalGeometry.index!.array as Uint32Array;
-
-    // winding 방향 확인
     const windingDirection = this.checkWindingDirection(
-      borderIndices,
-      originalIndices
+      geometry,
+      borderVertexIndices
     );
 
-    // 새로운 정점 배열 생성 (기존 + 최소 곡면의 내부 정점들)
-    const newVertices = [...originalPositions];
-    const newNormals = [...originalNormals];
-
     // 최소 곡면의 내부 정점들 추가 (경계 정점 제외)
-    const borderVertexCount = borderIndices.length;
-    for (let i = borderVertexCount; i < minimalSurfaceVertices.length; i++) {
-      const vertex = minimalSurfaceVertices[i];
-      newVertices.push(vertex.x, vertex.y, vertex.z);
-      // 노멀은 나중에 계산하므로 임시로 0으로 설정
-      newNormals.push(0, 0, 0);
+    const borderVertexCount = borderVertexIndices.length;
+
+    const vertexMap = new Map<number, number>();
+    for (let i = 0; i < borderVertexCount; i++) {
+      vertexMap.set(i, borderVertexIndices[i]);
     }
 
-    // 새로운 인덱스 배열 생성
-    const newIndices = [...originalIndices];
+    for (let i = borderVertexCount; i < minimalSurfaceResult.vertices.length; i++) {
+      const vertex = minimalSurfaceResult.vertices[i];
+      const newIndex = geometry.addVertex(vertex, new THREE.Vector3(0, 0, 0));
+      vertexMap.set(i, newIndex);
+    }
 
-    // 최소 곡면의 인덱스들 추가 (경계 정점은 기존 인덱스 사용, 내부 정점은 새 인덱스 사용)
-    const originalVertexCount = originalPositions.length / 3;
-    for (const face of minimalSurfaceFaces) {
-      for (const vertexIndex of windingDirection ? face : face.reverse()) {
-        if (vertexIndex < borderVertexCount) {
-          // 경계 정점: 기존 인덱스 사용
-          newIndices.push(borderIndices[vertexIndex]);
-        } else {
-          // 내부 정점: 새 인덱스 사용
-          const newIndex =
-            originalVertexCount + (vertexIndex - borderVertexCount);
-          newIndices.push(newIndex);
-        }
+    for (const [v0, v1, v2] of minimalSurfaceResult.faces) {
+      if (windingDirection) {
+      geometry.addFace(vertexMap.get(v0)!, vertexMap.get(v2)!, vertexMap.get(v1)!);
+      } else {
+        geometry.addFace(vertexMap.get(v0)!, vertexMap.get(v1)!, vertexMap.get(v2)!);
       }
     }
 
-    // 새로운 BufferGeometry 생성
-    const integratedGeometry = new THREE.BufferGeometry();
-    integratedGeometry.setAttribute(
-      "position",
-      new THREE.Float32BufferAttribute(newVertices, 3)
-    );
-    integratedGeometry.setAttribute(
-      "normal",
-      new THREE.Float32BufferAttribute(newNormals, 3)
-    );
-    integratedGeometry.setIndex(new THREE.Uint32BufferAttribute(newIndices, 1));
+    const integratedGeometry = geometry.compact().geometry.toBufferGeometry();
 
     // 노멀과 바운딩 정보 재계산
     integratedGeometry.computeVertexNormals();
@@ -426,33 +301,17 @@ export class ToothRemovalSystem {
   }
 
   private checkWindingDirection(
-    borderIndices: number[],
-    originalIndices: Uint32Array
+    geometry: InformedGeometry,
+    borderIndices: number[]
   ): boolean {
-    const faceCount = originalIndices.length / 3;
+    const [v0, v1] = borderIndices;
+    const [face] = geometry.findFacesWithEdge(v0, v1);
 
-    for (let i = 0; i < faceCount; i++) {
-      const a = originalIndices[i * 3];
-      const b = originalIndices[i * 3 + 1];
-      const c = originalIndices[i * 3 + 2];
+    const [a, b, c] = face;
 
-      if (
-        (a === borderIndices[0] && b === borderIndices[1]) ||
-        (b === borderIndices[0] && c === borderIndices[1]) ||
-        (c === borderIndices[0] && a === borderIndices[1])
-      ) {
-        return false;
-      }
-      if (
-        (a === borderIndices[1] && b === borderIndices[0]) ||
-        (b === borderIndices[1] && c === borderIndices[0]) ||
-        (c === borderIndices[1] && a === borderIndices[0])
-      ) {
-        return true;
-      }
-    }
-
-    throw new Error("Winding direction check failed");
+    return (
+      (a === v0 && b === v1) || (b === v0 && c === v1) || (c === v0 && a === v1)
+    );
   }
   /**
    * 메시에 새로운 geometry 적용 (공통 로직)
@@ -571,7 +430,6 @@ export class ToothRemovalSystem {
    */
   public restoreOriginal(): boolean {
     this.onUpdateMessage("백업 상태로 되돌리는 중...");
-
 
     try {
       // 백업 geometry 복원
