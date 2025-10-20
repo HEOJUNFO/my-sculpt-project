@@ -26,7 +26,7 @@ export function generateFlipper() {
   try {
     const originalGeometry = refs.targetMesh.geometry.clone();
 
-    const { borderVertexIndices, geometry } = MeshCutter.performCutting(originalGeometry, selectedAreaPoints, 0.005, refs.scene);
+    const { borderVertexIndices, geometry } = MeshCutter.performCutting(originalGeometry, selectedAreaPoints);
 
     const { usedVertices, usedFaces } = extractInnerFacesFromBorder(
       geometry,
