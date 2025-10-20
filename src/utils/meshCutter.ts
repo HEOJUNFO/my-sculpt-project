@@ -116,7 +116,11 @@ export class MeshCutter {
     const borderPoints: DrawingPoint[] = selectedAreaPoints.map((point) => ({
       position: point.position,
       normal: point.normal,
-      face: [faceIndices[point.faceIndex * 3], faceIndices[point.faceIndex * 3 + 1], faceIndices[point.faceIndex * 3 + 2]],
+      face: [
+        faceIndices[point.faceIndex * 3],
+        faceIndices[point.faceIndex * 3 + 1],
+        faceIndices[point.faceIndex * 3 + 2],
+      ],
     }));
 
     console.log("=== Knife Cut 시작 ===");
@@ -124,7 +128,7 @@ export class MeshCutter {
     // 1. 각 점에 대해 면 분할
     cutter.subdivideIntersectedFaces(borderPoints);
 
-    // 2. 연속된 점들 사이의 경로 찾기 및 면 분할 
+    // 2. 연속된 점들 사이의 경로 찾기 및 면 분할
     cutter.performKnifeCuts(borderPoints);
 
     console.log(
@@ -135,9 +139,7 @@ export class MeshCutter {
     );
 
     // 3. 엣지 병합 단계
-    console.log("=== 엣지 병합 시작 ===");
     cutter.mergeShortEdges(edgeMergeThreshold);
-    console.log("=== 엣지 병합 완료 ===");
 
     // 4. 플리퍼가 기대하는 형태로 결과 반환 (compact된 상태)
     return cutter.getWorkingData();
@@ -538,38 +540,37 @@ export class MeshCutter {
   private mergeShortEdges(threshold: number): void {
     // Border vertex set 생성 (빠른 검색)
     const borderVertexSet = new Set(this.borderVertexIndices);
-    
+
     console.log(`  초기 경계 정점 수: ${this.borderVertexIndices.length}`);
-    
+
     // === 1단계: Adjacent Vertex Merging ===
     console.log("  1단계: 인접 정점 병합 시작");
     let mergeCount = 0;
-    
-      for (let i = 0; i < this.borderVertexIndices.length; i++) {
-        const borderVertex = this.borderVertexIndices[i];
-        
-        if (!this.geometry.positions[borderVertex]) {
-          console.log("이미 삭제된 border 제거:", borderVertex);
-          this.borderVertexIndices.splice(i, 1);
-          borderVertexSet.delete(borderVertex);
-          continue;
-        }
-      
+
+    for (let i = 0; i < this.borderVertexIndices.length; i++) {
+      const borderVertex = this.borderVertexIndices[i];
+
+      if (!this.geometry.positions[borderVertex]) {
+        console.log("이미 삭제된 border 제거:", borderVertex);
+        this.borderVertexIndices.splice(i, 1);
+        borderVertexSet.delete(borderVertex);
+        continue;
+      }
+
       const borderPos = this.geometry.positions[borderVertex]!;
       const adjacentVertices = this.geometry.edges.get(borderVertex)!;
-      
+
       // 인접 정점들 중 threshold보다 가까운 것 찾기
       for (const adjacentVertex of adjacentVertices) {
-        // 이미 삭제되었으면 스킵
         const adjacentPos = this.geometry.positions[adjacentVertex]!;
-        
+
         const distance = borderPos.distanceTo(adjacentPos);
-        
+
         if (distance < threshold) {
           // border vertex로 병합 (adjacentVertex를 borderVertex로)
           this.geometry.mergeVertices(borderVertex, adjacentVertex);
           mergeCount++;
-          
+
           // adjacentVertex가 border vertex였다면 제거
           if (borderVertexSet.has(adjacentVertex)) {
             const idx = this.borderVertexIndices.indexOf(adjacentVertex);
@@ -581,101 +582,57 @@ export class MeshCutter {
         }
       }
     }
-    
-    console.log(`  1단계 완료: ${mergeCount}개 정점 병합`);
-    
-    // 1단계 후 정리: mergeVertices가 다른 border 정점들도 삭제했을 수 있으므로 정리
-    this.borderVertexIndices = this.borderVertexIndices.filter(idx => {
-      const isValid = this.geometry.positions[idx] !== null;
-      if (!isValid) {
-        console.log("1단계 정리: 삭제된 border 제거:", idx);
-        borderVertexSet.delete(idx);
-      }
-      return isValid;
-    });
-    
-    // === 2단계: Border Edge Projection ===
-    console.log("  2단계: Border edge projection 시작");
-    let projectionCount = 0;
-    
-    // Border edges 생성 (정점 인덱스만 저장, borderIdx는 동적으로 계산)
-    const borderEdges: Array<{ v1: number; v2: number }> = [];
-    for (let i = 0; i < this.borderVertexIndices.length; i++) {
-      const v1 = this.borderVertexIndices[i];
-      const v2 = this.borderVertexIndices[(i + 1) % this.borderVertexIndices.length];
-      borderEdges.push({ v1, v2 });
-    }
-    
-    // 각 border edge에 대해 인접 face 처리
-    for (const { v1, v2 } of borderEdges) {
-      // 엣지가 유효한지 확인
-      const pos1 = this.geometry.positions[v1];
-      const pos2 = this.geometry.positions[v2];
-      if (!pos1 || !pos2) continue;
-      
-      // 이 엣지를 포함하는 면들 찾기
-      const facesWithEdge = this.geometry.findFacesWithEdge(v1, v2);
-      
-      for (const face of facesWithEdge) {
-        // Opposite vertex 찾기 (v1, v2가 아닌 나머지)
-        const oppositeVertex = face.find(idx => idx !== v1 && idx !== v2);
-        if (oppositeVertex === undefined) continue;
-        
-        // 이미 border vertex면 스킵
-        if (borderVertexSet.has(oppositeVertex)) continue;
-        
-        const oppositePos = this.geometry.positions[oppositeVertex];
-        if (!oppositePos) continue;
-        
-        // Opposite vertex에서 border edge까지 projection 계산
-        const { distance, projection, t } = this.projectPointToEdge(oppositePos, pos1, pos2);
-        
-        if (distance < threshold) {
-          // Opposite vertex의 노멀 계산 (엣지 노멀 보간)
-          const normal1 = this.geometry.normals[v1]!;
-          const normal2 = this.geometry.normals[v2]!;
-          const newNormal = new THREE.Vector3().lerpVectors(normal1, normal2, t).normalize();
-          
-          // Opposite vertex를 projection 위치로 이동
-          this.geometry.setVertex(oppositeVertex, projection, newNormal);
-          
-          // borderVertexIndices에 삽입 (v1과 v2 사이에)
-          // 현재 borderVertexIndices에서 v1의 위치를 찾아서 그 다음에 삽입
-          const currentV1Idx = this.borderVertexIndices.indexOf(v1);
-          if (currentV1Idx !== -1) {
-            this.borderVertexIndices.splice(currentV1Idx + 1, 0, oppositeVertex);
-            borderVertexSet.add(oppositeVertex);
-          }
-          
-          // 해당 face는 이제 degenerate (넓이 0) - 즉시 삭제
-          this.geometry.removeFace(face[0], face[1], face[2]);
-          
-          projectionCount++;
-        }
-      }
-    }
-    
-    console.log(`  2단계 완료: ${projectionCount}개 정점 projection`);
-    
-    // 2단계 후 최종 정리: 삭제된 정점이 혹시 남아있는지 확인
-    const beforeFinalCleanup = this.borderVertexIndices.length;
-    this.borderVertexIndices = this.borderVertexIndices.filter(idx => {
-      const isValid = this.geometry.positions[idx] !== null;
-      if (!isValid) {
-        console.log("2단계 정리: 삭제된 border 제거:", idx);
-        borderVertexSet.delete(idx);
-      }
-      return isValid;
-    });
-    console.log(`  2단계 정리: ${beforeFinalCleanup - this.borderVertexIndices.length}개 삭제된 정점 제거`);
-    console.log(`  최종 경계 정점 수: ${this.borderVertexIndices.length}`);
 
-    // 현재 borderVertexIndices의 모든 정점에 debug point 추가 (빨강)
-    if (this.debugScene) {
-      for (const idx of this.borderVertexIndices) {
-        const pos = this.geometry.positions[idx];
-        if (pos) {
-          this._addDebugPoint(pos, 0xff0000, 0.0008); // 약간 작은 구로 표시
+    console.log(`${mergeCount}개 정점 병합`);
+
+    this.borderVertexIndices = this.borderVertexIndices.filter((idx) => {
+      const isValid = this.geometry.positions[idx] !== null;
+      if (!isValid) {
+        console.log("정리: 삭제된 border 제거:", idx);
+        borderVertexSet.delete(idx);
+      }
+      return isValid;
+    });
+
+
+    // 임시적 조치: neighbor 적은 정점 제거
+    for (let i = 0; i<this.geometry.positions.length; i++) {
+      const neighbors = this.geometry.edges.get(i);
+      if (neighbors && neighbors.size <= 1) {
+        console.warn(`${i}번 정점 삭제: ${neighbors.size}개 인접 정점`);
+        for (const neighbor of neighbors) {
+          this.geometry.edges.get(neighbor)?.delete(i);
+        }
+        this.geometry.positions[i] = null;
+        this.geometry.normals[i] = null;
+        this.geometry.edges.delete(i);
+      }
+    }
+
+    console.log("  3단계: Border face topology 재구성 시작");
+    for (let i = 0; i < this.borderVertexIndices.length; i++) {
+      const a = this.borderVertexIndices[i];
+      const b =
+        this.borderVertexIndices[(i + 1) % this.borderVertexIndices.length];
+      const c =
+        this.borderVertexIndices[(i + 2) % this.borderVertexIndices.length];
+
+      // abc 면이 존재하는지 확인
+      const abcFace = this.geometry.getFace(a, b, c);
+      if (abcFace) {
+        const d = this.findOppositeVertex(a, b, c, borderVertexSet);
+
+        if (d !== null) {
+          const windingDirection = this.checkEdgeWindingInFace(a, b, abcFace);
+          this.geometry.removeFace(a, b, c);
+
+          if(windingDirection) {
+            this.geometry.addFace(a, b, d);
+            this.geometry.addFace(b, c, d);
+          } else {
+            this.geometry.addFace(a, d, b);
+            this.geometry.addFace(b, d, c);
+          }
         }
       }
     }
@@ -733,6 +690,95 @@ export class MeshCutter {
       }
     }
     this.debugObjects = [];
+  }
+
+  /**
+   * 엣지 winding direction 확인
+   * v1 -> v2 순서가 face에서 유지되는지 확인
+   */
+  private checkEdgeWindingInFace(v1: number, v2: number, face: [number, number, number]): boolean {
+    const [f1, f2, f3] = face;
+    return (f1 === v1 && f2 === v2) || 
+           (f2 === v1 && f3 === v2) || 
+           (f3 === v1 && f1 === v2);
+  }
+
+  /**
+   * 재귀적으로 반대편 정점을 찾는 함수
+   * abc가 아닌 acd 면을 찾아 d를 리턴
+   * 
+   * @param a 첫 번째 정점
+   * @param b 중간 정점 (제외할 정점)
+   * @param c 세 번째 정점
+   * @param borderVertexSet 경계 정점 집합
+   * @returns 반대편 정점 인덱스 또는 null
+   */
+  private findOppositeVertex(
+    a: number, 
+    b: number, 
+    c: number, 
+    borderVertexSet: Set<number>
+  ): number | null {
+    // ac를 가지는 면들 찾기
+    const facesWithAC = this.geometry.findFacesWithEdge(a, c);
+    
+    // abc가 아닌 면 찾기 (acd)
+    const oppositeFace = facesWithAC.find(face => !face.includes(b));
+    
+    if (!oppositeFace) {
+      return null; // d를 찾지 못함
+    }
+    
+    // d 정점 찾기 (a, c가 아닌 정점)
+    const d = oppositeFace.find(v => v !== a && v !== c);
+    
+    if (d === undefined) {
+      return null;
+    }
+    
+    // d가 경계점이 아니면 면 삭제하고 d 리턴
+    if (!borderVertexSet.has(d)) {
+      this.geometry.removeFace(oppositeFace[0], oppositeFace[1], oppositeFace[2]);
+      return d;
+    }
+    
+    // d가 경계점이면 재귀 호출
+    // dac에 대해 호출
+    const e1 = this.findOppositeVertex(d, a, c, borderVertexSet);
+    
+    if (e1 !== null) {
+      const dacFace = this.geometry.getFace(d, a, c)!;
+      const isDA = this.checkEdgeWindingInFace(d, a, dacFace);
+      this.geometry.removeFace(...dacFace);
+      
+      if (isDA) {
+        this.geometry.addFace(d, a, e1);
+      } else {
+        this.geometry.addFace(a, d, e1);
+      }
+      
+      return e1;
+    }
+    
+    // acd에 대해 호출
+    const e2 = this.findOppositeVertex(a, c, d, borderVertexSet);
+    
+    if (e2 !== null) {
+      const acdFace = this.geometry.getFace(a, c, d)!;
+      const isCD = this.checkEdgeWindingInFace(c, d, acdFace);
+      this.geometry.removeFace(...acdFace);
+      
+      if (isCD) {
+        this.geometry.addFace(c, d, e2);
+      } else {
+        this.geometry.addFace(d, c, e2);
+      }
+      
+      return e2;
+    }
+    
+    // 둘 다 null이면 null 리턴
+    return null;
   }
 
   /**
