@@ -349,6 +349,7 @@ export class InformedGeometry {
     // v2를 포함하는 모든 면을 v1로 변경
     const facesToUpdate = this.findFacesWithVertex(v2);
     const newFaces: Array<[number, number, number]> = [];
+    const duplicateFaces: Array<[number, number, number]> = [];
 
     for (const face of facesToUpdate) {
       // 면 제거
@@ -371,15 +372,62 @@ export class InformedGeometry {
       }
     }
 
-    // 새 면들 추가
+    // 새 면들 추가 (duplicateFaces 추적)
     for (const newFace of newFaces) {
-      this.addFace(newFace[0], newFace[1], newFace[2]);
+      const added = this.addFace(newFace[0], newFace[1], newFace[2]);
+      if (!added) {
+        // 이미 존재하는 면이면 duplicateFaces에 추가
+        duplicateFaces.push(newFace);
+      }
     }
 
     // v2 삭제
     this.positions[v2] = null;
     this.normals[v2] = null;
     this.edges.delete(v2);
+
+    // duplicateFaces 처리: adjacent vertex가 2개인 정점들 제거
+    // 예: 중심에 a가 있고, bcd가 a를 둘러싸며 fully connected인 상황
+    // 면은 abc, abd, acd 3개. mergeVertices(b, c)를 하면 abd가 acd로 바뀌는데 acd는 이미 존재.
+    // 이제 a는 adjacent vertex가 2개만 남으므로 제거해야 함.
+    
+    // 1단계: duplicateFaces를 먼저 제거 (정점이 아직 edges에 존재하는 상태에서)
+    for (const face of duplicateFaces) {
+      this.removeFace(face[0], face[1], face[2]);
+    }
+    
+    // 2단계: 고립되거나 불안정한 정점 제거 (neighbors.size <= 2)
+    const vertexRemoveCandidates = new Set<number>(duplicateFaces.flat());
+    
+    while (vertexRemoveCandidates.size > 0) {
+      // neighbors가 2개 이하인 정점 찾기 (고립 또는 불안정)
+      const vertexToRemove = Array.from(vertexRemoveCandidates).find(
+        (vertex) => {
+          const neighbors = this.edges.get(vertex);
+          return neighbors && neighbors.size <= 2;  // 0, 1, 2 모두 제거
+        }
+      );
+      
+      if (vertexToRemove) {
+        // 해당 정점 삭제
+        this.positions[vertexToRemove] = null;
+        this.normals[vertexToRemove] = null;
+        
+        // inbound 제거 (다른 정점에서 이 정점으로의 연결 제거)
+        const neighbors = this.edges.get(vertexToRemove)!;
+        for (const neighbor of neighbors) {
+          this.edges.get(neighbor)?.delete(vertexToRemove);
+        }
+        
+        // outbound 제거
+        this.edges.delete(vertexToRemove);
+        
+        // candidate에서 제거
+        vertexRemoveCandidates.delete(vertexToRemove);
+      } else {
+        break; // 더 이상 제거할 정점이 없음
+      }
+    }
   }
 
   // ============================================================================

@@ -277,7 +277,7 @@ export class ToothRemovalSystem {
     }
 
     for (let i = borderVertexCount; i < minimalSurfaceResult.vertices.length; i++) {
-      const vertex = minimalSurfaceResult.vertices[i];
+      const vertex = minimalSurfaceResult.vertices[i]!;
       const newIndex = geometry.addVertex(vertex, new THREE.Vector3(0, 0, 0));
       vertexMap.set(i, newIndex);
     }
