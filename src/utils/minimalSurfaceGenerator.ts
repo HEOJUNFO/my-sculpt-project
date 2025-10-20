@@ -1,7 +1,5 @@
-// src/utils/minimalSurfaceGenerator.ts
-// 통합 최소 곡면 생성기 - 적응형 세분화와 라플라시안 스무딩을 통한 고품질 최소 곡면 메시 생성
-
 import * as THREE from "three";
+import { InformedGeometry } from "./InformedGeometry";
 
 // 타입 정의
 export interface MinimalSurfaceConfig {
@@ -20,21 +18,21 @@ interface EdgeInfo {
 
 export class MinimalSurfaceGenerator {
   private config: MinimalSurfaceConfig;
-  private vertices: THREE.Vector3[];
+  private geometry: InformedGeometry;
   private fixedVerticeCount: number;
-  private faces: Map<string, [number, number, number]>;
-  private adjacencyMap: Map<number, Set<number>>;
-  private deletedVertices: Set<number>;
 
   constructor(
     boundaryPoints: THREE.Vector3[],
     config: Partial<MinimalSurfaceConfig> = {}
   ) {
-    this.vertices = [...boundaryPoints];
+    this.geometry = new InformedGeometry();
     this.fixedVerticeCount = boundaryPoints.length;
-    this.faces = new Map();
-    this.adjacencyMap = new Map();
-    this.deletedVertices = new Set();
+    
+    // 경계 정점들 추가
+    for (const point of boundaryPoints) {
+      this.geometry.addVertex(point, new THREE.Vector3(0, 0, 1)); // 임시 노멀
+    }
+    
     this.config = {
       edgeLengthMin: 0.002,
       edgeLengthMax: 0.008,
@@ -51,60 +49,21 @@ export class MinimalSurfaceGenerator {
   }
 
   private createInitialTriangleFan() {
+    // 중심점 계산
     const center = new THREE.Vector3();
-    for (const vertex of this.vertices) {
-      center.add(vertex);
+    for (let i = 0; i < this.fixedVerticeCount; i++) {
+      center.add(this.geometry.positions[i]!);
     }
     center.divideScalar(this.fixedVerticeCount);
-    this.vertices.push(center);
+    
+    // 중심 정점 추가
+    const centerIndex = this.geometry.addVertex(center, new THREE.Vector3(0, 0, 1));
 
-    const centerIndex = this.vertices.length - 1;
-
-    // adjacency map과 faces 생성
-    // adjacency map 정합성 체크를 위해서는 육각형 그리고 양방향 연결 그려볼 것
-    this.adjacencyMap.set(
-      0,
-      new Set<number>([this.fixedVerticeCount - 1, 1, centerIndex])
-    );
-    this.addFace([this.fixedVerticeCount - 1, 0, centerIndex]);
-
+    // 삼각형 팬 생성
+    this.geometry.addFace(this.fixedVerticeCount - 1, 0, centerIndex);
+    
     for (let i = 1; i < this.fixedVerticeCount; i++) {
-      const set = new Set<number>([i - 1, i + 1, centerIndex]);
-      this.adjacencyMap.set(i, set);
-      this.addFace([i - 1, i, centerIndex]);
-    }
-    this.adjacencyMap.get(this.fixedVerticeCount - 1)!.add(0);
-
-    const centerNeighbors = new Set<number>(
-      Array(this.fixedVerticeCount)
-        .fill(0)
-        .map((_, i) => i)
-    );
-    this.adjacencyMap.set(centerIndex, centerNeighbors);
-  }
-
-  /** 면을 추가하고, 이미 존재하는 면인지 여부를 반환합니다. */
-  private addFace(face: [number, number, number]): { exists: boolean } {
-    // 키는 오름차순으로 정렬된 인덱스들
-    const sortedIndices = [...face].sort((a, b) => a - b);
-    const key = sortedIndices.join("-");
-
-    if (this.faces.has(key)) {
-      return { exists: true };
-    }
-
-    // 값은 원래 방향 유지
-    this.faces.set(key, face);
-    return { exists: false };
-  }
-
-  private removeFace(face: [number, number, number]): void {
-    // 키는 오름차순으로 정렬된 인덱스들
-    const sortedIndices = [...face].sort((a, b) => a - b);
-    const key = sortedIndices.join("-");
-
-    if (!this.faces.delete(key)) {
-      throw new Error("removeFace: 유효하지 않은 면");
+      this.geometry.addFace(i - 1, i, centerIndex);
     }
   }
 
@@ -112,10 +71,8 @@ export class MinimalSurfaceGenerator {
     try {
       for (let i = 0; i < this.config.stepCount; i++) {
         this.performAdaptiveSubdivision(this.config.edgeLengthMin);
-        this.verifyAdjacencyAndDeletedVertices();
         this.performLaplacianSmoothing(this.config.smoothIterations);
         this.mergeShortEdges(this.config.edgeLengthMax);
-        this.verifyAdjacencyAndDeletedVertices();
         this.performLaplacianSmoothing(this.config.smoothIterations);
       }
     } catch (error) {
@@ -123,51 +80,46 @@ export class MinimalSurfaceGenerator {
     }
   }
 
-  private verifyAdjacencyAndDeletedVertices() {
-    // adjacency map이 있으면 deletedVertices에는 없어야하고, deletedVertices에 있으면 adjacency map에는 없어야 함.
-    const adjacencySet = new Set<number>(this.adjacencyMap.keys());
-    const deletedVerticesSet = new Set<number>(this.deletedVertices);
-    for (const vertexIndex of adjacencySet) {
-      if (deletedVerticesSet.has(vertexIndex)) {
-        throw new Error(
-          "verifyAdjacencyAndDeletedVertices: 유효하지 않은 인접 리스트" +
-            vertexIndex
-        );
-      }
-    }
-    for (const vertexIndex of deletedVerticesSet) {
-      if (adjacencySet.has(vertexIndex)) {
-        throw new Error(
-          "verifyAdjacencyAndDeletedVertices: 유효하지 않은 인접 리스트" +
-            vertexIndex
-        );
-      }
-    }
-  }
-
   private performLaplacianSmoothing(iterations: number) {
-    let vertices = this.vertices;
     for (let iter = 0; iter < iterations; iter++) {
-      vertices = vertices.map((vertex, index) => {
-        if (index < this.fixedVerticeCount || this.deletedVertices.has(index))
-          return vertex;
-        const neighbors = this.adjacencyMap.get(index);
+      // 새로운 위치들을 먼저 계산 (동시에 업데이트하기 위해)
+      const newPositions = new Map<number, THREE.Vector3>();
+      
+      for (let index = 0; index < this.geometry.positions.length; index++) {
+        const position = this.geometry.positions[index];
+        
+        // 고정된 정점이거나 삭제된 정점은 건너뜀
+        if (position === null || index < this.fixedVerticeCount) {
+          continue;
+        }
+        
+        const neighbors = this.geometry.edges.get(index);
         if (!neighbors || neighbors.size === 0) {
           console.error("performLaplacianSmoothing: 유효하지 않은 정점", {
             index,
             neighbors,
           });
-          return vertex;
+          continue;
         }
+        
+        // 인접 정점들의 중심 계산
         const centroid = new THREE.Vector3();
         for (const neighborIndex of neighbors) {
-          centroid.add(vertices[neighborIndex]);
+          const neighborPos = this.geometry.positions[neighborIndex];
+          if (neighborPos) {
+            centroid.add(neighborPos);
+          }
         }
         centroid.divideScalar(neighbors.size);
-        return centroid;
-      });
+        
+        newPositions.set(index, centroid);
+      }
+      
+      // 새로운 위치로 업데이트
+      for (const [index, newPosition] of newPositions) {
+        this.geometry.positions[index] = newPosition;
+      }
     }
-    this.vertices = vertices;
   }
 
   private performAdaptiveSubdivision(lengthThreshold: number) {
@@ -181,7 +133,7 @@ export class MinimalSurfaceGenerator {
     const longEdges: [number, number][] = [];
 
     // adjacency map을 순회하며 엣지 정보 수집
-    for (const [vertexIndex, neighbors] of this.adjacencyMap) {
+    for (const [vertexIndex, neighbors] of this.geometry.edges) {
       for (const neighborIndex of neighbors) {
         if (neighborIndex < vertexIndex) continue;
 
@@ -194,12 +146,15 @@ export class MinimalSurfaceGenerator {
         }
 
         // 엣지 길이 계산
-        const length = this.vertices[vertexIndex].distanceTo(
-          this.vertices[neighborIndex]
-        );
-
-        if (length > lengthThreshold) {
-          longEdges.push([vertexIndex, neighborIndex]);
+        const pos1 = this.geometry.positions[vertexIndex];
+        const pos2 = this.geometry.positions[neighborIndex];
+        
+        if (pos1 && pos2) {
+          const length = pos1.distanceTo(pos2);
+          
+          if (length > lengthThreshold) {
+            longEdges.push([vertexIndex, neighborIndex]);
+          }
         }
       }
     }
@@ -210,35 +165,38 @@ export class MinimalSurfaceGenerator {
   private perform2To4Subdivision(edge: [number, number]) {
     const [v1, v2] = edge;
 
-    // 엣지 중점 계산
-    const midpoint = new THREE.Vector3()
-      .addVectors(this.vertices[v1], this.vertices[v2])
-      .multiplyScalar(0.5);
+    const pos1 = this.geometry.positions[v1];
+    const pos2 = this.geometry.positions[v2];
+    
+    if (!pos1 || !pos2) return;
 
-    // 새로운 정점 추가
-    this.vertices.push(midpoint);
-    const c = this.vertices.length - 1;
-
-    // 엣지를 공유하는 두 면 찾기
-    const sharedFaces = this.findSharedFaces(v1, v2);
-    const windingDirection = this.checkWindingDirection(v1, v2, sharedFaces[0]);
-
-    const [faceA, faceB] = windingDirection
-      ? sharedFaces
-      : sharedFaces.reverse();
-
-    if (!faceA || !faceB) {
-      console.error("perform2To4Subdivision: 유효하지 않은 면", {
+    // 엣지를 공유하는 두 면 찾기 (검증을 먼저 수행)
+    const sharedFaces = this.geometry.findFacesWithEdge(v1, v2);
+    
+    if (sharedFaces.length !== 2) {
+      console.error("perform2To4Subdivision: 유효하지 않은 면 개수", {
         v1,
         v2,
-        sharedFaces,
+        sharedFacesCount: sharedFaces.length,
       });
       return;
     }
 
+    // 검증 통과 후에만 새로운 정점 추가
+    const midpoint = new THREE.Vector3()
+      .addVectors(pos1, pos2)
+      .multiplyScalar(0.5);
+
+    const c = this.geometry.addVertex(midpoint, new THREE.Vector3(0, 0, 1));
+
+    const windingDirection = this.checkWindingDirection(v1, v2, sharedFaces[0]);
+    const [faceA, faceB] = windingDirection
+      ? sharedFaces
+      : sharedFaces.reverse();
+
     // 기존 면들 제거
-    this.removeFace(faceA);
-    this.removeFace(faceB);
+    this.geometry.removeFace(faceA[0], faceA[1], faceA[2]);
+    this.geometry.removeFace(faceB[0], faceB[1], faceB[2]);
 
     // 4개의 새로운 면 추가
     // faceA에서 v1, v2가 아닌 정점 찾기
@@ -248,40 +206,10 @@ export class MinimalSurfaceGenerator {
     const b = faceB.find((v) => v !== v1 && v !== v2)!;
 
     // 4개의 새로운 면 생성
-    this.addFace([v1, c, a]);
-    this.addFace([c, v2, a]);
-    this.addFace([v2, c, b]);
-    this.addFace([c, v1, b]);
-
-    // 인접 리스트 업데이트
-    // 원래 edge 없애고 새 vertex에서부터 4개의 edge 추가
-    this.adjacencyMap.get(v1)!.delete(v2);
-    this.adjacencyMap.get(v2)!.delete(v1);
-
-    const newVertexneighbors = new Set<number>([v1, v2, a, b]);
-    this.adjacencyMap.set(c, newVertexneighbors);
-
-    this.adjacencyMap.get(v1)!.add(c);
-    this.adjacencyMap.get(v2)!.add(c);
-    this.adjacencyMap.get(a)!.add(c);
-    this.adjacencyMap.get(b)!.add(c);
-  }
-
-  private findSharedFaces(v1: number, v2: number): [number, number, number][] {
-    const sharedFaces: [number, number, number][] = [];
-
-    for (const face of this.faces.values()) {
-      const [f1, f2, f3] = face;
-
-      if (
-        (f1 === v1 || f2 === v1 || f3 === v1) &&
-        (f1 === v2 || f2 === v2 || f3 === v2)
-      ) {
-        sharedFaces.push(face);
-      }
-    }
-
-    return sharedFaces;
+    this.geometry.addFace(v1, c, a);
+    this.geometry.addFace(c, v2, a);
+    this.geometry.addFace(v2, c, b);
+    this.geometry.addFace(c, v1, b);
   }
 
   private checkWindingDirection(
@@ -325,7 +253,37 @@ export class MinimalSurfaceGenerator {
         continue;
       }
 
-      this.mergeEdge(Math.max(v1, v2), Math.min(v1, v2), edgeQueue);
+      // 이미 삭제된 정점은 건너뛰기
+      if (
+        this.geometry.positions[v1] === null ||
+        this.geometry.positions[v2] === null
+      ) {
+        continue;
+      }
+
+      // v1을 v2로 병합 (v1이 더 큰 인덱스)
+      const toMerge = Math.max(v1, v2);
+      const mergeInto = Math.min(v1, v2);
+      
+      this.geometry.mergeVertices(mergeInto, toMerge);
+
+      // edgeQueue의 모든 엣지에서 toMerge를 mergeInto로 변경하고 길이 재계산
+      for (const edge of edgeQueue) {
+        if (edge.v1 === toMerge) edge.v1 = mergeInto;
+        if (edge.v2 === toMerge) edge.v2 = mergeInto;
+        
+        // mergeInto가 관련된 엣지의 길이 재계산
+        if (edge.v1 === mergeInto || edge.v2 === mergeInto) {
+          const pos1 = this.geometry.positions[edge.v1];
+          const pos2 = this.geometry.positions[edge.v2];
+          if (pos1 && pos2) {
+            edge.length = pos1.distanceTo(pos2);
+          }
+        }
+      }
+
+      // edgeQueue 재정렬
+      edgeQueue.sort((a, b) => a.length - b.length);
     }
   }
 
@@ -335,7 +293,7 @@ export class MinimalSurfaceGenerator {
   private collectAllEdges(): EdgeInfo[] {
     const edgeQueue: EdgeInfo[] = [];
 
-    for (const [vertexIndex, neighbors] of this.adjacencyMap) {
+    for (const [vertexIndex, neighbors] of this.geometry.edges) {
       for (const neighborIndex of neighbors) {
         if (neighborIndex < vertexIndex) continue;
 
@@ -347,138 +305,32 @@ export class MinimalSurfaceGenerator {
           continue;
         }
 
-        const length = this.vertices[vertexIndex].distanceTo(
-          this.vertices[neighborIndex]
-        );
-
-        edgeQueue.push({
-          v1: vertexIndex,
-          v2: neighborIndex,
-          length: length,
-        });
+        const pos1 = this.geometry.positions[vertexIndex];
+        const pos2 = this.geometry.positions[neighborIndex];
+        
+        if (pos1 && pos2) {
+          const length = pos1.distanceTo(pos2);
+          
+          edgeQueue.push({
+            v1: vertexIndex,
+            v2: neighborIndex,
+            length: length,
+          });
+        }
       }
     }
 
     return edgeQueue;
   }
 
-  /**
-   * 두 정점을 병합합니다.
-   * v1을 v2로 병합하고, v1을 삭제된 정점으로 표시합니다.
-   */
-  private mergeEdge(v1: number, v2: number, edgeQueue: EdgeInfo[]) {
-    if (
-      v1 === v2 ||
-      this.deletedVertices.has(v1) ||
-      this.deletedVertices.has(v2)
-    )
-      return;
-
-    // 공유하는 면들 제거, v1을 v2로 변경
-    const facesToRemove = [];
-    const facesToReAdd = [];
-    for (const face of this.faces.values()) {
-      if (face.includes(v1)) {
-        facesToRemove.push(face);
-        if (!face.includes(v2)) {
-          const faceToReAdd = [...face] as [number, number, number];
-          faceToReAdd[faceToReAdd.indexOf(v1)] = v2;
-          facesToReAdd.push(faceToReAdd);
-        }
-      }
-    }
-
-    for (const face of facesToRemove) {
-      this.removeFace(face);
-    }
-
-    // 중심에 a가 있고, bcd가 a를 둘러싸며 fully connected인 상황을 생각.
-    // 면은 abc, abd, acd 3개가 있음 여기서 mergeEdge(b, c)를 하게 되는 경우 abd가 acd로 바뀌게 되는데, acd는 이미 존재함.
-    // 이것이 duplicatedFaces 상황이고, 남는 면은 acd 한개임. 원래 abc만 삭제되는게 맞았음. 이는 이제 a를 삭제해야 하는 상황이 됨. a는 adjacent vertex가 2개 뿐임.
-    const duplicateFaces = [];
-    for (const face of facesToReAdd) {
-      const { exists } = this.addFace(face);
-      if (exists) {
-        duplicateFaces.push(face);
-      }
-    }
-
-    // v1의 모든 인접 정점들을 v2에 연결
-    const v1Neighbors = this.adjacencyMap.get(v1)!;
-    const v2Neighbors = this.adjacencyMap.get(v2)!;
-    for (const neighbor of v1Neighbors) {
-      if (neighbor !== v2) {
-        // v1의 인접 정점들을 v2에 연결
-        v2Neighbors.add(neighbor);
-        const neighborNeighbors = this.adjacencyMap.get(neighbor)!;
-        neighborNeighbors.delete(v1);
-        neighborNeighbors.add(v2);
-      }
-    }
-    // v1을 삭제된 정점으로 표시
-    this.deletedVertices.add(v1);
-
-    // v1과 v2 사이의 연결 제거
-    v2Neighbors.delete(v1);
-
-    // v1의 인접성 맵 제거
-    this.adjacencyMap.delete(v1);
-
-    // 병합된 정점과 관련된 모든 엣지들의 길이 재계산
-    for (const edge of edgeQueue) {
-      if (edge.v1 === v1) edge.v1 = v2;
-      if (edge.v2 === v1) edge.v2 = v2;
-      if (edge.v1 === v2 || edge.v2 === v2) {
-        edge.length = this.vertices[edge.v1].distanceTo(this.vertices[edge.v2]);
-      }
-    }
-
-    // duplicatedFaces를 제거
-    const vertexRemoveCandidates = new Set<number>(duplicateFaces.flat());
-    while (vertexRemoveCandidates.size > 0) {
-      const vertexToRemove = Array.from(vertexRemoveCandidates).find(
-        (vertex) => this.adjacencyMap.get(vertex)!.size === 2
-      );
-      if (vertexToRemove) {
-        this.deletedVertices.add(vertexToRemove);
-
-        // inbound 제거
-        this.adjacencyMap.get(vertexToRemove)!.forEach((neighbor) => {
-          this.adjacencyMap.get(neighbor)!.delete(vertexToRemove);
-        });
-
-        // outbound 제거
-        this.adjacencyMap.delete(vertexToRemove);
-
-        // candidate에서 제거
-        vertexRemoveCandidates.delete(vertexToRemove);
-      } else break;
-    }
-
-    // 결국 duplicateFaces는 모두 삭제됨.
-    for (const face of duplicateFaces) {
-      this.removeFace(face);
-    }
-
-    edgeQueue.sort((a, b) => a.length - b.length);
-  }
-
   private createCompactedResult() {
-    const newVertices = [];
-    const vertexMap = new Map<number, number>();
-    for (let i = 0; i < this.vertices.length; i++) {
-      if (!this.deletedVertices.has(i)) {
-        newVertices.push(this.vertices[i]);
-        vertexMap.set(i, newVertices.length - 1);
-      }
-    }
-
+    // InformedGeometry의 compact 사용
+    const { geometry: compacted } = this.geometry.compact();
+    
     return {
-      vertices: newVertices,
+      vertices: compacted.positions,
       fixedVerticeCount: this.fixedVerticeCount,
-      faces: Array.from(this.faces.values()).map((face) =>
-        face.map((v) => vertexMap.get(v)!)
-      ),
+      faces: Array.from(compacted.faces.values()),
     };
   }
 }
