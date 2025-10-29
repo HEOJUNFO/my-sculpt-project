@@ -36,6 +36,7 @@ export const refs = {
   transformControls: null,
   renderer:null,
   camerastate: null,
+  wireframeMode: false, // wireframe 렌더링 모드 상태
 };
 
 // ------------------------
@@ -213,25 +214,44 @@ export function redo() {
 
 /** 활성 재질 */
 function createActiveMaterial() {
-  return new THREE.MeshMatcapMaterial({
-    matcap: refs.matcaps[refs.params.matcap],
-    transparent: true,
-    opacity: refs.params.modelOpacity,
-    side: THREE.DoubleSide,
-    flatShading: refs.params.flatShading,
-  });
-  
+  if (refs.wireframeMode) {
+    return new THREE.MeshBasicMaterial({
+      color: 0x00ff00, // wireframe 색상 (녹색)
+      wireframe: true,
+      transparent: true,
+      opacity: refs.params.modelOpacity,
+      side: THREE.DoubleSide,
+    });
+  } else {
+    return new THREE.MeshMatcapMaterial({
+      matcap: refs.matcaps[refs.params.matcap],
+      transparent: true,
+      opacity: refs.params.modelOpacity,
+      side: THREE.DoubleSide,
+      flatShading: refs.params.flatShading,
+    });
+  }
 }
 
 /** 비활성 재질 */
 function createInactiveMaterial() {
-  return new THREE.MeshMatcapMaterial({
-    matcap: refs.matcaps['MatcapFV'],
-    transparent: true,
-    opacity: refs.params.modelOpacity,
-    side: THREE.DoubleSide,
-    flatShading: refs.params.flatShading,
-  });
+  if (refs.wireframeMode) {
+    return new THREE.MeshBasicMaterial({
+      color: 0x666666, // 비활성 wireframe 색상 (회색)
+      wireframe: true,
+      transparent: true,
+      opacity: refs.params.modelOpacity,
+      side: THREE.DoubleSide,
+    });
+  } else {
+    return new THREE.MeshMatcapMaterial({
+      matcap: refs.matcaps['MatcapFV'],
+      transparent: true,
+      opacity: refs.params.modelOpacity,
+      side: THREE.DoubleSide,
+      flatShading: refs.params.flatShading,
+    });
+  }
 }
 
 /**
@@ -633,6 +653,30 @@ export function importModel(file) {
       console.error('STL load error:', err);
     });
 
+}
+
+/**
+ * Wireframe 모드 토글
+ */
+export function toggleWireframeMode() {
+  refs.wireframeMode = !refs.wireframeMode;
+  
+  // 모든 모델의 재질을 업데이트
+  modelList.forEach((item, i) => {
+    const userOp = item.customOpacity !== undefined 
+      ? item.customOpacity 
+      : refs.params.modelOpacity ?? 1.0;
+
+    if (i === activeItemIndex) {
+      item.mesh.material = createActiveMaterial();
+      item.mesh.material.opacity = userOp;
+    } else {
+      item.mesh.material = createInactiveMaterial();
+      item.mesh.material.opacity = userOp;
+    }
+  });
+  
+  console.log('Wireframe mode:', refs.wireframeMode ? 'ON' : 'OFF');
 }
 
 window.setTargetMeshAsActive = setTargetMeshAsActive;

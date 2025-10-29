@@ -45,10 +45,10 @@ export function startRenderLoop(renderer, scene, camera, stats) {
 
     refs.controls.update();
 
-    // 라이브러리 완료 단계 확인 (단계 6)
-    const isLibraryCompleted = getCurrentStep() === 6;
-    // 플리퍼 완료 단계 확인 (단계 8)
-    const isFlipperCompleted = getCurrentStep() === 8;
+    // 라이브러리 완료 단계 확인 (단계 8) - 발치 단계 추가로 인한 재정의
+    const isLibraryCompleted = getCurrentStep() === 8;
+    // 플리퍼 완료 단계 확인 (단계 10) - 발치 단계 추가로 인한 재정의
+    const isFlipperCompleted = getCurrentStep() === 10;
 
     // 브러시 표시 여부 - 라이브러리/플리퍼 모드에서는 스컬프 비활성화
     if (

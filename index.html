@@ -10,30 +10,35 @@
 <body>
   <div id="drag-hint">Drag STL file or folder here!</div>
   
-  <!-- 진행 단계 표시 UI (스컬프 단계 제거) -->
+  <!-- 진행 단계 표시 UI (발치가 블록아웃보다 먼저 오도록 순서 변경) -->
   <div id="process-steps-container">
     <div class="process-step" data-step="upload">
       <div class="step-circle">1</div>
       <div class="step-label">업로드</div>
     </div>
     <div class="process-step-line"></div>
-    <div class="process-step" data-step="blockout">
+    <div class="process-step" data-step="tooth-removal">
       <div class="step-circle">2</div>
+      <div class="step-label">발치</div>
+    </div>
+    <div class="process-step-line"></div>
+    <div class="process-step" data-step="blockout">
+      <div class="step-circle">3</div>
       <div class="step-label">블럭아웃</div>
     </div>
     <div class="process-step-line"></div>
     <div class="process-step" data-step="library">
-      <div class="step-circle">3</div>
+      <div class="step-circle">4</div>
       <div class="step-label">라이브러리</div>
     </div>
     <div class="process-step-line"></div>
     <div class="process-step" data-step="flipper">
-      <div class="step-circle">4</div>
+      <div class="step-circle">5</div>
       <div class="step-label">플리퍼</div>
     </div>
     <div class="process-step-line"></div>
     <div class="process-step" data-step="export">
-      <div class="step-circle">5</div>
+      <div class="step-circle">6</div>
       <div class="step-label">익스포트</div>
     </div>
   </div>
@@ -144,6 +149,12 @@
       Import
     </button>
 
+    <!-- Wireframe 토글 버튼 -->
+    <button class="brush-btn btn-full" id="btn-wireframe">
+      <ion-icon name="grid-outline"></ion-icon>
+      Wireframe
+    </button>
+
     <input type="file" id="file-input" accept=".stl, .obj, .gltf, .glb" style="display:none" multiple />
   
     <!-- Export (긴 버튼) -->
@@ -198,6 +209,54 @@
     
     <!-- 메시지 표시용 엘리먼트 (선택사항) -->
     <p id="blockout-message" style="color: #2ecc71; margin-top: 10px; display: none;"></p>
+  </div>
+
+  <!-- Tooth Removal UI (치아 제거 단계) -->
+  <div id="tooth-removal-ui">
+    <h2>치아 제거</h2>
+    <hr />
+    
+    <!-- 상태 정보 표시 -->
+    <p id="tooth-removal-info">Alt 키를 누른 채 마우스를 드래그하여 제거할 치아 영역을 선택하세요.</p>
+    
+    <!-- 치아 제거 버튼 -->
+    <button class="brush-btn btn-full" id="btn-remove-tooth" disabled>
+      <ion-icon name="medical-outline"></ion-icon>
+      치아 제거
+    </button>
+    
+    <!-- 버튼 그룹 -->
+    <div class="btn-row-2">
+      <!-- 되돌리기 버튼 (메쉬만) -->
+      <button class="brush-btn btn-half" id="btn-restore-tooth" disabled>
+        <ion-icon name="arrow-undo-outline"></ion-icon>
+        되돌리기
+      </button>
+      
+      <!-- 초기화 버튼 (모두) -->
+      <button class="brush-btn btn-half" id="btn-reset-tooth-selection" disabled>
+        <ion-icon name="refresh-outline"></ion-icon>
+        초기화
+      </button>
+    </div>
+    
+    <!-- 다음 치아 제거 버튼 -->
+    <button class="brush-btn btn-full" id="btn-next-tooth-removal" disabled style="background: #e74c3c;">
+      <ion-icon name="medical-outline"></ion-icon>
+      다음 치아 제거
+    </button>
+    
+    <!-- 발치 완료 버튼 -->
+    <button class="brush-btn btn-full" id="btn-tooth-removal-complete">
+      <ion-icon name="checkmark-circle-outline"></ion-icon>
+      발치 완료
+    </button>
+    
+    <!-- 건너뛰기 버튼 -->
+    <button class="brush-btn btn-full" id="btn-skip-tooth-removal" style="background: #95a5a6;">
+      <ion-icon name="play-forward-outline"></ion-icon>
+      발치 건너뛰기
+    </button>
   </div>
 
   <!-- Vite import -->

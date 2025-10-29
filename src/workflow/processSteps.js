@@ -5,6 +5,7 @@
 import { initLibraryMode, cleanupLibraryMode } from '../features/library/libraryIntegration.js';
 import { initFlipperUI, cleanupFlipperUI } from '../features/flipper/flipperUI.js';
 import { initExportUI, cleanupExportUI } from '../features/export/exportUI.js';
+import { initToothRemovalUI, cleanupToothRemovalUI, setupToothRemovalEventHandlers } from '../features/tooth-removal/toothRemovalUI.ts';
 import { refs } from '../models/modelManager.js';
 
 
@@ -12,21 +13,24 @@ import { refs } from '../models/modelManager.js';
 export const STEPS = {
   UPLOAD: 'upload',
   BLOCKOUT: 'blockout',
+  TOOTH_REMOVAL: 'tooth-removal',
   LIBRARY: 'library',
   FLIPPER: 'flipper',
   EXPORT: 'export'
 };
 
-// 단계 숫자 정의
+// 단계 숫자 정의 (발치가 블록아웃보다 먼저 오도록 재정의)
 // 1 = 업로드 UI (초기 단계)
 // 2 = 업로드 단계 + 스컬프 UI
-// 3 = 블록아웃 단계 + 블록아웃 UI
-// 4 = 블록아웃 단계 + 스컬프 UI
-// 5 = 라이브러리 단계 + 라이브러리 UI
-// 6 = 라이브러리 단계 + 스컬프 UI
-// 7 = 플리퍼 단계 + 플리퍼 UI
-// 8 = 플리퍼 단계 + 스컬프 UI
-// 9 = 익스포트 단계 + 익스포트 UI
+// 3 = 치아 제거 단계 + 치아 제거 UI
+// 4 = 치아 제거 단계 + 스컬프 UI
+// 5 = 블록아웃 단계 + 블록아웃 UI
+// 6 = 블록아웃 단계 + 스컬프 UI
+// 7 = 라이브러리 단계 + 라이브러리 UI
+// 8 = 라이브러리 단계 + 스컬프 UI
+// 9 = 플리퍼 단계 + 플리퍼 UI
+// 10 = 플리퍼 단계 + 스컬프 UI
+// 11 = 익스포트 단계 + 익스포트 UI
 
 // 현재 단계 숫자 (처음에는 1: 업로드 UI)
 let currentStep = 1;
@@ -39,25 +43,32 @@ export function getCurrentStep() {
 }
 
 /**
+ * 현재 단계가 치아 제거 단계인지 확인하는 함수
+ */
+export function isToothRemovalStep() {
+  return currentStep === 3;
+}
+
+/**
  * 현재 단계가 라이브러리 단계인지 확인하는 함수
  */
 export function isLibraryStep() {
-  return currentStep === 5;
+  return currentStep === 7;
 }
 
 /**
  * 현재 단계가 플리퍼 단계인지 확인하는 함수
  */
 export function isFlipperStep() {
-  return currentStep === 7;
+  return currentStep === 9;
 }
 
 /**
  * 현재 단계가 스컬프를 실행해도 되는 단계인지 확인
  */
 export function canSculpt() {
-  // 단계 2, 4, 6, 8에서만 스컬프 가능
-  return currentStep === 2 || currentStep === 4 || currentStep === 6 || currentStep === 8;
+  // 단계 2, 4, 6, 8, 10에서만 스컬프 가능
+  return currentStep === 2 || currentStep === 4 || currentStep === 6 || currentStep === 8 || currentStep === 10;
 }
 
 /**
@@ -80,24 +91,29 @@ function updateTopBar() {
       activeStep = STEPS.UPLOAD;
     } 
     else if (currentStep >= 3 && currentStep <= 4) {
-      // 단계 3-4: 블록아웃 단계 활성화, 업로드 단계 완료 
-      activeStep = STEPS.BLOCKOUT;
+      // 단계 3-4: 치아 제거 단계 활성화, 업로드 단계 완료 
+      activeStep = STEPS.TOOTH_REMOVAL;
       completedSteps = [STEPS.UPLOAD];
     }
     else if (currentStep >= 5 && currentStep <= 6) {
-      // 단계 5-6: 라이브러리 단계 활성화, 업로드와 블록아웃 단계 완료
-      activeStep = STEPS.LIBRARY;
-      completedSteps = [STEPS.UPLOAD, STEPS.BLOCKOUT];
+      // 단계 5-6: 블록아웃 단계 활성화, 업로드와 치아 제거 단계 완료
+      activeStep = STEPS.BLOCKOUT;
+      completedSteps = [STEPS.UPLOAD, STEPS.TOOTH_REMOVAL];
     }
     else if (currentStep >= 7 && currentStep <= 8) {
-      // 단계 7-8: 플리퍼 단계 활성화, 이전 단계들 완료
-      activeStep = STEPS.FLIPPER;
-      completedSteps = [STEPS.UPLOAD, STEPS.BLOCKOUT, STEPS.LIBRARY];
+      // 단계 7-8: 라이브러리 단계 활성화, 이전 단계들 완료
+      activeStep = STEPS.LIBRARY;
+      completedSteps = [STEPS.UPLOAD, STEPS.TOOTH_REMOVAL, STEPS.BLOCKOUT];
     }
-    else if (currentStep >= 9) {
-      // 단계 9: 익스포트 단계 활성화, 이전 단계들 완료
+    else if (currentStep >= 9 && currentStep <= 10) {
+      // 단계 9-10: 플리퍼 단계 활성화, 이전 단계들 완료
+      activeStep = STEPS.FLIPPER;
+      completedSteps = [STEPS.UPLOAD, STEPS.TOOTH_REMOVAL, STEPS.BLOCKOUT, STEPS.LIBRARY];
+    }
+    else if (currentStep >= 11) {
+      // 단계 11: 익스포트 단계 활성화, 이전 단계들 완료
       activeStep = STEPS.EXPORT;
-      completedSteps = [STEPS.UPLOAD, STEPS.BLOCKOUT, STEPS.LIBRARY, STEPS.FLIPPER];
+      completedSteps = [STEPS.UPLOAD, STEPS.TOOTH_REMOVAL, STEPS.BLOCKOUT, STEPS.LIBRARY, STEPS.FLIPPER];
     }
     
     // 현재 활성화 단계 표시
@@ -120,6 +136,7 @@ function updateUIVisibility() {
   const uploadUI = document.getElementById('upload-ui');
   const sculptUI = document.getElementById('sculpt-ui');
   const blockoutUI = document.getElementById('blockout-ui');
+  const toothRemovalUI = document.getElementById('tooth-removal-ui');
   const dragHint = document.getElementById('drag-hint');
   
   // 디버그 로그
@@ -129,18 +146,23 @@ function updateUIVisibility() {
   if (uploadUI) uploadUI.style.display = 'none';
   if (sculptUI) sculptUI.style.display = 'none';
   if (blockoutUI) blockoutUI.style.display = 'none';
+  if (toothRemovalUI) toothRemovalUI.style.display = 'none';
   if (dragHint) dragHint.style.display = 'none';
   
   // 이전 단계의 특수 UI들 정리
-  if (currentStep !== 5 && currentStep !== 6) {
-    cleanupLibraryMode();
+  if (currentStep !== 3 && currentStep !== 4) {
+    cleanupToothRemovalUI();
   }
   
   if (currentStep !== 7 && currentStep !== 8) {
+    cleanupLibraryMode();
+  }
+  
+  if (currentStep !== 9 && currentStep !== 10) {
     cleanupFlipperUI();
   }
   
-  if (currentStep !== 9) {
+  if (currentStep !== 11) {
     cleanupExportUI();
   }
   
@@ -155,33 +177,43 @@ function updateUIVisibility() {
       if (sculptUI) sculptUI.style.display = 'block';
       break;
       
-    case 3: // 블록아웃 UI 표시 (블록아웃 단계)
-      if (blockoutUI) blockoutUI.style.display = 'block';
+    case 3: // 치아 제거 UI 표시
+      initToothRemovalUI(); // Initialize tooth removal UI
+      if (toothRemovalUI) toothRemovalUI.style.display = 'block';
+      if (sculptUI) sculptUI.style.display = 'none'; // Hide sculpt UI
       break;
-      
-    case 4: // 스컬프 UI 표시 (블록아웃 단계)
+    
+    case 4: // 스컬프 UI 표시 (치아 제거 단계)
       if (sculptUI) sculptUI.style.display = 'block';
       break;
       
-    case 5: // 라이브러리 UI 표시
+    case 5: // 블록아웃 UI 표시 (블록아웃 단계)
+      if (blockoutUI) blockoutUI.style.display = 'block';
+      break;
+      
+    case 6: // 스컬프 UI 표시 (블록아웃 단계)
+      if (sculptUI) sculptUI.style.display = 'block';
+      break;
+      
+    case 7: // 라이브러리 UI 표시
       initLibraryMode(); // Initialize library UI
       if (sculptUI) sculptUI.style.display = 'none'; // Hide sculpt UI
       break;
     
-    case 6: // 스컬프 UI 표시 (라이브러리 단계)
+    case 8: // 스컬프 UI 표시 (라이브러리 단계)
       if (sculptUI) sculptUI.style.display = 'block';
       break;
       
-    case 7: // 플리퍼 UI 표시
+    case 9: // 플리퍼 UI 표시
       initFlipperUI(); // Initialize flipper UI
       if (sculptUI) sculptUI.style.display = 'none'; // Hide sculpt UI
       break;
       
-    case 8: // 스컬프 UI 표시 (플리퍼 단계)
+    case 10: // 스컬프 UI 표시 (플리퍼 단계)
       if (sculptUI) sculptUI.style.display = 'block';
       break;
       
-    case 9: // 익스포트 UI 표시
+    case 11: // 익스포트 UI 표시
       initExportUI(); // Initialize export UI
       if (sculptUI) sculptUI.style.display = 'none'; // Hide sculpt UI
       break;
@@ -224,20 +256,24 @@ export function completeUpload() {
  */
 export function completeSculpting() {
   if (currentStep === 2) {
-    // 업로드 후 첫 스컬프 완료: 단계 3으로 (블록아웃 UI)
+    // 업로드 후 첫 스컬프 완료: 단계 3으로 (치아 제거 UI)
     setStep(3);
   } 
   else if (currentStep === 4) {
-    // 블록아웃 후 스컬프 완료: 단계 5로 (라이브러리 UI)
+    // 치아 제거 후 스컬프 완료: 단계 5로 (블록아웃 UI)
     setStep(5);
   }
   else if (currentStep === 6) {
-    // 단계 7로 (플리퍼 UI)
+    // 블록아웃 후 스컬프 완료: 단계 7로 (라이브러리 UI)
     setStep(7);
   }
   else if (currentStep === 8) {
-    // 플리퍼 후 스컬프 완료: 단계 9로 (익스포트 UI)
+    // 라이브러리 후 스컬프 완료: 단계 9로 (플리퍼 UI)
     setStep(9);
+  }
+  else if (currentStep === 10) {
+    // 플리퍼 후 스컬프 완료: 단계 11로 (익스포트 UI)
+    setStep(11);
   }
   console.log('스컬프 완료 - 다음 단계로 진행:', currentStep);
 }
@@ -270,26 +306,34 @@ function findBaseModel() {
 }
 
 /**
- * 블록아웃 완료 시 - 단계 4로 변경 (블록아웃 단계 + 스컬프 UI)
+ * 블록아웃 완료 시 - 단계 6으로 변경 (블록아웃 단계 + 스컬프 UI)
  */
 export function completeBlockout() {
-  setStep(4); // 단계 4: 블록아웃 단계 + 스컬프 UI
+  setStep(6); // 단계 6: 블록아웃 단계 + 스컬프 UI
   console.log('블록아웃 완료 - 스컬프 UI로 돌아감');
 }
 
 /**
- * 라이브러리 완료 시 - 단계 6으로 변경 (라이브러리 단계 + 스컬프 UI)
+ * 치아 제거 완료 시 - 단계 4로 변경 (치아 제거 단계 + 스컬프 UI)
+ */
+export function completeToothRemoval() {
+  setStep(4); // 단계 4: 치아 제거 단계 + 스컬프 UI
+  console.log('치아 제거 완료 - 스컬프 UI로 돌아감');
+}
+
+/**
+ * 라이브러리 완료 시 - 단계 8로 변경 (라이브러리 단계 + 스컬프 UI)
  */
 export function completeLibrary() {
-  setStep(6); // 단계 6: 라이브러리 단계 + 스컬프 UI
+  setStep(8); // 단계 8: 라이브러리 단계 + 스컬프 UI
   console.log('라이브러리 완료 - 스컬프 UI로 돌아감');
 }
 
 /**
- * 플리퍼 완료 시 - 단계 8로 변경 (플리퍼 단계 + 스컬프 UI)
+ * 플리퍼 완료 시 - 단계 10으로 변경 (플리퍼 단계 + 스컬프 UI)
  */
 export function completeFlipper() {
-  setStep(8); // 단계 8: 플리퍼 단계 + 스컬프 UI
+  setStep(10); // 단계 10: 플리퍼 단계 + 스컬프 UI
   console.log('플리퍼 완료 - 스컬프 UI로 돌아감');
 }
 
@@ -303,17 +347,20 @@ export function goToStep(stepName) {
     case STEPS.UPLOAD:
       setStep(1); // 업로드 단계의 시작점
       break;
+    case STEPS.TOOTH_REMOVAL:
+      setStep(3); // 치아 제거 단계의 시작점
+      break;
     case STEPS.BLOCKOUT:
-      setStep(3); // 블록아웃 단계의 시작점
+      setStep(5); // 블록아웃 단계의 시작점
       break;
     case STEPS.LIBRARY:
-      setStep(5); // 라이브러리 단계의 시작점
+      setStep(7); // 라이브러리 단계의 시작점
       break;
     case STEPS.FLIPPER:
-      setStep(7); // 플리퍼 단계의 시작점
+      setStep(9); // 플리퍼 단계의 시작점
       break;
     case STEPS.EXPORT:
-      setStep(9); // 익스포트 단계
+      setStep(11); // 익스포트 단계
       break;
     default:
       console.error('알 수 없는 단계 이름:', stepName);
@@ -341,11 +388,13 @@ export function initProcessSteps() {
 // Expose functions for global access (for use in library UI)
 window.appSteps = {
   getCurrentStep,
+  isToothRemovalStep,
   isLibraryStep,
   isFlipperStep,
   canSculpt,
   completeSculpting,
   completeBlockout,
+  completeToothRemoval,
   completeLibrary,
   completeFlipper,
   STEPS
