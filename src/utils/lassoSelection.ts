@@ -627,19 +627,27 @@ export class LassoSelector {
       let pos = new THREE.Vector3().lerpVectors(positionA, positionB, t);
       let normal = new THREE.Vector3().lerpVectors(normalA, normalB, t).normalize();
       
-      // 노멀 방향으로 조금 위에서 아래로 레이캐스팅
-      const rayOrigin = pos.clone().addScaledVector(normal, 0.1);
-      const rayDirection = normal.clone().negate();
-      const raycaster = new THREE.Raycaster(rayOrigin, rayDirection);
+      // 양방향 레이캐스팅으로 가장 가까운 표면 찾기
+      const maxDistance = 0.05; // 레이캐스팅 거리 제한
+      const raycasterForward = new THREE.Raycaster(pos, normal.clone(), 0, maxDistance);
+      const raycasterBackward = new THREE.Raycaster(pos, normal.clone().negate(), 0, maxDistance);
       
-      const intersects = raycaster.intersectObject(this.targetMesh, true);
+      const intersectsForward = raycasterForward.intersectObject(this.targetMesh, true);
+      const intersectsBackward = raycasterBackward.intersectObject(this.targetMesh, true);
       
-      if (intersects.length > 0) {
-        // 레이캐스팅 성공 시 교차점 사용
-        let hitNormal = intersects[0].face!.normal.clone();
+      // 양쪽 교차점 모두 수집
+      const allIntersects = [...intersectsForward, ...intersectsBackward];
+      
+      if (allIntersects.length > 0) {
+        // 가장 가까운 교차점 선택
+        allIntersects.sort((a, b) => a.distance - b.distance);
+        const closest = allIntersects[0];
+        
+        // 교차점의 노멀 사용
+        let hitNormal = closest.face!.normal.clone();
         hitNormal.transformDirection(this.targetMesh.matrixWorld);
         
-        pos = intersects[0].point.clone().addScaledVector(hitNormal, 0.001);
+        pos = closest.point.clone().addScaledVector(hitNormal, 0.001);
         pointsOnSurface.push(pos);
       } else {
         // 레이캐스팅 실패 시 보간점 사용
