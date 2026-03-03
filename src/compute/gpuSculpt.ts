@@ -4,8 +4,8 @@ import normalsShaderSource from './shaders/sculptNormals.wgsl?raw';
 
 let gpuDevice: GPUDevice | null = null;
 let displacePipeline: GPUComputePipeline | null = null;
-let normalAccumPipeline: GPUComputePipeline | null = null;
-let normalNormPipeline: GPUComputePipeline | null = null;
+let _normalAccumPipeline: GPUComputePipeline | null = null;
+let _normalNormPipeline: GPUComputePipeline | null = null;
 let initialized = false;
 
 // 버퍼 풀: 매 프레임 재할당 방지
@@ -46,18 +46,20 @@ export async function initGPUSculpt(): Promise<boolean> {
 
     // Normal accumulation pipeline
     const normalsModule = gpuDevice.createShaderModule({ code: normalsShaderSource });
-    normalAccumPipeline = gpuDevice.createComputePipeline({
+    _normalAccumPipeline = gpuDevice.createComputePipeline({
       layout: 'auto',
       compute: { module: normalsModule, entryPoint: 'accumulateNormals' },
     });
 
     // Normal normalization pipeline
-    normalNormPipeline = gpuDevice.createComputePipeline({
+    _normalNormPipeline = gpuDevice.createComputePipeline({
       layout: 'auto',
       compute: { module: normalsModule, entryPoint: 'normalizeNormals' },
     });
 
     initialized = true;
+    void _normalAccumPipeline;
+    void _normalNormPipeline;
     console.log('[GPUSculpt] Initialized successfully');
     return true;
   } catch (err) {
@@ -121,15 +123,15 @@ export async function displaceVerticesGPU(
   if (!pooledPositionBuffer || !pooledNormalBuffer) return;
 
   // 위치/노말 데이터 업로드
-  gpuDevice.queue.writeBuffer(pooledPositionBuffer, 0, positionArray);
-  gpuDevice.queue.writeBuffer(pooledNormalBuffer, 0, normalArray);
+  gpuDevice.queue.writeBuffer(pooledPositionBuffer, 0, positionArray as unknown as ArrayBuffer);
+  gpuDevice.queue.writeBuffer(pooledNormalBuffer, 0, normalArray as unknown as ArrayBuffer);
 
   // 영향받는 인덱스 버퍼
   const indicesBuffer = gpuDevice.createBuffer({
     size: affectedIndices.byteLength,
     usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
   });
-  gpuDevice.queue.writeBuffer(indicesBuffer, 0, affectedIndices);
+  gpuDevice.queue.writeBuffer(indicesBuffer, 0, affectedIndices as unknown as ArrayBuffer);
 
   // Uniform 버퍼 (BrushParams 구조체, 64 bytes)
   const uniformData = new Float32Array(16);

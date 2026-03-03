@@ -57,8 +57,8 @@ export function switchRenderer(
   const controls = new TrackballControls(camera, activeRenderer.domElement);
   controls.rotateSpeed = 3;
   controls.panSpeed = 1;
-  controls.addEventListener('start', () => { controls.active = true; });
-  controls.addEventListener('end', () => { controls.active = false; });
+  controls.addEventListener('start', () => { (controls as any).active = true; });
+  controls.addEventListener('end', () => { (controls as any).active = false; });
 
   oldTransformControls.dispose();
   const transformControls = new TransformControls(camera, activeRenderer.domElement);

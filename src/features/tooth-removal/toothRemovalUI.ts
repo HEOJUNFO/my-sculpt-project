@@ -108,14 +108,14 @@ export function nextToothRemoval(): void {
 /**
  * 치아 점 추가 진행 콜백
  */
-function onToothPointProgress(pointCount: number): void {
+function onToothPointProgress(_pointCount: number): void {
   updateUIState();
 }
 
 /**
  * 치아 선택 완료 콜백
  */
-function onToothSelectionComplete(points: DrawingPointData[]): void {
+function onToothSelectionComplete(_points: DrawingPointData[]): void {
   updateUIState();
 }
 

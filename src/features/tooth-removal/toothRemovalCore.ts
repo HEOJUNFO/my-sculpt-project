@@ -15,7 +15,7 @@ import { refs, modelList, activeItemIndex } from "../../models/modelManager.js";
 
 // refs 객체를 any 타입으로 처리 (JavaScript 모듈이므로)
 const refsAny = refs as any;
-import { MeshBVHHelper } from "three-mesh-bvh";
+import { BVHHelper } from "three-mesh-bvh";
 // 타입 정의
 type ToothRemovalInitOptions = {
   onUpdateMessage?: (message: string) => void;
@@ -405,7 +405,7 @@ export class ToothRemovalSystem {
       try {
         const depth =
           refsAny.params && refsAny.params.depth ? refsAny.params.depth : 10;
-        const newHelper = new MeshBVHHelper(refsAny.targetMesh, depth);
+        const newHelper = new BVHHelper(refsAny.targetMesh, depth);
 
         // helper 표시 여부는 기존 설정 따름 (기본값: false)
         const displayHelper = refsAny.params && refsAny.params.displayHelper;
