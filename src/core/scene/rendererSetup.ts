@@ -12,6 +12,15 @@ export function createWebGLRenderer(): THREE.WebGLRenderer {
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.setClearColor(CLEAR_COLOR, 1);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+  // Tone mapping — OutputPass에서 자동 적용
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.0;
+
+  // Shadow maps
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
   renderer.domElement.style.touchAction = 'none';
   document.body.appendChild(renderer.domElement);
   return renderer;

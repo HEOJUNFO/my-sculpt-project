@@ -72,17 +72,72 @@ export function createInactiveMaterial(
 export function updatePBRUniforms(
   mesh: THREE.Mesh | null,
   camera: THREE.Camera,
-  light: THREE.DirectionalLight | null,
+  lightingRig: { lights: THREE.DirectionalLight[] } | null,
+  envMap: THREE.Texture | null,
 ): void {
   if (!mesh || !mesh.material) return;
 
   const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
   for (const mat of materials) {
-    if (mat instanceof THREE.ShaderMaterial && mat.uniforms.uCameraPosition) {
-      mat.uniforms.uCameraPosition.value.copy(camera.position);
-      if (light) {
-        mat.uniforms.uLightPosition.value.copy(light.position);
+    if (!(mat instanceof THREE.ShaderMaterial) || !mat.uniforms.uCameraPosition) continue;
+
+    // Camera position
+    mat.uniforms.uCameraPosition.value.copy(camera.position);
+
+    // Multi-light positions, colors, intensities
+    if (lightingRig && mat.uniforms.uLightPositions) {
+      const positions = mat.uniforms.uLightPositions.value;
+      const colors = mat.uniforms.uLightColors.value;
+      const intensities = mat.uniforms.uLightIntensities.value;
+
+      for (let i = 0; i < lightingRig.lights.length && i < 3; i++) {
+        const light = lightingRig.lights[i];
+        positions[i].copy(light.position);
+        colors[i].copy(light.color);
+        intensities[i] = light.intensity;
       }
     }
+
+    // IBL environment map
+    if (mat.uniforms.uEnvMap && envMap && !mat.uniforms.uEnvMap.value) {
+      mat.uniforms.uEnvMap.value = envMap;
+      mat.uniforms.uEnvMapIntensity.value = 1.0;
+    }
+  }
+}
+
+/**
+ * PBR 머티리얼에 텍스처 설정 (노말맵, AO맵)
+ */
+export function setMaterialTextures(
+  material: THREE.ShaderMaterial,
+  options: {
+    normalMap?: THREE.Texture | null;
+    normalScale?: THREE.Vector2;
+    aoMap?: THREE.Texture | null;
+    aoIntensity?: number;
+    hasUV?: boolean;
+  },
+): void {
+  if (!material.uniforms.uHasUV) return;
+
+  material.uniforms.uHasUV.value = options.hasUV ? 1.0 : 0.0;
+
+  if (options.normalMap) {
+    material.uniforms.uNormalMap.value = options.normalMap;
+    material.uniforms.uHasNormalMap.value = 1.0;
+    if (options.normalScale) {
+      material.uniforms.uNormalScale.value.copy(options.normalScale);
+    }
+  } else {
+    material.uniforms.uHasNormalMap.value = 0.0;
+  }
+
+  if (options.aoMap) {
+    material.uniforms.uAOMap.value = options.aoMap;
+    material.uniforms.uHasAOMap.value = 1.0;
+    material.uniforms.uAOIntensity.value = options.aoIntensity ?? 1.0;
+  } else {
+    material.uniforms.uHasAOMap.value = 0.0;
   }
 }

@@ -43,7 +43,9 @@ export const refs = {
   camerastate: null,
   wireframeMode: false, // wireframe 렌더링 모드 상태
   brush: null,
-  dirLight: null,     // DirectionalLight 참조 (PBR 셰이더용)
+  dirLight: null,     // DirectionalLight 참조 (PBR 셰이더용, keyLight 호환)
+  lightingRig: null,  // LightingRig 참조 (3-포인트 조명)
+  envMap: null,       // IBL 환경맵 텍스처
   composer: null,     // EffectComposer 참조 (포스트 프로세싱용)
 };
 

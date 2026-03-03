@@ -18,7 +18,7 @@ import {
 
 // 모듈화된 서브시스템
 import { createWebGLRenderer, createWebGPURenderer } from './rendererSetup.ts';
-import { setupLighting } from './lightingSetup.ts';
+import { setupLighting, loadEnvironmentMap } from './lightingSetup.ts';
 import { createBrush } from './brushSetup.ts';
 import { setupDebugGUI, createSubdivParams } from './guiSetup.ts';
 import { createComposer } from '../../rendering/postprocessing/composerSetup.ts';
@@ -71,7 +71,8 @@ export function initScene() {
 
   // 씬, 카메라, 조명
   const scene = new THREE.Scene();
-  const dirLight = setupLighting(scene);
+  const lightingRig = setupLighting(scene);
+  const dirLight = lightingRig.keyLight;
 
   const camera = new THREE.PerspectiveCamera(
     50, window.innerWidth / window.innerHeight, 0.1, 50
@@ -131,9 +132,21 @@ export function initScene() {
   refs.transformControls = transformControls;
   refs.renderer = currentRenderer;
   refs.dirLight = dirLight;
+  refs.lightingRig = lightingRig;
+  refs.envMap = null;
 
   // 포스트 프로세싱 (WebGL 렌더러에서만 지원)
   refs.composer = createComposer(webglRenderer, scene, camera, params);
+
+  // HDR 환경맵 로딩 (비동기, IBL용)
+  loadEnvironmentMap(webglRenderer, scene, 'textures/studio_env.hdr')
+    .then((envMap) => {
+      refs.envMap = envMap;
+      console.log('HDR environment map loaded');
+    })
+    .catch(() => {
+      refs.envMap = null;
+    });
 
   // 디버그 GUI
   if (isDebugMode) {

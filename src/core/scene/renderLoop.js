@@ -225,8 +225,8 @@ export function startRenderLoop(renderer, scene, camera, stats) {
 
     someUpdateFunc();
 
-    // PBR 셰이더 유니폼 업데이트 (카메라 위치, 조명 위치)
-    updatePBRUniforms(refs.targetMesh, camera, refs.dirLight);
+    // PBR 셰이더 유니폼 업데이트 (카메라, 멀티라이트, IBL)
+    updatePBRUniforms(refs.targetMesh, camera, refs.lightingRig, refs.envMap);
 
     // 스컬핑 중 성능 최적화: SSAO/Bloom 자동 비활성화
     const isSculpting = mouseState && brushActive && !refs.controls.active;
