@@ -168,6 +168,40 @@
       <ion-icon name="checkmark-done-outline"></ion-icon>
       Complete Sculpting
     </button>
+
+    <!-- 렌더링 설정 (접기 가능) -->
+    <div id="rendering-settings" style="margin-top: 12px;">
+      <button class="brush-btn btn-full" id="btn-toggle-render-settings" style="background: #34495e;">
+        <ion-icon name="settings-outline"></ion-icon>
+        렌더링 설정
+      </button>
+      <div id="render-settings-panel" style="display: none; margin-top: 8px;">
+        <div class="slider-row">
+          <label for="material-mode">머티리얼</label>
+          <select id="material-mode" style="width: 100%; padding: 4px; margin-top: 4px;">
+            <option value="matcap">Matcap</option>
+            <option value="pbr">PBR (치아 실사)</option>
+          </select>
+        </div>
+        <div style="margin-top: 8px;">
+          <label style="display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
+            <input type="checkbox" id="toggle-ssao"> SSAO (음영 깊이)
+          </label>
+          <label style="display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
+            <input type="checkbox" id="toggle-outline"> 외곽선
+          </label>
+          <label style="display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
+            <input type="checkbox" id="toggle-bloom"> 블룸
+          </label>
+          <label style="display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
+            <input type="checkbox" id="toggle-fxaa" checked> FXAA
+          </label>
+          <label style="display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
+            <input type="checkbox" id="toggle-gpu-sculpt"> GPU 스컬프
+          </label>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- Blockout UI (initially hidden, shown after sculpt completion) -->

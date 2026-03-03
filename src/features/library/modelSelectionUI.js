@@ -28,7 +28,7 @@ export function initModelSelection(loader, setGeometryFn) {
   
   // Matcap 텍스처 인코딩 설정
   for (const key in matcaps) {
-    matcaps[key].encoding = THREE.sRGBEncoding;
+    matcaps[key].colorSpace = THREE.SRGBColorSpace;
   }
   
   // Add styles for model selection UI
@@ -299,7 +299,7 @@ function loadModelPreview(modelPath) {
         side: THREE.DoubleSide,
         matcap: matcaps['Clay']
       });
-      for (const key in matcaps) matcaps[key].encoding = THREE.sRGBEncoding;
+      for (const key in matcaps) matcaps[key].colorSpace = THREE.SRGBColorSpace;
       
       // 메시 생성
       previewMesh = new THREE.Mesh(geometry, material);

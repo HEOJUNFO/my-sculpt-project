@@ -7,6 +7,11 @@ import { centerAndScaleGeometry } from '../utils/geometryHelpers.js';
 import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { MeshBVHHelper } from 'three-mesh-bvh';
 import { fitCameraToObject } from '../core/controls/cameraHelpers.js';
+import {
+  createActiveMaterial as createActiveMaterialFromManager,
+  createInactiveMaterial as createInactiveMaterialFromManager,
+} from '../rendering/materials/materialManager.ts';
+import { setOutlineTarget } from '../rendering/postprocessing/composerSetup.ts';
 
 // 새로 분리한 UI 모듈 (UI 관련 코드 대부분 modelListUI.js로 이동)
 import { updateModelListUI } from './modelListUI.js';
@@ -34,9 +39,12 @@ export const refs = {
   params: null, // (matcap, displayHelper, modelOpacity, transformMode, etc.)
   matcaps: null,
   transformControls: null,
-  renderer:null,
+  renderer: null,
   camerastate: null,
   wireframeMode: false, // wireframe 렌더링 모드 상태
+  brush: null,
+  dirLight: null,     // DirectionalLight 참조 (PBR 셰이더용)
+  composer: null,     // EffectComposer 참조 (포스트 프로세싱용)
 };
 
 // ------------------------
@@ -212,46 +220,15 @@ export function redo() {
   );
 }
 
-/** 활성 재질 */
+/** 활성 재질 — materialManager로 위임 */
 function createActiveMaterial() {
-  if (refs.wireframeMode) {
-    return new THREE.MeshBasicMaterial({
-      color: 0x00ff00, // wireframe 색상 (녹색)
-      wireframe: true,
-      transparent: true,
-      opacity: refs.params.modelOpacity,
-      side: THREE.DoubleSide,
-    });
-  } else {
-    return new THREE.MeshMatcapMaterial({
-      matcap: refs.matcaps[refs.params.matcap],
-      transparent: true,
-      opacity: refs.params.modelOpacity,
-      side: THREE.DoubleSide,
-      flatShading: refs.params.flatShading,
-    });
-  }
+  const mode = refs.params?.materialMode || 'matcap';
+  return createActiveMaterialFromManager(mode, refs.matcaps, refs.params, refs.wireframeMode);
 }
 
-/** 비활성 재질 */
+/** 비활성 재질 — materialManager로 위임 */
 function createInactiveMaterial() {
-  if (refs.wireframeMode) {
-    return new THREE.MeshBasicMaterial({
-      color: 0x666666, // 비활성 wireframe 색상 (회색)
-      wireframe: true,
-      transparent: true,
-      opacity: refs.params.modelOpacity,
-      side: THREE.DoubleSide,
-    });
-  } else {
-    return new THREE.MeshMatcapMaterial({
-      matcap: refs.matcaps['MatcapFV'],
-      transparent: true,
-      opacity: refs.params.modelOpacity,
-      side: THREE.DoubleSide,
-      flatShading: refs.params.flatShading,
-    });
-  }
+  return createInactiveMaterialFromManager(refs.matcaps, refs.params, refs.wireframeMode);
 }
 
 /**
@@ -370,6 +347,9 @@ function setTargetMeshAsActive(mesh) {
     newHelper.update();
     refs.bvhHelper = newHelper;
   }
+
+  // OutlinePass 업데이트
+  setOutlineTarget(refs.composer, mesh);
 
   // UI 갱신 (modelListUI.js)
   updateModelListUI(

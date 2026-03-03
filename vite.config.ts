@@ -17,5 +17,6 @@ export default defineConfig({
   },
   optimizeDeps: {
     include: ['three', 'three-mesh-bvh', 'three-subdivide', 'earcut']
-  }
+  },
+  assetsInclude: ['**/*.glsl', '**/*.wgsl'],
 });

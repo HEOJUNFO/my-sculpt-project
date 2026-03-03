@@ -158,9 +158,12 @@ function main() {
     });
   }
 
+  // 렌더링 설정 UI 이벤트
+  setupRenderingSettingsUI();
+
   // 3) 렌더 루프 시작
   startRenderLoop(renderer, scene, camera, stats);
-  
+
   // 전역 접근을 위해 window 객체에 추가 (디버깅용)
   window.appSteps = { 
     completeSculpting, 
@@ -249,6 +252,96 @@ function setupUploadUI() {
         // 파일 업로드 후 스컬프 모드로 전환
         completeUpload();
       }
+    });
+  }
+}
+
+/**
+ * 렌더링 설정 UI 이벤트 설정
+ */
+function setupRenderingSettingsUI() {
+  // 토글 버튼
+  const btnToggle = document.getElementById('btn-toggle-render-settings');
+  const panel = document.getElementById('render-settings-panel');
+  if (btnToggle && panel) {
+    btnToggle.addEventListener('click', () => {
+      panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+    });
+  }
+
+  // 머티리얼 모드
+  const materialMode = document.getElementById('material-mode');
+  if (materialMode) {
+    materialMode.addEventListener('change', (e) => {
+      refs.params.materialMode = e.target.value;
+      // 활성 모델의 머티리얼 재적용
+      if (refs.targetMesh && window.toggleWireframe) {
+        // toggleWireframe을 두 번 호출하여 머티리얼 갱신
+        toggleWireframeMode();
+        toggleWireframeMode();
+      }
+    });
+  }
+
+  // 포스트 프로세싱 토글
+  const ssaoToggle = document.getElementById('toggle-ssao');
+  const outlineToggle = document.getElementById('toggle-outline');
+  const bloomToggle = document.getElementById('toggle-bloom');
+  const fxaaToggle = document.getElementById('toggle-fxaa');
+  const gpuSculptToggle = document.getElementById('toggle-gpu-sculpt');
+
+  if (ssaoToggle) {
+    ssaoToggle.addEventListener('change', (e) => {
+      refs.params.enableSSAO = e.target.checked;
+      if (refs.composer) {
+        refs.composer.passes.forEach(pass => {
+          if (pass.isSSAOPass) pass.enabled = e.target.checked;
+        });
+      }
+    });
+  }
+
+  if (outlineToggle) {
+    outlineToggle.addEventListener('change', (e) => {
+      refs.params.enableOutline = e.target.checked;
+      if (refs.composer) {
+        refs.composer.passes.forEach(pass => {
+          // OutlinePass는 selectedObjects 속성을 가짐
+          if (pass.selectedObjects !== undefined) pass.enabled = e.target.checked;
+        });
+      }
+    });
+  }
+
+  if (bloomToggle) {
+    bloomToggle.addEventListener('change', (e) => {
+      refs.params.enableBloom = e.target.checked;
+      if (refs.composer) {
+        refs.composer.passes.forEach(pass => {
+          if (pass.isUnrealBloomPass) pass.enabled = e.target.checked;
+        });
+      }
+    });
+  }
+
+  if (fxaaToggle) {
+    fxaaToggle.addEventListener('change', (e) => {
+      refs.params.enableFXAA = e.target.checked;
+      if (refs.composer) {
+        // FXAA는 마지막에서 두 번째 패스 (OutputPass 직전)
+        const passes = refs.composer.passes;
+        for (let i = 0; i < passes.length; i++) {
+          if (passes[i].material && passes[i].material.uniforms && passes[i].material.uniforms.resolution) {
+            passes[i].enabled = e.target.checked;
+          }
+        }
+      }
+    });
+  }
+
+  if (gpuSculptToggle) {
+    gpuSculptToggle.addEventListener('change', (e) => {
+      refs.params.useGPUSculpt = e.target.checked;
     });
   }
 }

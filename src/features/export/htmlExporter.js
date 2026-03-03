@@ -251,7 +251,7 @@ function generateHTMLTemplate(sceneData) {
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.setPixelRatio(window.devicePixelRatio);
-        renderer.outputEncoding = THREE.sRGBEncoding;
+        renderer.outputColorSpace = THREE.SRGBColorSpace;
         document.body.appendChild(renderer.domElement);
 
         // 컨트롤 설정
@@ -325,7 +325,7 @@ function generateHTMLTemplate(sceneData) {
                     loadedMeshes++;
                     checkLoadingComplete();
                 });
-                texture.encoding = THREE.sRGBEncoding;
+                texture.colorSpace = THREE.SRGBColorSpace;
                 material = new THREE.MeshMatcapMaterial({
                     matcap: texture,
                     color: matData.color,
