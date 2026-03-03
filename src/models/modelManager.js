@@ -5,7 +5,7 @@ import { STLExporter } from 'three/examples/jsm/exporters/STLExporter.js';
 import { loadStlFileAsGeometry } from '../utils/stlHelpers.js';
 import { centerAndScaleGeometry } from '../utils/geometryHelpers.js';
 import * as BufferGeometryUtils from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { MeshBVHHelper } from 'three-mesh-bvh';
+import { BVHHelper } from 'three-mesh-bvh';
 import { fitCameraToObject } from '../core/controls/cameraHelpers.js';
 import {
   createActiveMaterial as createActiveMaterialFromManager,
@@ -340,7 +340,7 @@ function setTargetMeshAsActive(mesh) {
 
   // BVH Helper
   if (mesh) {
-    const newHelper = new MeshBVHHelper(mesh, refs.params.depth);
+    const newHelper = new BVHHelper(mesh, refs.params.depth);
     if (refs.params.displayHelper) {
       refs.scene.add(newHelper);
     }
@@ -542,7 +542,7 @@ export function reset() {
     refs.scene.remove(refs.bvhHelper);
     refs.bvhHelper = null;
   }
-  const newHelper = new MeshBVHHelper(activeItem.mesh, refs.params.depth);
+  const newHelper = new BVHHelper(activeItem.mesh, refs.params.depth);
   if (refs.params.displayHelper) {
     refs.scene.add(newHelper);
   }

@@ -113,7 +113,7 @@ export function createDentalPBRMaterial(opts: DentalMaterialOptions = {}): THREE
   });
 
   if (opts.flatShading) {
-    material.flatShading = true;
+    (material as any).flatShading = true;
   }
 
   return material;
