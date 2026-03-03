@@ -14,6 +14,7 @@ import {
   someUpdateFunc,
 } from '../events/eventHandlers.js';
 import { isLibraryStep, isFlipperStep, canSculpt, getCurrentStep } from '../../workflow/processSteps.js';
+import { updatePBRUniforms } from '../../rendering/materials/materialManager.ts';
 
 let animationId = null; // 현재 렌더 루프의 requestAnimationFrame ID를 저장할 변수
 
@@ -224,8 +225,23 @@ export function startRenderLoop(renderer, scene, camera, stats) {
 
     someUpdateFunc();
 
-    // WebGPU -> renderAsync, WebGL -> render
-    if (useRenderAsync) {
+    // PBR 셰이더 유니폼 업데이트 (카메라 위치, 조명 위치)
+    updatePBRUniforms(refs.targetMesh, camera, refs.dirLight);
+
+    // 스컬핑 중 성능 최적화: SSAO/Bloom 자동 비활성화
+    const isSculpting = mouseState && brushActive && !refs.controls.active;
+    if (refs.composer) {
+      refs.composer.passes.forEach((pass) => {
+        if (pass.isSSAOPass) pass.enabled = refs.params.enableSSAO && !isSculpting;
+        if (pass.isUnrealBloomPass) pass.enabled = refs.params.enableBloom && !isSculpting;
+      });
+    }
+
+    // WebGPU -> renderAsync, WebGL -> render (composer 우선)
+    if (refs.composer && !useRenderAsync) {
+      refs.composer.render();
+      if (stats) stats.end();
+    } else if (useRenderAsync) {
       renderer.renderAsync(scene, camera).then(() => {
         if (stats) stats.end();
       });

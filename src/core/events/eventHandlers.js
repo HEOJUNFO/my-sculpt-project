@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { pushUndoState, refs, redoStack, undo, redo, toggleWireframeMode } from '../../models/modelManager.js';
 import { memos, openEditMemoModal, openNewMemoModal } from '../../features/memo/memo.js';
 import { isLibraryStep, isFlipperStep, canSculpt } from '../../workflow/processSteps.js';
+import { resizeComposer } from '../../rendering/postprocessing/composerSetup.ts';
 
 export let mouse = new THREE.Vector2();
 export let lastMouse = new THREE.Vector2();
@@ -194,6 +195,7 @@ export function onWindowResize() {
   refs.camera.aspect = window.innerWidth / window.innerHeight;
   refs.camera.updateProjectionMatrix();
   refs.renderer?.setSize( window.innerWidth, window.innerHeight );
+  resizeComposer(refs.composer, refs.renderer);
 }
 
 export function someUpdateFunc() {
